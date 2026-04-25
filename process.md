@@ -10,6 +10,7 @@
 - `gh repo create` → **개인** [eunsang9597/solpath-dashboard](https://github.com/eunsang9597/solpath-dashboard) (`origin`, `--push`)
 - **Org** [solpath-labs-dev/solpath-dashboard](https://github.com/solpath-labs-dev/solpath-dashboard) 생성 후 `mirror` remote → `main` push
 - `main` 기본 upstream은 `origin/main` (이후 커밋마다 `git push origin main && git push mirror main` 패턴 유지)
+- **clasp**: `clasp list`로 `solpath-dashboard-b…` 식별 → `clasp clone <scriptId> --rootDir gas` → 루트 `.clasp.json` + `gas/` (`clasp status`·`clasp push` 정상). [gas/README.md](./gas/README.md) 추가 (README는 GAS 업로드 대상 아님 · Untracked).
 
 ### 오늘의 전제
 
@@ -27,7 +28,7 @@
 ### 다음 할 일 (체크용)
 
 - [x] ⓪ 레포 생성·로컬 git·양쪽 push (2026-04-25, 이 폴더 기준)
-- [ ] `gas/`·루트 `.clasp.json` 붙이거나 복사 후 루트에서 `clasp push` 연동
+- [x] `gas/`·루트 `.clasp.json` — `clasp clone`·`clasp status` / `clasp push` 확인 (2026-04-25, `solpath-dashboard-b…`)
 - [ ] 주문(및 품목) API **샘플 JSON** 저장·대조 후 §3.3 / §5.1.1 / GAS 매핑 1:1 점검
 - [ ] A→B→C→D 한 사이클 후 **전 구간·청크 실run** + §2 Properties 키 표와 구현 동기화
 
