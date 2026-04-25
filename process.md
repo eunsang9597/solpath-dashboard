@@ -4,6 +4,13 @@
 
 ## 2026-04-25 — 재개: Properties 완료 → GitHub ⓪부터
 
+### 오늘 한 일 (⓪ 이 워크스페이스에서 완료)
+
+- 로컬 `git init -b main` → 첫 커밋 `50ee587` (`docs: initial SPEC / README / process`)
+- `gh repo create` → **개인** [eunsang9597/solpath-dashboard](https://github.com/eunsang9597/solpath-dashboard) (`origin`, `--push`)
+- **Org** [solpath-labs-dev/solpath-dashboard](https://github.com/solpath-labs-dev/solpath-dashboard) 생성 후 `mirror` remote → `main` push
+- `main` 기본 upstream은 `origin/main` (이후 커밋마다 `git push origin main && git push mirror main` 패턴 유지)
+
 ### 오늘의 전제
 
 - **GAS Script Properties**: `IMWEB_CLIENT_ID` / `IMWEB_CLIENT_SECRET` / `IMWEB_SITE_CODE` **이미 저장된 상태**를 전제로 함 (문서·채팅에 값 기입 금지).
@@ -19,7 +26,8 @@
 
 ### 다음 할 일 (체크용)
 
-- [ ] ⓪ 레포 생성·로컬 git·양쪽 push (또는 기존 레포에 이 폴더 연결)
+- [x] ⓪ 레포 생성·로컬 git·양쪽 push (2026-04-25, 이 폴더 기준)
+- [ ] `gas/`·루트 `.clasp.json` 붙이거나 복사 후 루트에서 `clasp push` 연동
 - [ ] 주문(및 품목) API **샘플 JSON** 저장·대조 후 §3.3 / §5.1.1 / GAS 매핑 1:1 점검
 - [ ] A→B→C→D 한 사이클 후 **전 구간·청크 실run** + §2 Properties 키 표와 구현 동기화
 
