@@ -71,7 +71,18 @@ function openSyncJsonpFromGet_(e, callbackName) {
       callbackName
     );
   }
-  return openSyncTextOutputJsonp_(openSyncRouteAction_(action, e), callbackName);
+  try {
+    return openSyncTextOutputJsonp_(openSyncRouteAction_(action, e), callbackName);
+  } catch (x) {
+    /** 예외가 그대로 나가면 200+HTML이 오고, JSONP <script>가 콜백을 못 부름 → 프론트 "초기화 실패"만 뜸 */
+    return openSyncTextOutputJsonp_(
+      {
+        ok: false,
+        error: { code: 'INTERNAL', message: x && x.message != null ? String(x.message) : String(x) }
+      },
+      callbackName
+    );
+  }
 }
 
 /**

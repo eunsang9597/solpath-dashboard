@@ -91,17 +91,28 @@ function dbPmSeedProductMappingFromMaster_(opsSs, forceReseed) {
  * @return {{ ok: true, data: { seededRowCount: number, reset: true } }|{ ok: false, error: { code: string, message: string } }}
  */
 function dbProductMappingResetFromMaster_() {
-  var ss;
   try {
-    ss = dbPmOpenOpsOrThrow_();
-  } catch (e) {
-    return { ok: false, error: { code: 'NO_OPERATIONS_SHEET', message: '운영 DB가 없습니다.' } };
+    var ss;
+    try {
+      ss = dbPmOpenOpsOrThrow_();
+    } catch (e) {
+      return { ok: false, error: { code: 'NO_OPERATIONS_SHEET', message: '운영 DB가 없습니다.' } };
+    }
+    var sh = dbGetOrCreateSheetWithHeaders_(ss, DB_SHEET_PRODUCT_MAPPING, DB_PRODUCT_MAPPING_HEADERS);
+    var w = DB_PRODUCT_MAPPING_HEADERS.length;
+    dbClearDataRows2Plus_(sh, w);
+    var n = dbPmSeedProductMappingFromMaster_(ss, true);
+    return { ok: true, data: { seededRowCount: n, reset: true } };
+  } catch (x) {
+    Logger.log('dbProductMappingResetFromMaster_: ' + (x && x.message != null ? x.message : String(x)));
+    return {
+      ok: false,
+      error: {
+        code: 'RESET_FAILED',
+        message: x && x.message != null ? String(x.message) : String(x)
+      }
+    };
   }
-  var sh = dbGetOrCreateSheetWithHeaders_(ss, DB_SHEET_PRODUCT_MAPPING, DB_PRODUCT_MAPPING_HEADERS);
-  var w = DB_PRODUCT_MAPPING_HEADERS.length;
-  dbClearDataRows2Plus_(sh, w);
-  var n = dbPmSeedProductMappingFromMaster_(ss, true);
-  return { ok: true, data: { seededRowCount: n, reset: true } };
 }
 
 /**
