@@ -2,7 +2,8 @@
  * 대시보드 — Open API 전체 시트 스냅샷. Web App POST + CORS.
  * dbSyncOpenAll() = members → products(1p) → orders
  *
- * 본문: application/x-www-form-urlencoded — `action` 만 (ping | syncOpenFull)
+ * 본문: `application/x-www-form-urlencoded` 또는 `text/plain` (동일 key=value) — `action` 만
+ *   (프론트는 브라우저 CORS simple POST용으로 `text/plain` 사용)
  */
 
 /**
@@ -63,11 +64,17 @@ function openSyncGetActionFromRequest_(e) {
   if (!post || post.contents == null) {
     return '';
   }
-  var ct = post.type != null ? String(post.type) : '';
-  if (ct.length && ct.indexOf('application/x-www-form-urlencoded') < 0) {
-    return '';
+  var ct = post.type != null ? String(post.type).toLowerCase() : '';
+  var raw = String(post.contents);
+  if (ct.length) {
+    if (
+      ct.indexOf('application/x-www-form-urlencoded') < 0 &&
+      ct.indexOf('text/plain') < 0
+    ) {
+      return '';
+    }
   }
-  var q = openSyncParseFormUrlEncoded_(String(post.contents));
+  var q = openSyncParseFormUrlEncoded_(raw);
   return q.action != null ? String(q.action).trim() : '';
 }
 
