@@ -367,6 +367,30 @@ function imwebSaveTokenResponseToProperties_(raw) {
 }
 
 /**
+ * `dbSyncOpenAll`·대시보드 [실행] 직전: `IMWEB_OAUTH_REFRESH_TOKEN`이 있으면 POST refresh로 access 갱신.
+ * 브라우저로 Web App 루트를 열 땐 `doGet`이 갱신하지만, **doPost/JSONP만** 쓰면 만료 access로 `GET /member-info/members` 등이 **401·30101**이 남는다.
+ * @throws {Error} refresh가 있는데 응답 저장 실패 시(만료된 refresh 등)
+ */
+function imwebEnsureAccessTokenForOpenSync_() {
+  var p = PropertiesService.getScriptProperties();
+  var rt = p.getProperty('IMWEB_OAUTH_REFRESH_TOKEN') != null ? String(p.getProperty('IMWEB_OAUTH_REFRESH_TOKEN')).trim() : '';
+  if (!rt.length) {
+    Logger.log('[imwebEnsureAccessTokenForOpenSync_] refresh 없음 — 기존 access로 시도(만료면 401)');
+    return;
+  }
+  var b = imwebTTokenBodyRefresh_();
+  if (imwebSaveTokenResponseToProperties_(b._text) === true) {
+    Logger.log('[imwebEnsureAccessTokenForOpenSync_] refresh OK http=' + b._http);
+    return;
+  }
+  throw new Error(
+    'Open API access 갱신 실패(POST /oauth2/token refresh, http=' +
+      b._http +
+      '). refresh 토큰 만료 가능 — GAS **Web App 배포 URL**을 브라우저로 열어 아임웹에서 다시 승인하세요.'
+  );
+}
+
+/**
  * **Web App doGet** — 리다이렉트 `code`로 토큰 교환·저장. `Code.js`가 호출.
  * @param {string} code
  * @returns {{_http:number, _text:string, _saved:boolean}} UrlFetch 결과 + `access` 저장 여부

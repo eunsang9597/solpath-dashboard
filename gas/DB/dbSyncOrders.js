@@ -106,6 +106,7 @@ function dbSyncOrdersOpen() {
  * @return {{ members: Object, products: Object, orders: Object }}
  */
 function dbSyncOpenAll() {
+  imwebEnsureAccessTokenForOpenSync_();
   return {
     members: dbSyncMembersOpen(),
     products: dbSyncProductsOnePage(),

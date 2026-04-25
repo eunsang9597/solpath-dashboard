@@ -1,6 +1,6 @@
 /**
  * 대시보드 — Open API 전체 시트 스냅샷. Web App
- * dbSyncOpenAll() = members → products(1p) → orders
+ * dbSyncOpenAll() = members → products(1p) → orders (시작 시 `imwebEnsureAccessTokenForOpenSync_`로 refresh)
  *
  * POST: 본문 `text/plain` 또는 `application/x-www-form-urlencoded` — `action=ping|syncOpenFull`
  * GET+JSONP(브라우저): `?format=jsonp&callback=NAME&action=...` — TextOutput엔 CORS(setHeader) API가 **없어**
