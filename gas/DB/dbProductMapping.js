@@ -229,7 +229,7 @@ function dbProductMappingList_() {
     if (_DB_PM_LIFECYCLES.indexOf(lifecycle) < 0) {
       lifecycle = 'active';
     }
-    var disp = dbPmDisplayName12_(product_name);
+    var disp = dbPmDisplayName20_(product_name);
     rows.push({
       prod_no: prodNo,
       product_name: product_name,
@@ -297,12 +297,12 @@ function dbPmReadMappingMap_() {
  * @param {string} s
  * @return {string}
  */
-function dbPmDisplayName12_(s) {
+function dbPmDisplayName20_(s) {
   var t = s != null ? String(s) : '';
-  if (t.length <= 12) {
+  if (t.length <= 20) {
     return t;
   }
-  return t.slice(0, 12) + '…';
+  return t.slice(0, 20) + '…';
 }
 
 /**
