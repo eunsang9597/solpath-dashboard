@@ -3,8 +3,33 @@
  */
 
 /**
+ * Script Properties에 넣는 id는 **자동 갱신되는 핸들이 아니라 예전에 저장한 문자열**이다.
+ * `openById`만 믿으면 휴지통에만 있어도 열릴 수 있고, "실패가 안 났다"는 착시가 남는다. Drive에서 **살아 있고** 스프레드시트인지 먼저 본다.
+ * @param {string} fileId
+ * @return {boolean}
+ */
+function dbDriveSpreadsheetIdIsUsableNow_(fileId) {
+  var s = fileId != null ? String(fileId).trim() : '';
+  if (!s) {
+    return false;
+  }
+  try {
+    var f = DriveApp.getFileById(s);
+    if (f.isTrashed && typeof f.isTrashed === 'function' && f.isTrashed()) {
+      return false;
+    }
+    if (f.getMimeType() !== 'application/vnd.google-apps.spreadsheet') {
+      return false;
+    }
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+/**
  * Properties의 `SHEETS_MASTER_ID`로 원천 DB를 연다.
- * 파일이 삭제·이동돼 `openById`가 실패하면 Property를 비우고 `dbSetupMasterDatabase()`로 **빈 원천 DB를 새로 만든 뒤** 다시 연다(수동 키 삭제 대신).
+ * Drive에서 id가 **무효**면(없음·휴지통·mime 아님) **SpreadsheetApp이 성공해도** Property를 버리고 `dbSetupMasterDatabase()`로 재생성. open 예외는 보조.
  * @returns {GoogleAppsScript.Spreadsheet.Spreadsheet}
  */
 function dbOpenMaster_() {
@@ -14,12 +39,22 @@ function dbOpenMaster_() {
     throw new Error('SHEETS_MASTER_ID 가 비어 있음. 먼저 dbSetupMasterDatabase() 실행.');
   }
   var sid = String(id).trim();
+  if (!dbDriveSpreadsheetIdIsUsableNow_(sid)) {
+    Logger.log('dbOpenMaster_: Drive에서 id 무효(삭제·휴지통·mime) — SHEETS_MASTER_ID 제거 후 dbSetupMasterDatabase');
+    try {
+      p.deleteProperty(DB_PROP_SHEETS_MASTER_ID);
+    } catch (d) {}
+    var info0 = dbSetupMasterDatabase();
+    if (!info0 || !info0.id) {
+      throw new Error('원천 DB를 열 수 없고 재생성도 실패했습니다. Drive 폴더·`SHEETS_MASTER_PARENT_FOLDER_ID`·권한을 확인하세요.');
+    }
+    return SpreadsheetApp.openById(String(info0.id).trim());
+  }
   try {
     return SpreadsheetApp.openById(sid);
   } catch (e) {
     Logger.log(
-      'dbOpenMaster_: openById 실패(삭제·권한 등) — SHEETS_MASTER_ID 제거 후 dbSetupMasterDatabase. ' +
-        (e && e.message != null ? e.message : String(e))
+      'dbOpenMaster_: openById 실패 — SHEETS_MASTER_ID 제거 후 dbSetupMasterDatabase. ' + (e && e.message != null ? e.message : String(e))
     );
     try {
       p.deleteProperty(DB_PROP_SHEETS_MASTER_ID);

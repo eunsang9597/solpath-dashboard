@@ -52,22 +52,30 @@ function dbInitOperationsSheets_() {
   var existing = p.getProperty(DB_PROP_SHEETS_OPERATIONS_ID);
   existing = existing != null ? String(existing).trim() : '';
   if (existing) {
-    try {
-      var ss0 = SpreadsheetApp.openById(existing);
-      dbGetOrCreateSheetWithHeaders_(ss0, DB_SHEET_PRODUCT_MAPPING, DB_PRODUCT_MAPPING_HEADERS);
-      return {
-        id: existing,
-        url: 'https://docs.google.com/spreadsheets/d/' + existing + '/edit',
-        already: true,
-        createdNew: false,
-        productMappingHeadersApplied: true
-      };
-    } catch (e0) {
-      Logger.log('dbInitOperationsSheets_: existing id open fail, will recreate. ' + (e0 && e0.message));
+    if (!dbDriveSpreadsheetIdIsUsableNow_(existing)) {
+      Logger.log('dbInitOperationsSheets_: SHEETS_OPERATIONS_ID 가 Drive에 없음·휴지통 등 — Property 제거');
       try {
         p.deleteProperty(DB_PROP_SHEETS_OPERATIONS_ID);
       } catch (del) {}
       existing = '';
+    } else {
+      try {
+        var ss0 = SpreadsheetApp.openById(existing);
+        dbGetOrCreateSheetWithHeaders_(ss0, DB_SHEET_PRODUCT_MAPPING, DB_PRODUCT_MAPPING_HEADERS);
+        return {
+          id: existing,
+          url: 'https://docs.google.com/spreadsheets/d/' + existing + '/edit',
+          already: true,
+          createdNew: false,
+          productMappingHeadersApplied: true
+        };
+      } catch (e0) {
+        Logger.log('dbInitOperationsSheets_: existing id open fail, will recreate. ' + (e0 && e0.message));
+        try {
+          p.deleteProperty(DB_PROP_SHEETS_OPERATIONS_ID);
+        } catch (del) {}
+        existing = '';
+      }
     }
   }
 
@@ -117,6 +125,12 @@ function dbPmOpenOpsOrThrow_() {
     throw new Error('NO_OPERATIONS_SHEET');
   }
   var sid = String(id).trim();
+  if (!dbDriveSpreadsheetIdIsUsableNow_(sid)) {
+    try {
+      p.deleteProperty(DB_PROP_SHEETS_OPERATIONS_ID);
+    } catch (d) {}
+    throw new Error('NO_OPERATIONS_SHEET');
+  }
   try {
     return SpreadsheetApp.openById(sid);
   } catch (e) {
@@ -137,6 +151,12 @@ function dbProductMappingState_() {
   var id = p.getProperty(DB_PROP_SHEETS_OPERATIONS_ID);
   id = id != null ? String(id).trim() : '';
   if (!id) {
+    return { ok: true, data: { ready: false, reason: 'NO_OPERATIONS_SHEET', masterSpreadsheetUrl: masterUrl, productMappingSheetName: DB_SHEET_PRODUCT_MAPPING } };
+  }
+  if (!dbDriveSpreadsheetIdIsUsableNow_(id)) {
+    try {
+      p.deleteProperty(DB_PROP_SHEETS_OPERATIONS_ID);
+    } catch (d) {}
     return { ok: true, data: { ready: false, reason: 'NO_OPERATIONS_SHEET', masterSpreadsheetUrl: masterUrl, productMappingSheetName: DB_SHEET_PRODUCT_MAPPING } };
   }
   try {

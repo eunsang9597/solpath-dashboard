@@ -12,15 +12,29 @@ function dbSetupMasterDatabase() {
   var ss;
   var createdNew = false;
   if (id != null && String(id).trim().length) {
+    var sid = String(id).trim();
     Logger.log(
       'dbSetupMasterDatabase: Property ' +
         DB_PROP_SHEETS_MASTER_ID +
-        ' 있음(기존 시트) — 새로 만들지 않고 이 ID로 연다. 완전히 새 DB를 만들려면 이 키를 스크립트 Property에서 지운 뒤 다시 실행.'
+        ' 있음 — Drive·mime·휴지통을 먼저 검사·완전히 새 DB는 키 삭제 후 실행.'
     );
-    try {
-      ss = SpreadsheetApp.openById(String(id).trim());
-    } catch (e) {
-      Logger.log('dbSetupMasterDatabase: openById 실패 → 신규 생성. ' + (e && e.message != null ? e.message : String(e)));
+    if (dbDriveSpreadsheetIdIsUsableNow_(sid)) {
+      try {
+        ss = SpreadsheetApp.openById(sid);
+      } catch (e) {
+        Logger.log('dbSetupMasterDatabase: openById 실패 → 신규 생성. ' + (e && e.message != null ? e.message : String(e)));
+        try {
+          p.deleteProperty(DB_PROP_SHEETS_MASTER_ID);
+        } catch (d) {}
+        ss = dbCreateNewMasterSpreadsheet_();
+        p.setProperty(DB_PROP_SHEETS_MASTER_ID, ss.getId());
+        createdNew = true;
+      }
+    } else {
+      Logger.log('dbSetupMasterDatabase: Property id 는 Drive에 유효한 스프레드시트가 아님(없음·휴지통 등) — Property 제거 후 신규 생성');
+      try {
+        p.deleteProperty(DB_PROP_SHEETS_MASTER_ID);
+      } catch (d) {}
       ss = dbCreateNewMasterSpreadsheet_();
       p.setProperty(DB_PROP_SHEETS_MASTER_ID, ss.getId());
       createdNew = true;
