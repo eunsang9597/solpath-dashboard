@@ -82,7 +82,7 @@ function dbInitOperationsSheets_() {
     return { error: { code: 'BAD_REQUEST', message: '원천 DB(SHEETS_MASTER_ID) 또는 Drive 부모 결정 실패' } };
   }
 
-  var title = '솔패스_운영DB_아임웹';
+  var title = '솔루션편입_운영DB_아임웹';
   var file = dbDriveCreateSpreadsheetInFolder_(title, folderId);
   if (!file || !file.id) {
     return { error: { code: 'INTERNAL', message: 'Drive에 스프레드시트를 만들지 못했습니다.' } };

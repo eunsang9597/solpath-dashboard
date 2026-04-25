@@ -96,7 +96,7 @@ function dbDescribeMasterFileLocation_(fileId) {
  * @returns {GoogleAppsScript.Spreadsheet.Spreadsheet}
  */
 function dbCreateNewMasterSpreadsheet_() {
-  var title = '솔패스_원천DB_아임웹';
+  var title = '솔루션편입_원천DB_아임웹';
   var baseFolderId = dbResolveMasterParentFolderId_();
   var subId = '';
   if (baseFolderId) {

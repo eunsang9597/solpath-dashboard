@@ -863,7 +863,7 @@ action=initOperationsSheets
 }
 ```
 
-- 파일 제목 예: `솔패스_운영DB_아임웹` (팀에서 확정). 위치: 원천 마스터와 **같은 부모 폴더**([process.md](../process.md) · `dbSchema` `DB` 폴더 규칙)에 두는 것을 권장.
+- 파일 제목 예: `솔루션편입_운영DB_아임웹` (팀에서 확정). 위치: 원천 마스터와 **같은 부모 폴더**([process.md](../process.md) · `dbSchema` `DB` 폴더 규칙)에 두는 것을 권장.
 
 #### 2.3.4 `POST` `productMappingApply`
 

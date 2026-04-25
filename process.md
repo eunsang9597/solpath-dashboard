@@ -152,8 +152,8 @@
 | 자산                     | 이름                                                  |
 | ---------------------- | --------------------------------------------------- |
 | GAS 프로젝트               | `solpath-dashboard-backend`                         |
-| Google Sheets (마스터 DB) | `솔패스 대시보드 마스터 DB`                                   |
-| 아임웹 개발자센터 앱 이름         | `솔패스 내부 대시보드`                                       |
+| Google Sheets (마스터 DB) | `솔루션편입 대시보드 마스터 DB`                                   |
+| 아임웹 개발자센터 앱 이름         | `솔루션편입 내부 대시보드`                                       |
 | GitHub Organization    | `solpath-labs-dev` (2026-04-20 신규 생성, 개발 자산 전용 Org) |
 
 
@@ -296,7 +296,7 @@
 | siteCode                        | 확보 완료 → `IMWEB_SITE_CODE` 키로 Script Properties **저장됨(값은 문서 비기재)**                       |
 | 서비스 URL                         | 위 §2 Web App URL (차후 Phase 3에서 프론트 CDN URL로 교체 예정)                                      |
 | 리다이렉트 URI                       | 동일 (단일 등록)                                                                              |
-| 앱 이름                            | `솔패스 내부 대시보드`                                                                           |
+| 앱 이름                            | `솔루션편입 내부 대시보드`                                                                           |
 | Client ID / Secret              | 발급 완료 → `IMWEB_CLIENT_ID`, `IMWEB_CLIENT_SECRET` **저장됨(값은 문서 비기재)**                     |
 | 요청 권한 (scope) — **read only**   | ✅ 사이트정보(필수·고정) / 회원정보 / 상품 / 주문 / 결제 / 프로모션 / 커뮤니티                                      |
 | 제외된 scope                       | ⛔ 스크립트(Script) — 사이트 전 영역 스크립트 삽입 권한, 보안상 활성화 금지                                        |
@@ -425,7 +425,7 @@
 
 ### 오늘 한 일
 
-- `gas/Setup.gs`: `**setupMasterDatabase`** — 스프레드시트 없으면 `솔패스 대시보드 마스터 DB` 생성, `members`/`orders`/`order_items`/`products`/`sync_log` 탭+§5.1.1 헤더(공통 2열 포함). `SHEETS_MASTER_ID`·`MASTER_DB_SCHEMA_VERSION` Script Properties. `CODE_SCHEMA_VERSION` 올리면 1행만 갱신.
+- `gas/Setup.gs`: `**setupMasterDatabase`** — 스프레드시트 없으면 `솔루션편입 대시보드 마스터 DB` 생성, `members`/`orders`/`order_items`/`products`/`sync_log` 탭+§5.1.1 헤더(공통 2열 포함). `SHEETS_MASTER_ID`·`MASTER_DB_SCHEMA_VERSION` Script Properties. `CODE_SCHEMA_VERSION` 올리면 1행만 갱신.
 - IMWEB 3키는 사용자가 이미 Properties에 넣은 상태(문서/코드에 값 없음).
 
 ### 다음 할 일
@@ -605,7 +605,7 @@
 **3차 세션 (저녁) — 사전 준비 Phase 실행**
 
 - GAS 프로젝트 `solpath-dashboard-backend` 생성 + `doGet` 껍데기 배포 → Web App URL 확보 및 `ok` 응답 검증
-- 아임웹 개발자센터 가입 + 앱 `솔패스 내부 대시보드` 생성
+- 아임웹 개발자센터 가입 + 앱 `솔루션편입 내부 대시보드` 생성
 - 앱 정보 등록: 서비스 URL · 리다이렉트 URI(둘 다 GAS Web App URL), Client ID/Secret 발급
 - API 설정: read-only 7개 활성화(사이트정보·회원정보·상품·주문·결제·프로모션·커뮤니티), **스크립트 scope 비활성화**(보안상 위험)
 - **앱 테스트 기능으로 테스트 사이트 연동 완료** → siteCode `S20250930...` 확보

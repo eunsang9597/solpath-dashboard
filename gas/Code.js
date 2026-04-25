@@ -7,7 +7,7 @@
 function doGet(e) {
   e = e || { parameter: {} };
   var p = e.parameter || {};
-  /** 대시보드 JSONP(크로스 오리진 fetch CORS 대신) — imweb·솔패스 */
+  /** 대시보드 JSONP(크로스 오리진 fetch CORS 대신) — imweb·솔루션편입 */
   var fmt = p.format != null ? String(p.format) : '';
   var jcb = p.callback != null ? String(p.callback) : '';
   if (fmt === 'jsonp' && jcb.length) {
