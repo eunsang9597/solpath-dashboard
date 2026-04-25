@@ -3,9 +3,9 @@
  */
 
 /** @type {string[]} */
-var _DB_PM_CATEGORIES = ['unmapped', 'solpass', 'solutine', 'challenge', 'textbook'];
+var _DB_PM_CATEGORIES = ['unmapped', 'solpass', 'solutine', 'challenge', 'textbook', 'jasoseo'];
 /** @type {string[]} */
-var _DB_PM_LIFECYCLES = ['active', 'archived', 'test'];
+var _DB_PM_LIFECYCLES = ['active', 'archived', 'test', 'legacy'];
 /** SPEC/스키마 기본값 — 빈 셀 아님 (internal_category, lifecycle, notes 빈문자) */
 var _DB_PM_DEFAULT_INTERNAL = 'unmapped';
 var _DB_PM_DEFAULT_LIFECYCLE = 'active';
@@ -379,10 +379,10 @@ function dbProductMappingList_() {
     });
   }
 
-  var counts = { unmapped: 0, solpass: 0, solutine: 0, challenge: 0, textbook: 0 };
+  var counts = { unmapped: 0, solpass: 0, solutine: 0, challenge: 0, textbook: 0, jasoseo: 0 };
   for (r = 0; r < rows.length; r++) {
     var c = rows[r].internal_category;
-    if (c === 'unmapped' || c === 'solpass' || c === 'solutine' || c === 'challenge' || c === 'textbook') {
+    if (counts.hasOwnProperty(c)) {
       counts[c]++;
     }
   }

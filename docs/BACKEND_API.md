@@ -837,7 +837,8 @@ action=syncOpenFull
     "solpass": 0,
     "solutine": 0,
     "challenge": 0,
-    "textbook": 0
+    "textbook": 0,
+    "jasoseo": 0
   }
 }
 ```
@@ -896,7 +897,7 @@ action=initOperationsSheets
 }
 ```
 
-**검증** — `internal_category` ∈ `unmapped|solpass|solutine|challenge|textbook`, `lifecycle` ∈ `active|archived|test`. 위반 시 `ok: false`, `error.code: BAD_REQUEST`.
+**검증** — `internal_category` ∈ `unmapped|solpass|solutine|challenge|textbook|jasoseo`, `lifecycle` ∈ `active|archived|test|legacy`. 위반 시 `ok: false`, `error.code: BAD_REQUEST`.
 
 **성공 `data`**
 

@@ -47,8 +47,8 @@ var DB_SHEET_PRODUCT_MAPPING = 'product_mapping';
 
 /**
  * @type {string[]}
- * - internal_category: `unmapped` | `solpass` | `solutine` | `challenge` | `textbook` (docs/SPEC.md §3.1·§4, 영문 키 고정)
- * - lifecycle: `active` (판매·운영) | `archived` (만료/종료) | `test` (테스트)
+ * - internal_category: `unmapped` | `solpass` | `solutine` | `challenge` | `textbook` | `jasoseo` (영문 키 고정)
+ * - lifecycle: `active` | `archived` | `test` | `legacy` ((구)상품)
  */
 var DB_PRODUCT_MAPPING_HEADERS = [
   'prod_no',
