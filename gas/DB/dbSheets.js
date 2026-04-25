@@ -61,12 +61,14 @@ function dbClearDataRows2Plus_(sheet, nCols) {
   if (lr < 2) {
     return;
   }
-  sheet.getRange(2, 1, lr, nCols).clearContent();
+  /** GAS `getRange(r,c,numRows,numCols)` — 3·4번째는 **개수**. 2행~lr행 = (lr-2+1)행 */
+  sheet.getRange(2, 1, lr - 2 + 1, nCols).clearContent();
 }
 
 /**
- * 1행=헤더, 2행부터 values 붙이기. 끝 행 = 1 + values.length (2…1+n행 = n행).
- * 열은 nCols에 맞게 패딩 — 가변 길이 행·setHeader 오해로 생기는 102/103 불일치 방지
+ * 1행=헤더, 2행부터 n행 데이터 쓰기.
+ * GAS `getRange(row,col,numRows,numCols)` — **3번째는 행 개수**(끝 행 인덱스 아님).
+ * 예: 데이터 102행이면 `numRows=102` — `1+102`로 넣으면 103행 범위가 되어 102/103 오류 남.
  * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet
  * @param {any[][]|null|undefined} values
  * @param {number} nCols
@@ -86,5 +88,5 @@ function dbSetValuesFromRow2_(sheet, values, nCols) {
     }
     norm.push(line);
   }
-  sheet.getRange(2, 1, 1 + n, nCols).setValues(norm);
+  sheet.getRange(2, 1, n, nCols).setValues(norm);
 }
