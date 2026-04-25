@@ -767,7 +767,144 @@ action=syncOpenFull
 
 **함수(코드) 매핑** — `action=syncOpenFull` → `dbSyncOpenAll()` → `dbSyncMembersOpen` → `dbSyncProductsOnePage` → `dbSyncOrdersOpen`. 시트 `getRange(…, numRows, numCols)`·`dbSetValuesFromRow2_` — [GAS_WEBAPP_SHEETS.md](./GAS_WEBAPP_SHEETS.md) §4.
 
-### 2.3 향후 엔드포인트 (템플릿)
+### 2.3 상품 항목 분류 (`product_mapping`)
+
+원천 `products` + 운영 시트 `product_mapping` — 스키마·열거는 [SCHEMA_PRODUCT_MAPPING.md](./SCHEMA_PRODUCT_MAPPING.md). 프론트 UX(저장 버튼·초기 시트 생성)는 [front/docs/PRODUCT_CLASSIFICATION_UI.md](../front/docs/PRODUCT_CLASSIFICATION_UI.md).
+
+**공통** — `POST`는 `Content-Type: application/x-www-form-urlencoded` 또는 `text/plain` + 본문, 또는 JSON 본문(구현 시 하나로 통일). 브라우저 읽기는 `GET` **JSONP** `?format=jsonp&callback=…&action=…` (§2, [GAS_WEBAPP_SHEETS.md](./GAS_WEBAPP_SHEETS.md)).
+
+| `action` (GET JSONP) | 용도 | `data` 요약 |
+|----------------------|------|----------------|
+| `productMappingState` | 운영 스프레드시트·`product_mapping` 시트 **준비 여부** + 링크 | 아래 §2.3.1 |
+| `productMappingList` | 원천 상품 + 매핑 **병합** 목록(페이지 UI) | §2.3.2. 준비 안 됐으면 `ok: false` + `error.code: NO_OPERATIONS_SHEET` |
+
+| `action` (POST) | 용도 | 비고 |
+|-----------------|------|------|
+| `initOperationsSheets` | **새** 운영용 스프레드시트 생성(원천 DB와 **같은 Drive 폴더**), `SHEETS_OPERATIONS_ID` 저장, `product_mapping` 탭+헤더 | 최초 1회. 이미 ID가 있으면 `ok: false` + `ALREADY_CONFIGURED` 또는 idempotent `ok: true` (구현 선택) |
+| `productMappingApply` | `prod_no` 기준 **배치 upsert** (프론트 **「수정하기」** 1클릭) | 본문 §2.3.3 |
+
+#### 2.3.1 `GET` `productMappingState` (JSONP)
+
+**성공 200 (JSONP 래핑)** — `data` 예:
+
+```json
+{
+  "ready": true,
+  "operationsSpreadsheetId": "…",
+  "operationsSpreadsheetUrl": "https://docs.google.com/spreadsheets/d/…/edit",
+  "productMappingSheetName": "product_mapping"
+}
+```
+
+`ready: false` 인 경우(프로퍼티 없음·파일 열기 실패 등):
+
+```json
+{
+  "ready": false,
+  "reason": "NO_OPERATIONS_SHEET",
+  "masterSpreadsheetUrl": "https://docs.google.com/spreadsheets/d/…/edit"
+}
+```
+
+- `masterSpreadsheetUrl` — 원천 `SHEETS_MASTER_ID` 가 있을 때만(선택). **「상품 불러오기」** 주변 링크용.
+- `reason` — 문자열 코드로 통일 (`NO_OPERATIONS_SHEET` | …).
+
+#### 2.3.2 `GET` `productMappingList` (JSONP)
+
+- **전제:** `ready === true`. 아니면 `ok: false`, `error: { "code": "NO_OPERATIONS_SHEET", "message": "…" }`.
+- `data` — 프론트가 미분류/4분류/접기 UI를 그리기 쉬운 형태로 **한 종류**로 고정(구현 시 아래를 스키마로 엄격히).
+
+**제안 스키마 (한 번에 병합)**
+
+```json
+{
+  "rows": [
+    {
+      "prod_no": 12345,
+      "product_name": "…",
+      "product_name_display": "… 12자 컷 + …",
+      "internal_category": "unmapped",
+      "lifecycle": "active",
+      "notes": "",
+      "created_at": "",
+      "updated_at": ""
+    }
+  ],
+  "counts": {
+    "unmapped": 0,
+    "solpass": 0,
+    "solutine": 0,
+    "challenge": 0,
+    "textbook": 0
+  }
+}
+```
+
+- `products` 원천에만 있고 `product_mapping` 행이 없으면, 서버가 **`internal_category: "unmapped"`**, `lifecycle` 기본값(예: `active`)으로 **채워 넣지 않고** 클라이언트 기본을 주거나, **빈 매핑**을 내려서 클라이언트가 `unmapped`로 표시 — **둘 중 하나로 통일** (권장: 서버가 항상 5개 분류+라이프사이클 키를 내려 **한 타입**).
+- (선택) `GET` 직전 원천 `products` **스냅샷**과 동기화하려면 별도 동기 job과 분리; v0는 **시트 캐시**만 읽어도 됨.
+
+#### 2.3.3 `POST` `initOperationsSheets`
+
+**본문 (form 권장)**
+
+```
+action=initOperationsSheets
+```
+
+또는 JSON `{ "action": "initOperationsSheets" }` — GAS `doPost` 파서와 맞출 것.
+
+**성공 `data`**
+
+```json
+{
+  "operationsSpreadsheetId": "…",
+  "operationsSpreadsheetUrl": "https://docs.google.com/spreadsheets/d/…/edit",
+  "productMappingHeadersApplied": true
+}
+```
+
+- 파일 제목 예: `솔패스_운영DB_아임웹` (팀에서 확정). 위치: 원천 마스터와 **같은 부모 폴더**([process.md](../process.md) · `dbSchema` `DB` 폴더 규칙)에 두는 것을 권장.
+
+#### 2.3.4 `POST` `productMappingApply`
+
+**본문 (JSON, UTF-8)** — **배치** (프론트가 편집한 행만 보내거나, 전체 dirty 행; 구현은 **배열 upsert**).
+
+```json
+{
+  "action": "productMappingApply",
+  "rows": [
+    {
+      "prod_no": 12345,
+      "product_name": "스냅샷(선택, 원천 name과 맞출 것)",
+      "internal_category": "solpass",
+      "lifecycle": "active",
+      "notes": ""
+    }
+  ]
+}
+```
+
+**검증** — `internal_category` ∈ `unmapped|solpass|solutine|challenge|textbook`, `lifecycle` ∈ `active|archived|test`. 위반 시 `ok: false`, `error.code: BAD_REQUEST`.
+
+**성공 `data`**
+
+```json
+{ "upserted": 3, "updated_at": "2026-04-25T12:00:00.000Z" }
+```
+
+- 시트: `created_at` 은 **신규 행에만**; `updated_at` 은 **항상** 갱신.
+- GAS: `httpOpenSync`의 `ping` `allowed` 배열에 위 `action` 이름들을 **추가**해 배포 문서·클라이언트가 참고.
+
+**에러 `code` 추가 (이 절)**
+
+| code | 의미 |
+|------|------|
+| `NO_OPERATIONS_SHEET` | `productMappingList` / `apply` — 운영 스프레드시트 없음 |
+| `ALREADY_CONFIGURED` | `initOperationsSheets` — 이미 `SHEETS_OPERATIONS_ID` 있음 (선택) |
+
+---
+
+### 2.4 향후 엔드포인트 (템플릿)
 
 추가할 때마다 아래 블록을 복사한다.
 
@@ -815,5 +952,6 @@ action=syncOpenFull
 | 2026-04-25 | **구현** — `gas/imwebAuth.js`: Open API는 OAuth2 `accessToken`만 Bearer; `v2/auth` 토큰은 30101 |
 | 2026-04-25 | **GAS** — `HttpOpenSync.js`: `POST` `action=ping|syncOpenFull` · CORS. `dbSyncOpenAll` 반환. 토큰 필드 제거(위젯에서 문구 확인만) |
 | 2026-04-25 | **GAS** — `TextOutput`에 CORS `setHeader` 없음·브라우저는 **JSONP** (`GET ?format=jsonp`). `getRange` 3·4인자=**행/열 개수** (`dbSheets.js`). 상세: [GAS_WEBAPP_SHEETS.md](./GAS_WEBAPP_SHEETS.md) · §2~4 갱신 |
+| 2026-04-25 | **§2.3** — `productMappingState` / `productMappingList` (GET JSONP), `initOperationsSheets` / `productMappingApply` (POST). [SCHEMA_PRODUCT_MAPPING.md](./SCHEMA_PRODUCT_MAPPING.md), [front/docs/PRODUCT_CLASSIFICATION_UI.md](../front/docs/PRODUCT_CLASSIFICATION_UI.md) |
 
 이후부터는 **날짜당 한 줄** 위주로 쌓고, 상세는 [process.md](../process.md) 변경 이력·[GAS_WEBAPP_SHEETS.md](./GAS_WEBAPP_SHEETS.md)에 남긴다.

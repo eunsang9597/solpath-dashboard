@@ -33,6 +33,28 @@ var DB_SHEET_ORDER_ITEMS = 'order_items';
 var DB_SHEET_PRODUCTS = 'products';
 var DB_SHEET_SYNC_LOG = 'sync_log';
 
+/**
+ * 층 1(운영/파생) — 상품·내부 분류 매핑. 원천 `products`와 **별도 시트(또는 별도 스프레드시트)**. (레포 `docs/SCHEMA_PRODUCT_MAPPING.md` 참고)
+ * Script Property: `SHEETS_OPERATIONS_ID` — 없으면 개발/초기에는 원천 마스터와 **같은 파일**에 탭만 두는 방식으로도 동작시킬 수 있음(구현에서 결정).
+ */
+var DB_PROP_SHEETS_OPERATIONS_ID = 'SHEETS_OPERATIONS_ID';
+var DB_SHEET_PRODUCT_MAPPING = 'product_mapping';
+
+/**
+ * @type {string[]}
+ * - internal_category: `unmapped` | `solpass` | `solutine` | `challenge` | `textbook` (docs/SPEC.md §3.1·§4, 영문 키 고정)
+ * - lifecycle: `active` (판매·운영) | `archived` (만료/종료) | `test` (테스트)
+ */
+var DB_PRODUCT_MAPPING_HEADERS = [
+  'prod_no',
+  'product_name',
+  'internal_category',
+  'lifecycle',
+  'created_at',
+  'updated_at',
+  'notes'
+];
+
 /** 끝 2열: docs/SPEC.md §5.1.1 공통 */
 var DB_META_SUFFIX = ['fetched_at', 'source_sync_id'];
 

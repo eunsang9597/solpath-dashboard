@@ -56,25 +56,38 @@ function openSyncJsonpFromGet_(e, callbackName) {
       callbackName
     );
   }
-  return openSyncTextOutputJsonp_(openSyncExecuteAction_(action), callbackName);
+  return openSyncTextOutputJsonp_(openSyncRouteAction_(action, e), callbackName);
+}
+
+/**
+ * @return {string[]}
+ */
+function openSyncAllowedActions_() {
+  return [
+    'ping',
+    'syncOpenFull',
+    'productMappingState',
+    'productMappingList',
+    'initOperationsSheets',
+    'productMappingApply'
+  ];
 }
 
 /**
  * @param {string} action
+ * @param {Object|null|undefined} e
  * @return {Object}
  */
-function openSyncExecuteAction_(action) {
+function openSyncRouteAction_(action, e) {
+  e = e || { parameter: {} };
   if (action === 'ping') {
-    return {
-      ok: true,
-      data: { name: 'openSync', version: 3, actions: ['ping', 'syncOpenFull'] }
-    };
+    return { ok: true, data: { name: 'openSync', version: 4, actions: openSyncAllowedActions_() } };
   }
   if (action === 'syncOpenFull') {
     try {
-      var data = dbSyncOpenAll();
-      data.spreadsheetUrl = openSyncMasterSpreadsheetUrl_();
-      return { ok: true, data: data };
+      var data0 = dbSyncOpenAll();
+      data0.spreadsheetUrl = openSyncMasterSpreadsheetUrl_();
+      return { ok: true, data: data0 };
     } catch (x) {
       return {
         ok: false,
@@ -83,7 +96,91 @@ function openSyncExecuteAction_(action) {
       };
     }
   }
-  return { ok: false, error: 'UNKNOWN_ACTION', allowed: ['ping', 'syncOpenFull'] };
+  if (action === 'productMappingState') {
+    return dbProductMappingState_();
+  }
+  if (action === 'productMappingList') {
+    return dbProductMappingList_();
+  }
+  if (action === 'initOperationsSheets') {
+    var r0 = dbInitOperationsSheets_();
+    if (r0 && r0.error) {
+      return { ok: false, error: { code: r0.error.code, message: r0.error.message } };
+    }
+    return {
+      ok: true,
+      data: {
+        operationsSpreadsheetId: r0.id,
+        operationsSpreadsheetUrl: r0.url,
+        alreadyConfigured: r0.already,
+        productMappingHeadersApplied: r0.productMappingHeadersApplied,
+        createdNew: r0.createdNew
+      }
+    };
+  }
+  if (action === 'productMappingApply') {
+    var rows0 = openSyncExtractRowsForApply_(e);
+    if (!rows0 || !rows0.length) {
+      return { ok: false, error: { code: 'BAD_REQUEST', message: 'payload 또는 rows 없음' } };
+    }
+    return dbProductMappingApply_(rows0);
+  }
+  return { ok: false, error: 'UNKNOWN_ACTION', allowed: openSyncAllowedActions_() };
+}
+
+/**
+ * @param {string} action
+ * @return {Object}
+ */
+function openSyncExecuteAction_(action) {
+  return openSyncRouteAction_(action, null);
+}
+
+/**
+ * @param {Object} e
+ * @return {any[]|null}
+ */
+function openSyncExtractRowsForApply_(e) {
+  e = e || {};
+  var p = e.parameter || {};
+  var bodyText = p.payload != null ? String(p.payload) : '';
+  if (!bodyText.length && e.postData && e.postData.contents) {
+    var lo0 = (e.postData.type != null ? String(e.postData.type) : '').toLowerCase();
+    if (lo0.indexOf('application/x-www-form-urlencoded') >= 0 || lo0.indexOf('text/plain') >= 0 || !lo0.length) {
+      var f0 = openSyncParseFormUrlEncoded_(String(e.postData.contents));
+      if (f0 && f0.payload != null) {
+        bodyText = String(f0.payload);
+      }
+    }
+  }
+  if (bodyText.length) {
+    var j;
+    try {
+      j = JSON.parse(bodyText);
+    } catch (e1) {
+      try {
+        j = JSON.parse(decodeURIComponent(bodyText));
+      } catch (e2) {
+        j = null;
+      }
+    }
+    if (j && j.rows && j.rows.length) {
+      return j.rows;
+    }
+  }
+  if (e.postData && e.postData.contents) {
+    var raw = String(e.postData.contents);
+    var lo = (e.postData.type != null ? String(e.postData.type) : '').toLowerCase();
+    if (lo.indexOf('application/json') >= 0) {
+      try {
+        var jo = JSON.parse(raw);
+        if (jo && jo.rows && jo.rows.length) {
+          return jo.rows;
+        }
+      } catch (ej) {}
+    }
+  }
+  return null;
 }
 
 /**
@@ -140,9 +237,44 @@ function openSyncParseFormUrlEncoded_(body) {
  * @param {Object} e
  */
 function doPost(e) {
+  e = e || {};
+  var jBody = null;
+  try {
+    if (e.postData && e.postData.contents) {
+      var t = (e.postData.type != null ? String(e.postData.type) : '').toLowerCase();
+      if (t.indexOf('application/json') >= 0) {
+        jBody = JSON.parse(String(e.postData.contents));
+      }
+    }
+  } catch (errJ) {
+    jBody = null;
+  }
+  if (jBody && jBody.action === 'productMappingApply' && jBody.rows && jBody.rows.length) {
+    return openSyncTextOutputJson_(dbProductMappingApply_(jBody.rows));
+  }
+  if (jBody && jBody.action === 'initOperationsSheets') {
+    var rI = dbInitOperationsSheets_();
+    if (rI && rI.error) {
+      return openSyncTextOutputJson_({ ok: false, error: { code: rI.error.code, message: rI.error.message } });
+    }
+    return openSyncTextOutputJson_({
+      ok: true,
+      data: {
+        operationsSpreadsheetId: rI.id,
+        operationsSpreadsheetUrl: rI.url,
+        alreadyConfigured: rI.already,
+        productMappingHeadersApplied: rI.productMappingHeadersApplied,
+        createdNew: rI.createdNew
+      }
+    });
+  }
   var action = '';
   try {
-    action = openSyncGetActionFromRequest_(e) || '';
+    if (jBody && jBody.action) {
+      action = String(jBody.action);
+    } else {
+      action = openSyncGetActionFromRequest_(e) || '';
+    }
   } catch (err) {
     return openSyncTextOutputJson_({
       ok: false,
@@ -150,7 +282,13 @@ function doPost(e) {
       message: err && err.message != null ? String(err.message) : String(err)
     });
   }
-  return openSyncTextOutputJson_(openSyncExecuteAction_(action));
+  if (action === 'productMappingApply' && e.postData) {
+    var rA = openSyncExtractRowsForApply_({ postData: e.postData, parameter: {} });
+    if (rA && rA.length) {
+      return openSyncTextOutputJson_(dbProductMappingApply_(rA));
+    }
+  }
+  return openSyncTextOutputJson_(openSyncRouteAction_(action, e));
 }
 
 /**
