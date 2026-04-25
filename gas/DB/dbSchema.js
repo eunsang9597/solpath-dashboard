@@ -3,6 +3,11 @@
  * Open API 응답(camelCase) → 아래 **헤더(snake_case) 열**로 매핑. ([BACKEND_API.md](../../docs/BACKEND_API.md) 주문 절)
  *
  * 원천 시트는 GAS만 쓰기·사람 읽기 전용(락은 시트 UI에서 별도 설정).
+ *
+ * --- 스프레드시트 **파일 ID** (고유값) ---
+ * 소스 코드에 스프레드시트 id 문자열을 **박아 넣지 않는다**. (`.clasp.json`의 `scriptId`는 **이 GAS 프로젝트** id이지 시트 id가 아님.)
+ * 시트를 만들 때 나온 id만 `PropertiesService.setProperty('SHEETS_MASTER_ID'|…, ss.getId())` 등으로 **그때마다** 넣는다.
+ * “고정값” 문제는 **레포**가 아니라, GAS 편집기 **프로젝트 설정 → 스크립트 속성**에 **옛 id가 남아 있는 것** — UI에서 파일을 지워도 속성은 자동으로 안 지워진다.
  */
 var DB_PROP_SHEETS_MASTER_ID = 'SHEETS_MASTER_ID';
 /** (선택) 마스터 스프레드시트를 **처음 만들 때** 둘 Google Drive 폴더 ID. */
