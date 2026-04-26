@@ -120,18 +120,48 @@ export const SYNC_PAGE_SHELL_HTML = `<div class="app-shell app-shell--v9">
                 <p class="sp-an-pillar__lede">기간 합계, 일별 순매출 표, 집계에 쓰는 품목 줄 확인·수정, 목표(KPI) 입력까지 이어집니다.</p>
               <div class="sp-an-actuals" id="sp-an-actuals" hidden>
                 <h3 class="sp-an-actuals__h">선택 기간 실적</h3>
-                <p class="sp-an-actuals__lede" id="sp-an-actualsLede" aria-live="polite">기간을 바꾸면 카드 숫자가 맞춰집니다. 「전체」는 <strong>이번 달</strong>입니다.</p>
+                <p class="sp-an-actuals__lede" id="sp-an-actualsLede" aria-live="polite">첫 줄은 이번 기간 실매출·주문입니다. 막대·(±%)는 <strong>전체(사이트) 목표</strong>가 있으면 그 목표, 없으면 <strong>전년 동월</strong> 대비입니다. 둘째 줄은 같은 기간의 목표 또는 전년 실적입니다.</p>
                 <div class="sp-an-filters" id="sp-an-filters">
                   <label class="sp-an-filters__f sp-an-filters__f--wide"><span class="sp-pm-filters__lbl">기간</span>
                     <select class="sp-confirm" id="sp-an-filterPeriod" title="실적 카드·아래 표·목표 행 필터를 같은 기간으로 맞춥니다"></select>
                   </label>
                 </div>
-                <div class="sp-an-actuals__cards" id="sp-an-actualsCards" aria-label="선택 기간 합계">
-                  <div class="sp-an-card" id="sp-an-cardSales"><span class="sp-an-card__lbl">실제 매출(원)</span><span class="sp-an-card__val" id="sp-an-valSales">—</span></div>
-                  <div class="sp-an-card" id="sp-an-cardOrders"><span class="sp-an-card__lbl">주문 건수</span><span class="sp-an-card__val" id="sp-an-valOrders">—</span></div>
-                  <div class="sp-an-card" id="sp-an-cardMem"><span class="sp-an-card__lbl">구매자 수(고유)</span><span class="sp-an-card__val" id="sp-an-valMem">—</span></div>
+                <div class="sp-an-actuals__cards sp-an-actuals__cards--tworow" id="sp-an-actualsCards" aria-label="선택 기간 실적·비교">
+                  <div class="sp-an-metric-row">
+                    <div class="sp-an-card sp-an-card--meter" id="sp-an-cardSales">
+                      <span class="sp-an-card__lbl">실제 매출(원)</span>
+                      <div class="sp-an-card__value-row">
+                        <span class="sp-an-card__val" id="sp-an-valSales">—</span>
+                        <span class="sp-an-card__pct" id="sp-an-pctSales"></span>
+                      </div>
+                      <div class="sp-an-meter" aria-hidden="true"><div class="sp-an-meter__fill" id="sp-an-meterSales"></div></div>
+                    </div>
+                    <div class="sp-an-card sp-an-card--meter" id="sp-an-cardOrders">
+                      <span class="sp-an-card__lbl">주문 건수</span>
+                      <div class="sp-an-card__value-row">
+                        <span class="sp-an-card__val" id="sp-an-valOrders">—</span>
+                        <span class="sp-an-card__pct" id="sp-an-pctOrders"></span>
+                      </div>
+                      <div class="sp-an-meter" aria-hidden="true"><div class="sp-an-meter__fill" id="sp-an-meterOrders"></div></div>
+                    </div>
+                  </div>
+                  <div class="sp-an-metric-row sp-an-metric-row--secondary" id="sp-an-actSecondary">
+                    <div class="sp-an-metric-row2-head">
+                      <h4 class="sp-an-metric-row2__title" id="sp-an-actRow2Title">이번 기간 목표</h4>
+                      <p class="sp-an-metric-row2__sub" id="sp-an-actRow2Sub" hidden></p>
+                    </div>
+                    <div class="sp-an-metric-row2-cards">
+                      <div class="sp-an-card sp-an-card--plain">
+                        <span class="sp-an-card__lbl" id="sp-an-actRow2LblA">매출 목표(원)</span>
+                        <span class="sp-an-card__val" id="sp-an-actRow2ValA">—</span>
+                      </div>
+                      <div class="sp-an-card sp-an-card--plain">
+                        <span class="sp-an-card__lbl" id="sp-an-actRow2LblB">주문 목표(건)</span>
+                        <span class="sp-an-card__val" id="sp-an-actRow2ValB">—</span>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                <p class="sp-an-actuals__prev" id="sp-an-actualsPrev" aria-live="polite"></p>
                 <p class="sp-an-actuals__warn" id="sp-an-actualsWarn" hidden></p>
               </div>
               <div class="sp-an-viz" id="sp-an-viz" hidden>

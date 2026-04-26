@@ -305,8 +305,16 @@ export function initAnalytics(mount) {
     actuals: /** @type {HTMLElement | null} */ (mount.querySelector('#sp-an-actuals')),
     valSales: /** @type {HTMLElement | null} */ (mount.querySelector('#sp-an-valSales')),
     valOrders: /** @type {HTMLElement | null} */ (mount.querySelector('#sp-an-valOrders')),
-    valMem: /** @type {HTMLElement | null} */ (mount.querySelector('#sp-an-valMem')),
-    actualsPrev: /** @type {HTMLElement | null} */ (mount.querySelector('#sp-an-actualsPrev')),
+    pctSales: /** @type {HTMLElement | null} */ (mount.querySelector('#sp-an-pctSales')),
+    pctOrders: /** @type {HTMLElement | null} */ (mount.querySelector('#sp-an-pctOrders')),
+    meterSales: /** @type {HTMLElement | null} */ (mount.querySelector('#sp-an-meterSales')),
+    meterOrders: /** @type {HTMLElement | null} */ (mount.querySelector('#sp-an-meterOrders')),
+    actRow2Title: /** @type {HTMLElement | null} */ (mount.querySelector('#sp-an-actRow2Title')),
+    actRow2Sub: /** @type {HTMLElement | null} */ (mount.querySelector('#sp-an-actRow2Sub')),
+    actRow2LblA: /** @type {HTMLElement | null} */ (mount.querySelector('#sp-an-actRow2LblA')),
+    actRow2LblB: /** @type {HTMLElement | null} */ (mount.querySelector('#sp-an-actRow2LblB')),
+    actRow2ValA: /** @type {HTMLElement | null} */ (mount.querySelector('#sp-an-actRow2ValA')),
+    actRow2ValB: /** @type {HTMLElement | null} */ (mount.querySelector('#sp-an-actRow2ValB')),
     actualsWarn: /** @type {HTMLElement | null} */ (mount.querySelector('#sp-an-actualsWarn')),
     btnInit: /** @type {HTMLButtonElement | null} */ (mount.querySelector('#sp-an-btnInit')),
     hint: /** @type {HTMLElement | null} */ (mount.querySelector('#sp-an-hint')),
@@ -366,6 +374,8 @@ export function initAnalytics(mount) {
   let _vizM = 0;
   let _peopleYearRows = /** @type {Object[]|null} */ (null);
   let _peopleY = 0;
+  /** @type {{ y: number, m: number, d: Record<string, unknown> } | null} */
+  let _lastMasterActuals = null;
 
   function setHint(t, show) {
     if (!el.hint) {
@@ -445,7 +455,7 @@ export function initAnalytics(mount) {
         el.subCount.setAttribute('aria-selected', 'true');
         el.subCount.tabIndex = 0;
         if (el.subLede) {
-          el.subLede.textContent = '같은 표에서 인원(건수) 칸이 더 잘 보이게 켠 상태입니다.';
+          el.subLede.textContent = '같은 표에서 건수 칸이 더 잘 보이게 켠 상태입니다.';
         }
         if (el.table) {
           el.table.classList.remove('sp-an-table--mode-sales');
@@ -480,6 +490,186 @@ export function initAnalytics(mount) {
     });
   }
   setSubMode('sales');
+
+  function goalKeyEntire_(row) {
+    return String(row.goal_target != null ? row.goal_target : row.scopeKey != null ? row.scopeKey : '')
+      .trim()
+      .toLowerCase();
+  }
+
+  /**
+   * @param {number} y
+   * @param {number} m
+   * @return {object|null}
+   */
+  function findEntireTargetRowForYm_(y, m) {
+    for (let i = 0; i < localRows.length; i++) {
+      const row = localRows[i];
+      if (Math.floor(Number(row.year)) !== y || Math.floor(Number(row.month)) !== m) {
+        continue;
+      }
+      if (goalKeyEntire_(row) === 'entire') {
+        return row;
+      }
+    }
+    return null;
+  }
+
+  function fmtKrwDash0_(n) {
+    if (!isFinite(n) || n === 0) {
+      return '—';
+    }
+    return fmtKrw_(n);
+  }
+
+  function fmtIntDash0_(n) {
+    if (!isFinite(n) || n === 0) {
+      return '—';
+    }
+    return fmtInt_(n);
+  }
+
+  /**
+   * @param {unknown} v
+   * @return {number|null}
+   */
+  function parseTargetNum_(v) {
+    if (v == null || v === '') {
+      return null;
+    }
+    const n = Number(v);
+    return isFinite(n) ? n : null;
+  }
+
+  /**
+   * @param {HTMLElement | null} elP
+   * @param {HTMLElement | null} elFill
+   * @param {number} actual
+   * @param {number} baseline
+   */
+  function applyMeterPct_(elP, elFill, actual, baseline) {
+    if (!elFill) {
+      return;
+    }
+    if (!elP) {
+      elFill.style.width = '0%';
+      return;
+    }
+    elP.textContent = '';
+    elP.classList.remove('sp-an-card__pct--up', 'sp-an-card__pct--down');
+    if (!isFinite(actual) || !isFinite(baseline) || baseline <= 0) {
+      elFill.style.width = '0%';
+      return;
+    }
+    const ratio = Math.min(1, actual / baseline);
+    elFill.style.width = ratio * 70 + '%';
+    const delta = ((actual - baseline) / baseline) * 100;
+    elP.textContent = (delta >= 0 ? '(+' : '(-') + Math.abs(delta).toFixed(1) + '%)';
+    elP.classList.add(delta >= 0 ? 'sp-an-card__pct--up' : 'sp-an-card__pct--down');
+  }
+
+  function paintActualsCompareUi_() {
+    if (
+      !el.valSales ||
+      !el.valOrders ||
+      !el.pctSales ||
+      !el.pctOrders ||
+      !el.meterSales ||
+      !el.meterOrders ||
+      !el.actRow2Title ||
+      !el.actRow2Sub ||
+      !el.actRow2LblA ||
+      !el.actRow2LblB ||
+      !el.actRow2ValA ||
+      !el.actRow2ValB
+    ) {
+      return;
+    }
+    if (!_lastMasterActuals) {
+      el.valSales.textContent = '—';
+      el.valOrders.textContent = '—';
+      el.pctSales.textContent = '';
+      el.pctOrders.textContent = '';
+      el.pctSales.classList.remove('sp-an-card__pct--up', 'sp-an-card__pct--down');
+      el.pctOrders.classList.remove('sp-an-card__pct--up', 'sp-an-card__pct--down');
+      el.meterSales.style.width = '0%';
+      el.meterOrders.style.width = '0%';
+      el.actRow2Title.textContent = '이번 기간 목표';
+      el.actRow2Sub.textContent = '';
+      el.actRow2Sub.setAttribute('hidden', '');
+      el.actRow2LblA.textContent = '매출 목표(원)';
+      el.actRow2LblB.textContent = '주문 목표(건)';
+      el.actRow2ValA.textContent = '—';
+      el.actRow2ValB.textContent = '—';
+      return;
+    }
+    const yv = _lastMasterActuals.y;
+    const mv = _lastMasterActuals.m;
+    const d = _lastMasterActuals.d;
+    const pv =
+      d.prevYear && typeof d.prevYear === 'object' ? /** @type {Record<string, unknown>} */ (d.prevYear) : {};
+    const actS = Number(d.actualSales);
+    const actO = Number(d.orderCount);
+    const tgtRow = findEntireTargetRowForYm_(yv, mv);
+    let baseS = NaN;
+    let baseO = NaN;
+    if (tgtRow) {
+      const ts0 = parseTargetNum_(tgtRow.targetAmount);
+      const to0 = parseTargetNum_(tgtRow.targetCount);
+      baseS = ts0 != null ? ts0 : NaN;
+      baseO = to0 != null ? to0 : NaN;
+    } else {
+      baseS = Number(pv.actualSales);
+      baseO = Number(pv.orderCount);
+    }
+    el.valSales.textContent = isFinite(actS) ? fmtKrw_(actS) : '—';
+    el.valOrders.textContent = isFinite(actO) ? fmtInt_(actO) : '—';
+
+    const showBarS = isFinite(actS) && isFinite(baseS) && baseS > 0;
+    const showBarO = isFinite(actO) && isFinite(baseO) && baseO > 0;
+    if (!showBarS) {
+      el.pctSales.textContent = '';
+      el.pctSales.classList.remove('sp-an-card__pct--up', 'sp-an-card__pct--down');
+      el.meterSales.style.width = '0%';
+    } else {
+      applyMeterPct_(el.pctSales, el.meterSales, actS, baseS);
+    }
+    if (!showBarO) {
+      el.pctOrders.textContent = '';
+      el.pctOrders.classList.remove('sp-an-card__pct--up', 'sp-an-card__pct--down');
+      el.meterOrders.style.width = '0%';
+    } else {
+      applyMeterPct_(el.pctOrders, el.meterOrders, actO, baseO);
+    }
+
+    if (tgtRow) {
+      el.actRow2Title.textContent = '이번 기간 목표';
+      el.actRow2Sub.textContent = '';
+      el.actRow2Sub.setAttribute('hidden', '');
+      el.actRow2LblA.textContent = '매출 목표(원)';
+      el.actRow2LblB.textContent = '주문 목표(건)';
+      const ts = parseTargetNum_(tgtRow.targetAmount);
+      const to = parseTargetNum_(tgtRow.targetCount);
+      el.actRow2ValA.textContent = ts != null && ts > 0 ? fmtKrw_(ts) : '—';
+      el.actRow2ValB.textContent = to != null && to > 0 ? fmtInt_(to) : '—';
+    } else {
+      el.actRow2Title.textContent = '전년 동월 실적';
+      const py = pv.year != null ? Number(pv.year) : yv - 1;
+      const pm = pv.month != null ? Number(pv.month) : mv;
+      let sub = '';
+      if (pm === 0) {
+        sub = py + '년(연간)';
+      } else {
+        sub = py + '년 ' + pm + '월';
+      }
+      el.actRow2Sub.textContent = sub;
+      el.actRow2Sub.removeAttribute('hidden');
+      el.actRow2LblA.textContent = '실제 매출(원)';
+      el.actRow2LblB.textContent = '주문 건수';
+      el.actRow2ValA.textContent = fmtKrwDash0_(Number(pv.actualSales));
+      el.actRow2ValB.textContent = fmtIntDash0_(Number(pv.orderCount));
+    }
+  }
 
   /**
    * @return {Promise<Object|null>}
@@ -1640,6 +1830,7 @@ export function initAnalytics(mount) {
         });
       });
     }
+    paintActualsCompareUi_();
   }
 
   function syncAnUi_() {
@@ -1686,7 +1877,7 @@ export function initAnalytics(mount) {
     if (!GAS_MODE.canSync || GAS_MODE.useMock) {
       return;
     }
-    if (!el.filterPeriod || !el.valSales || !el.valOrders || !el.valMem) {
+    if (!el.filterPeriod || !el.valSales || !el.valOrders) {
       return;
     }
     if (el.actualsWarn) {
@@ -1695,6 +1886,8 @@ export function initAnalytics(mount) {
     }
     const ym = periodValueToApiYm_(el.filterPeriod.value);
     const url = String(GAS_BASE_URL).trim();
+    _lastMasterActuals = null;
+    paintActualsCompareUi_();
     try {
       const r = await gasJsonpWithParams(
         url,
@@ -1703,18 +1896,8 @@ export function initAnalytics(mount) {
         90000
       );
       if (!r || !r.ok) {
-        if (el.valSales) {
-          el.valSales.textContent = '—';
-        }
-        if (el.valOrders) {
-          el.valOrders.textContent = '—';
-        }
-        if (el.valMem) {
-          el.valMem.textContent = '—';
-        }
-        if (el.actualsPrev) {
-          el.actualsPrev.textContent = '';
-        }
+        _lastMasterActuals = null;
+        paintActualsCompareUi_();
         const msg =
           r && r.error && typeof r.error === 'object' && r.error.message
             ? String(r.error.message)
@@ -1727,37 +1910,11 @@ export function initAnalytics(mount) {
         return;
       }
       const d = (r.data && r.data) || {};
-      const pv = d.prevYear || {};
-      if (el.valSales) {
-        el.valSales.textContent = fmtKrw_(Number(d.actualSales));
-      }
-      if (el.valOrders) {
-        el.valOrders.textContent = fmtInt_(Number(d.orderCount));
-      }
-      if (el.valMem) {
-        el.valMem.textContent = fmtInt_(Number(d.uniqueMemberCount));
-      }
-      if (el.actualsPrev) {
-        const py = pv.year != null ? Number(pv.year) : d.year - 1;
-        const pm = pv.month != null ? Number(pv.month) : ym.m;
-        let plab = '';
-        if (pm === 0) {
-          plab = py + '년(연간)';
-        } else {
-          plab = py + '년 ' + pm + '월';
-        }
-        el.actualsPrev.textContent =
-          '전년 동기(' +
-          plab +
-          ') 실적: 매출 ' +
-          fmtKrw_(Number(pv.actualSales)) +
-          ' · 주문 ' +
-          fmtInt_(Number(pv.orderCount)) +
-          ' · 구매자 ' +
-          fmtInt_(Number(pv.uniqueMemberCount)) +
-          '. 목표를 비워 두었을 때 비교·참고로 쓸 수 있는 대표치입니다.';
-      }
+      _lastMasterActuals = { y: ym.y, m: ym.m, d: d };
+      paintActualsCompareUi_();
     } catch (e) {
+      _lastMasterActuals = null;
+      paintActualsCompareUi_();
       logSolpathApi_('analyticsMasterActualsGet', null, e);
       if (el.actualsWarn) {
         el.actualsWarn.textContent = '집계 요청이 끝나지 않았습니다.';
