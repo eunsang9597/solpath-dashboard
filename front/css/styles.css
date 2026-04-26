@@ -146,44 +146,60 @@ code {
   min-height: 10rem;
 }
 
-/* 로딩 오버레이(동기 fetch 중) */
+/* 로딩 오버레이(동기화 실행 등 — 뷰포트 전체 덮어 눈에 잘 띄게) */
 .sp-overlay[hidden] {
   display: none !important;
 }
 
 .sp-overlay {
-  position: absolute;
+  position: fixed;
   inset: 0;
-  z-index: 20;
+  z-index: 10000;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(248, 250, 252, 0.82);
-  backdrop-filter: blur(4px);
-  border-radius: var(--radius);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.6);
+  padding: 1.25rem;
+  background: rgba(15, 23, 42, 0.48);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
 }
 
 .sp-overlay-box {
   text-align: center;
-  padding: 1.25rem;
+  padding: 1.65rem 1.85rem;
+  max-width: min(22rem, 100%);
+  background: #fff;
+  border-radius: 14px;
+  box-shadow:
+    0 22px 50px rgba(15, 23, 42, 0.22),
+    0 0 0 1px rgba(15, 23, 42, 0.06);
 }
 
 .sp-overlay-text {
-  margin: 0.75rem 0 0;
-  font-size: calc(0.92rem + var(--sp-text-bump));
-  color: #3d4a5c;
+  margin: 1rem 0 0;
+  font-size: calc(1.05rem + var(--sp-text-bump));
+  color: #0f172a;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  line-height: 1.35;
+}
+
+.sp-overlay-sub {
+  margin: 0.45rem 0 0;
+  font-size: calc(0.88rem + var(--sp-text-bump));
+  color: #64748b;
   font-weight: 500;
+  line-height: 1.45;
 }
 
 .sp-spinner {
-  width: calc(36px + 4pt);
-  height: calc(36px + 4pt);
+  width: calc(44px + 4pt);
+  height: calc(44px + 4pt);
   margin: 0 auto;
-  border: 3px solid var(--line);
+  border: 3px solid rgba(37, 99, 235, 0.22);
   border-top-color: var(--accent);
   border-radius: 50%;
-  animation: sp-spin 0.7s linear infinite;
+  animation: sp-spin 0.65s linear infinite;
 }
 
 @keyframes sp-spin {
@@ -1736,31 +1752,53 @@ input.sp-confirm:disabled {
 }
 
 .sp-pm__loading {
-  font-size: calc(0.9rem + var(--sp-text-bump));
+  font-size: calc(0.92rem + var(--sp-text-bump));
   color: var(--muted);
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.55rem;
 }
 
 .sp-pm__loading:not([hidden]) {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
-  min-height: 1.5rem;
-  font-weight: 600;
+  gap: 0.65rem;
+  min-height: 2.35rem;
+  font-weight: 650;
   color: #0b5cad;
-  padding: 0.35rem 0;
-  margin-bottom: 0.5rem;
+  padding: 0.55rem 0.75rem;
+  margin-bottom: 0.65rem;
+  border-radius: 10px;
+  background: rgba(11, 92, 173, 0.07);
+  border: 1px solid rgba(11, 92, 173, 0.22);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.7) inset;
 }
 
 .sp-pm__loading:not([hidden])::before {
   content: "";
-  width: calc(0.9rem + 3pt);
-  height: calc(0.9rem + 3pt);
-  border: 2px solid rgba(11, 92, 173, 0.2);
+  width: calc(1.1rem + 4pt);
+  height: calc(1.1rem + 4pt);
+  border: 3px solid rgba(11, 92, 173, 0.22);
   border-top-color: #0b5cad;
   border-radius: 50%;
   flex-shrink: 0;
-  animation: sp-pm-spin 0.7s linear infinite;
+  animation: sp-pm-spin 0.65s linear infinite;
+}
+
+/* 매출·구매 인원 탭: 목표/표 로딩 띠 — 조금 더 크고 대비 있게 */
+.sp-pm__loading.sp-an-loading:not([hidden]) {
+  min-height: 2.75rem;
+  padding: 0.75rem 1rem;
+  font-size: calc(0.98rem + var(--sp-text-bump));
+  background: linear-gradient(180deg, rgba(239, 246, 255, 0.95) 0%, rgba(219, 234, 254, 0.55) 100%);
+  border-color: rgba(37, 99, 235, 0.35);
+  color: #1e3a5f;
+}
+
+.sp-pm__loading.sp-an-loading:not([hidden])::before {
+  width: calc(1.28rem + 4pt);
+  height: calc(1.28rem + 4pt);
+  border-width: 3px;
+  border-color: rgba(37, 99, 235, 0.2);
+  border-top-color: #2563eb;
 }
 
 @keyframes sp-pm-spin {

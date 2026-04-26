@@ -270,9 +270,11 @@ function setLoading(on) {
     if (on) {
       loadingOverlay.removeAttribute('hidden');
       loadingOverlay.setAttribute('aria-hidden', 'false');
+      loadingOverlay.setAttribute('aria-busy', 'true');
     } else {
       loadingOverlay.setAttribute('hidden', '');
       loadingOverlay.setAttribute('aria-hidden', 'true');
+      loadingOverlay.removeAttribute('aria-busy');
     }
   }
   if (btnSync) {

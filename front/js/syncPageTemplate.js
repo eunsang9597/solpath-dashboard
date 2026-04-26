@@ -81,8 +81,9 @@ export const SYNC_PAGE_SHELL_HTML = `<div class="app-shell app-shell--v9">
         <main class="app-main sp-app-main" id="sp-main">
         <div class="sp-overlay" id="sp-loadingOverlay" hidden aria-hidden="true">
           <div class="sp-overlay-box">
-            <div class="sp-spinner" role="status" aria-label="로딩"></div>
-            <p class="sp-overlay-text">처리 중</p>
+            <div class="sp-spinner" role="status" aria-label="데이터 처리 중"></div>
+            <p class="sp-overlay-text" id="sp-loadingOverlay-title">데이터 반영 중</p>
+            <p class="sp-overlay-sub" id="sp-loadingOverlay-desc">잠시만 기다려 주세요. 수 분 걸릴 수 있습니다.</p>
           </div>
         </div>
 
@@ -204,7 +205,7 @@ export const SYNC_PAGE_SHELL_HTML = `<div class="app-shell app-shell--v9">
                 <p class="sp-an-ol__warn" id="sp-an-olWarn" hidden></p>
                 <div class="sp-an-ol-scroll" id="sp-an-olScroll" role="region" aria-label="품목 줄 인정·집계 반영"></div>
               </div>
-              <div class="sp-pm__loading" id="sp-an-loading" hidden>불러오는 중</div>
+              <div class="sp-pm__loading sp-an-loading" id="sp-an-loading" hidden role="status" aria-live="polite">데이터를 불러오는 중…</div>
               <div class="sp-pm-init" id="sp-an-init" hidden>
                 <p class="sp-pm-init__lede" id="sp-an-initLede">목표를 드라이브 표에 쓰려면 먼저 여기서 시트를 만듭니다. <strong>위 실적 요약</strong>은 동기화만 되어 있으면 됩니다. 예전 파일만 있을 때는 시트를 연 뒤 <strong>탭·주문라인 갱신</strong>으로 구조를 맞춥니다.</p>
                 <div class="sp-confirm-row sp-pm-init__row">
@@ -396,7 +397,7 @@ export const SYNC_PAGE_SHELL_HTML = `<div class="app-shell app-shell--v9">
                   <span>미분류만</span>
                 </label>
               </div>
-              <div class="sp-pm__loading" id="sp-pm-listLoading" hidden>불러오는 중</div>
+              <div class="sp-pm__loading" id="sp-pm-listLoading" hidden role="status" aria-live="polite">데이터를 불러오는 중…</div>
               <div class="sp-pm-sections" id="sp-pm-sections" hidden></div>
               <p class="actions-note sp-pm__footer-note" id="sp-pm-footerNote" hidden>편집한 뒤 <strong>수정하기</strong>로 <strong>구글 쪽</strong>에 반영합니다. 드롭다운을 바꾸면 <strong>수정하기</strong>가 켜집니다.</p>
             </div>
