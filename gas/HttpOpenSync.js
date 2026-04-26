@@ -208,7 +208,7 @@ function openSyncRouteAction_(action, e) {
     if (!isFinite(yAc) || yAc < 2000 || yAc > 2100) {
       yAc = nowAc.getFullYear();
     }
-    if (!isFinite(mAc) || mAc < 0 || mAc > 12) {
+    if (!isFinite(mAc) || mAc < 1 || mAc > 12) {
       mAc = nowAc.getMonth() + 1;
     }
     return dbAnalyticsMasterActualsGet_(yAc, mAc);

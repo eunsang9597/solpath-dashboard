@@ -330,7 +330,7 @@ function dbAnOrderLineSkipForAnalytics_(lifecycle, groupTitleStrings) {
 
 /**
  * 마스터 `order_items` 전체(테스트 `lifecycle` 포함) + `orders` + `products` + (읽기) `product_mapping` → `02_주문라인_실적` 전면 덮기
- * (내부/테스트 매출 제외: `dbAnOrderLineSkipForAnalytics_` — lifecycle test 또는 회원 그룹명 관리자·「테스트」)
+ * (제외: `internal_category === unmapped`, `dbAnOrderLineSkipForAnalytics_` — product_mapping lifecycle test 또는 회원 그룹명 관리자·「테스트」)
  * @return {{ ok: true, data: { written: number, excluded: number, batchId: string } }|{ ok: false, error: { code: string, message: string } }}
  */
 function dbAnalyticsOrderLinesRebuildFromMaster_() {
@@ -422,6 +422,10 @@ function dbAnalyticsOrderLinesRebuildFromMaster_() {
     }
     var memCode = ordNo && orderToMember[ordNo] != null ? String(orderToMember[ordNo]).trim() : '';
     var gTitles = memCode.length && memberToGroupTitles[memCode] ? memberToGroupTitles[memCode] : [];
+    if (cat === 'unmapped') {
+      skipped++;
+      continue;
+    }
     if (dbAnOrderLineSkipForAnalytics_(life, gTitles)) {
       skipped++;
       continue;
@@ -1092,52 +1096,158 @@ function dbAnAggregateOrdersForYm_(ss, y, m) {
   return { totalSales: totalSales, orderCount: orderCount, uniqueMemberCount: u };
 }
 
+/** 가상 fact·상단 실적 카드에서 빼는 대분류(미분류·교재·자소서) — `lifecycle test`·관리자/테스트 그룹은 02 재구축 시 제외 */
+var DB_AN_AGG_EXCLUDE_CATEGORY = { unmapped: true, textbook: true, jasoseo: true };
+
 /**
- * 마스터 `orders`에서 연·월 실적 (전년 동일 기간은 prev 블록)
+ * `02_주문라인_실적` — `dbAnVirtualFactRowsFromOrderLines_`와 동일한 행 선별 후,
+ * `DB_AN_AGG_EXCLUDE_CATEGORY` 대분류 줄 제외 후 순매출(매출−환불)·주문 건수(고유 order_no).
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} ssA 집계 스프레드시트
  * @param {number} y
- * @param {number} m
+ * @param {number} m 1–12
+ * @return {{ netSales: number, orderCount: number }}
+ */
+function dbAnSalesCardsMetricsFrom02_(ssA, y, m) {
+  var z = { netSales: 0, orderCount: 0 };
+  if (!ssA || !isFinite(y) || !isFinite(m) || m < 1 || m > 12) {
+    return z;
+  }
+  var sh = dbAnGetOrderLinesSheet_(ssA);
+  var lr = sh.getLastRow();
+  if (lr < 2) {
+    return z;
+  }
+  var w0 = DB_ANALYTICS_ORDER_LINE_HEADERS.length;
+  var vals = sh.getRange(2, 1, lr, w0).getValues();
+
+  var master = null;
+  try {
+    master = dbOpenMaster_();
+  } catch (eM) {
+    master = null;
+  }
+  var endMap = dbAnReadProductSalesEndMap_();
+  var addMap = master ? dbAnReadMasterProductAddTimeYm_(master) : {};
+
+  var salesSum = 0;
+  var refundSum = 0;
+  var ordSet = {};
+
+  var j;
+  for (j = 0; j < vals.length; j++) {
+    var L2 = vals[j] || [];
+    var ordN = String(L2[2] != null ? L2[2] : '').trim();
+    if (!ordN) {
+      continue;
+    }
+    var ymd0 = dbAnAnyToSeoulYmd_(L2[3]);
+    if (!ymd0) {
+      continue;
+    }
+    var pr2 = ymd0.split('-');
+    if (pr2.length < 2) {
+      continue;
+    }
+    if (parseInt(pr2[0], 10) !== y) {
+      continue;
+    }
+    if (parseInt(pr2[1], 10) !== m) {
+      continue;
+    }
+    var claim2 = String(L2[7] != null ? L2[7] : '').trim();
+    var isRe = claim2 === 'cancel' || claim2 === 'return';
+    var pRaw2 = L2[4];
+    var pkey2 = dbPmRowKey_(pRaw2);
+    var cat2 = String(L2[8] != null ? L2[8] : 'unmapped').trim() || 'unmapped';
+    var life2 = String(L2[9] != null ? L2[9] : '').trim();
+    if (life2 === 'test') {
+      continue;
+    }
+    if (DB_AN_AGG_EXCLUDE_CATEGORY[cat2]) {
+      continue;
+    }
+    var ymdP2 = ymd0.split('-');
+    if (ymdP2.length < 2) {
+      continue;
+    }
+    var oy2 = parseInt(ymdP2[0], 10);
+    var om02 = parseInt(ymdP2[1], 10);
+    var st2 = pkey2 ? addMap[pkey2] : null;
+    if (st2 && dbAnOrderYmBefore_(oy2, om02, st2.y, st2.m)) {
+      continue;
+    }
+    var en2 = pkey2 ? endMap[pkey2] : null;
+    if (en2 && dbAnOrderYmAfter_(oy2, om02, en2.lastY, en2.lastM)) {
+      continue;
+    }
+    var rawAmt2 = dbNumO_(L2[6]);
+    if (isRe) {
+      var ra2 = Math.abs(rawAmt2);
+      if (ra2 > 0) {
+        refundSum += ra2;
+      }
+    } else {
+      if (rawAmt2 > 0) {
+        salesSum += rawAmt2;
+      }
+    }
+    ordSet[ordN] = 1;
+  }
+  var oc = 0;
+  for (var ko in ordSet) {
+    if (ordSet.hasOwnProperty(ko)) {
+      oc++;
+    }
+  }
+  z.netSales = salesSum - refundSum;
+  z.orderCount = oc;
+  return z;
+}
+
+/**
+ * 상단 실적 카드 — 집계 시트 `02_주문라인_실적` 기준 (마스터 orders 아님). 전년 동월은 prev 블록.
+ * @param {number} y
+ * @param {number} m 1–12
  * @return {{ ok: true, data: Object }|{ ok: false, error: { code: string, message: string } }}
  */
 function dbAnalyticsMasterActualsGet_(y, m) {
   if (typeof y !== 'number' || !isFinite(y) || y < 2000 || y > 2100) {
     return { ok: false, error: { code: 'BAD_REQUEST', message: 'year(2000–2100)이 필요합니다.' } };
   }
-  if (typeof m !== 'number' || !isFinite(m) || m < 0 || m > 12) {
-    return { ok: false, error: { code: 'BAD_REQUEST', message: 'month(0–12)이 필요합니다. 0은 연간(그 해).' } };
+  if (typeof m !== 'number' || !isFinite(m) || m < 1 || m > 12) {
+    return { ok: false, error: { code: 'BAD_REQUEST', message: 'month는 1–12가 필요합니다. (집계 02 기준)' } };
   }
-  var ss;
+  var ssA;
   try {
-    ss = dbOpenMaster_();
+    ssA = dbAnOpenOrThrow_();
   } catch (e) {
     return {
       ok: false,
       error: {
-        code: 'NO_SHEETS_MASTER',
-        message: '집계 마스터(원천 DB)를 열지 못했습니다. 먼저「데이터 동기화」로 주문이 들어가게 한 뒤 다시 시도합니다.'
+        code: 'NO_ANALYTICS_SHEET',
+        message:
+          '집계·분석 시트(매출건수)를 열지 못했습니다. 집계용 드라이브 파일을 연 뒤 다시 시도합니다.'
       }
     };
   }
-  if (!ss) {
-    return { ok: false, error: { code: 'NO_SHEETS_MASTER', message: '집계 마스터를 열지 못했습니다.' } };
-  }
-  var cur = dbAnAggregateOrdersForYm_(ss, y, m);
+  var cur = dbAnSalesCardsMetricsFrom02_(ssA, y, m);
   var py = y - 1;
   var pm = m;
-  var prev = dbAnAggregateOrdersForYm_(ss, py, pm);
+  var prev = dbAnSalesCardsMetricsFrom02_(ssA, py, pm);
   return {
     ok: true,
     data: {
       year: y,
       month: m,
-      actualSales: cur.totalSales,
+      actualSales: cur.netSales,
       orderCount: cur.orderCount,
-      uniqueMemberCount: cur.uniqueMemberCount,
+      uniqueMemberCount: 0,
       prevYear: {
         year: py,
         month: pm,
-        actualSales: prev.totalSales,
+        actualSales: prev.netSales,
         orderCount: prev.orderCount,
-        uniqueMemberCount: prev.uniqueMemberCount
+        uniqueMemberCount: 0
       }
     }
   };
@@ -1366,6 +1476,9 @@ function dbAnVirtualFactRowsFromOrderLines_(y, m) {
     var pnoS2 = isNaN(pnum2) ? '' : String(pnum2);
     var life2 = String(L2[9] != null ? L2[9] : '').trim();
     if (life2 === 'test') {
+      continue;
+    }
+    if (DB_AN_AGG_EXCLUDE_CATEGORY[cat2]) {
       continue;
     }
     var ymdP2 = ymd0.split('-');

@@ -19,6 +19,9 @@ const AN_CATEGORY_KEY_LABEL = {
 /** 보기 범위 셀렉트에 넣는 대분류(전체 제외) — 미분류·교재·자소서 제외 */
 const VIZ_SCOPE_DROPDOWN_KEYS = { solpass: true, solutine: true, challenge: true };
 
+/** 상단 실적·전년·목표 비교 축 — 집계 02 기준, 미분류·교재·자소서 제외 */
+const AN_ACTUAL_EXCL_NOTE = ' (미분류·교재·자소서 제외)';
+
 /**
  * `monthTotals` 전 카테고리 순매출 합(사이트 전체 합계용).
  * @param {Record<string, {sales?: unknown, refund?: unknown}>|null|undefined} mt
@@ -642,8 +645,8 @@ export function initAnalytics(mount) {
       el.actRow2Title.textContent = '이번 기간 목표';
       el.actRow2Sub.textContent = '';
       el.actRow2Sub.setAttribute('hidden', '');
-      el.actRow2LblA.textContent = '매출 목표(원)';
-      el.actRow2LblB.textContent = '주문 목표(건)';
+      el.actRow2LblA.textContent = '매출 목표(원)' + AN_ACTUAL_EXCL_NOTE;
+      el.actRow2LblB.textContent = '주문 목표(건)' + AN_ACTUAL_EXCL_NOTE;
       el.actRow2ValA.textContent = '—';
       el.actRow2ValB.textContent = '—';
       return;
@@ -691,8 +694,8 @@ export function initAnalytics(mount) {
       el.actRow2Title.textContent = '이번 기간 목표';
       el.actRow2Sub.textContent = '';
       el.actRow2Sub.setAttribute('hidden', '');
-      el.actRow2LblA.textContent = '매출 목표(원)';
-      el.actRow2LblB.textContent = '주문 목표(건)';
+      el.actRow2LblA.textContent = '매출 목표(원)' + AN_ACTUAL_EXCL_NOTE;
+      el.actRow2LblB.textContent = '주문 목표(건)' + AN_ACTUAL_EXCL_NOTE;
       const ts = parseTargetNum_(tgtRow.targetAmount);
       const to = parseTargetNum_(tgtRow.targetCount);
       el.actRow2ValA.textContent = ts != null && ts > 0 ? fmtKrw_(ts) : '—';
@@ -709,8 +712,8 @@ export function initAnalytics(mount) {
       }
       el.actRow2Sub.textContent = sub;
       el.actRow2Sub.removeAttribute('hidden');
-      el.actRow2LblA.textContent = '실제 매출(원)';
-      el.actRow2LblB.textContent = '주문 건수';
+      el.actRow2LblA.textContent = '실제 매출(원)' + AN_ACTUAL_EXCL_NOTE;
+      el.actRow2LblB.textContent = '주문 건수' + AN_ACTUAL_EXCL_NOTE;
       el.actRow2ValA.textContent = fmtKrwDash0_(Number(pv.actualSales));
       el.actRow2ValB.textContent = fmtIntDash0_(Number(pv.orderCount));
     }

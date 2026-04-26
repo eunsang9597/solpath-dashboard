@@ -120,7 +120,7 @@ export const SYNC_PAGE_SHELL_HTML = `<div class="app-shell app-shell--v9">
                 <p class="sp-an-pillar__lede">선택 연·월 요약과 일별 순매출 표, 품목 줄·목표(KPI) 입력까지 한 흐름으로 이어집니다.</p>
               <div class="sp-an-salesUnified" id="sp-an-actuals" hidden>
                 <h3 class="sp-an-salesUnified__h">매출 · 선택 기간</h3>
-                <p class="sp-an-salesUnified__lede" id="sp-an-actualsLede" aria-live="polite">위 <strong>연·월(1–12)</strong>은 실적 카드·일별 표·월별 목표 행을 같이 맞춥니다. <strong>연간 목표(월 0)</strong>만 보려면 옆 버튼을 켜서 아래 KPI 표만 필터합니다. 첫 줄 카드는 실매출·주문, 막대·(±%)는 <strong>전체(사이트) 목표</strong>가 있으면 그 목표, 없으면 <strong>전년 동월</strong> 대비입니다.</p>
+                <p class="sp-an-salesUnified__lede" id="sp-an-actualsLede" aria-live="polite">위 <strong>연·월(1–12)</strong>은 실적 카드·일별 표·월별 목표 행을 같이 맞춥니다. <strong>연간 목표(월 0)</strong>만 보려면 옆 버튼을 켜서 아래 KPI 표만 필터합니다. 첫 줄 카드의 매출·주문은 집계 시트 기준이며 <strong>미분류·교재·자소서 대분류는 제외</strong>합니다(테스트 라이프사이클·관리자·테스트 그룹 주문은 02 재구축 시 제외). 막대·(±%)는 <strong>전체(사이트) 목표</strong>가 있으면 그 목표, 없으면 <strong>전년 동월</strong> 대비입니다.</p>
                 <div class="sp-an-filters sp-an-filters--period" id="sp-an-filters">
                   <label class="sp-an-filters__f"><span class="sp-pm-filters__lbl">연도</span>
                     <select class="sp-confirm" id="sp-an-filterY" title="실적·일별 표·목표(월별) 필터 연도"></select>
@@ -146,7 +146,7 @@ export const SYNC_PAGE_SHELL_HTML = `<div class="app-shell app-shell--v9">
                 <div class="sp-an-actuals__cards sp-an-actuals__cards--tworow" id="sp-an-actualsCards" aria-label="선택 기간 실적·비교">
                   <div class="sp-an-metric-row">
                     <div class="sp-an-card sp-an-card--meter" id="sp-an-cardSales">
-                      <span class="sp-an-card__lbl">실제 매출(원)</span>
+                      <span class="sp-an-card__lbl">실제 매출(원)<span class="sp-an-card__lbl-note">(미분류·교재·자소서 제외)</span></span>
                       <div class="sp-an-card__value-row">
                         <span class="sp-an-card__val" id="sp-an-valSales">—</span>
                         <span class="sp-an-card__pct" id="sp-an-pctSales"></span>
@@ -154,7 +154,7 @@ export const SYNC_PAGE_SHELL_HTML = `<div class="app-shell app-shell--v9">
                       <div class="sp-an-meter" aria-hidden="true"><div class="sp-an-meter__fill" id="sp-an-meterSales"></div></div>
                     </div>
                     <div class="sp-an-card sp-an-card--meter" id="sp-an-cardOrders">
-                      <span class="sp-an-card__lbl">주문 건수</span>
+                      <span class="sp-an-card__lbl">주문 건수<span class="sp-an-card__lbl-note">(미분류·교재·자소서 제외)</span></span>
                       <div class="sp-an-card__value-row">
                         <span class="sp-an-card__val" id="sp-an-valOrders">—</span>
                         <span class="sp-an-card__pct" id="sp-an-pctOrders"></span>
