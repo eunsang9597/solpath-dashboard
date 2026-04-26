@@ -1713,7 +1713,6 @@ function dbAnalyticsOrderLinesRawGet_(y, m) {
       truncated = true;
       break;
     }
-    var addYmd = dbAnAnyToSeoulYmd_(L[10]);
     out.push({
       lineKey: dbAnLineKey_(L[0], L[2]),
       order_section_item_no: L[0] != null ? L[0] : '',
@@ -1726,8 +1725,7 @@ function dbAnalyticsOrderLinesRawGet_(y, m) {
       line_net_amount: L[6],
       section_status: L[7] != null ? String(L[7]) : '',
       internal_category: L[8] != null ? String(L[8]) : '',
-      lifecycle: L[9] != null ? String(L[9]) : '',
-      add_time_ymd: addYmd
+      lifecycle: L[9] != null ? String(L[9]) : ''
     });
   }
   return { ok: true, data: { rows: out, truncated: truncated } };

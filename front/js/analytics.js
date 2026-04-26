@@ -1825,7 +1825,6 @@ export function initAnalytics(mount) {
         '<th class="sp-an-viz__row-h" scope="col">상품</th>' +
         '<th class="sp-an-viz__row-h" scope="col">대분류</th>' +
         '<th class="sp-an-viz__row-h" scope="col">상태</th>' +
-        '<th class="sp-an-viz__row-h" scope="col">상품 등록일</th>' +
         '</tr></thead><tbody>';
       for (let io = 0; io < rows.length; io++) {
         const row = rows[io] || {};
@@ -1834,7 +1833,6 @@ export function initAnalytics(mount) {
         const life0 = String(row.lifecycle != null ? row.lifecycle : '');
         const pnm0 = String(row.prod_name != null ? row.prod_name : '');
         const onoA = String(row.order_no != null ? row.order_no : '');
-        const addY = String(row.add_time_ymd != null ? row.add_time_ymd : '');
         const catDisp = AN_CATEGORY_KEY_LABEL[catL0] != null ? AN_CATEGORY_KEY_LABEL[catL0] : catL0;
         const lifeDisp =
           life0 === 'active'
@@ -1853,7 +1851,6 @@ export function initAnalytics(mount) {
           '<td class="sp-an-ol__cell-name">' + esc(pnm0) + '</td>' +
           '<td>' + esc(catDisp) + '</td>' +
           '<td>' + esc(lifeDisp) + '</td>' +
-          '<td>' + esc(addY) + '</td>' +
           '</tr>';
       }
       h += '</tbody></table>';

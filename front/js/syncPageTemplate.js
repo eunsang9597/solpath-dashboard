@@ -200,10 +200,10 @@ export const SYNC_PAGE_SHELL_HTML = `<div class="app-shell app-shell--v9">
                 </div>
               </div>
               <div class="sp-an-ol" id="sp-an-ol" hidden>
-                <div class="sp-an-ol__title" role="heading" aria-level="3">품목 줄 · 인정일·집계 반영</div>
-                <p class="sp-an-ol__lede" id="sp-an-olLede">위에서 고른 <strong>연·월</strong>과 같은 달·주문일 기준으로 품목 줄을 불러옵니다. 여기서 바꾼 인정일·집계 제외 여부는 드라이브 집계 시트에도 반영됩니다. 행이 많으면 일부만 보일 수 있습니다.</p>
+                <div class="sp-an-ol__title" role="heading" aria-level="3">품목 줄(집계 스냅샷)</div>
+                <p class="sp-an-ol__lede" id="sp-an-olLede">위에서 고른 <strong>연·월</strong>과 같은 달·주문일 기준으로, 집계 시트 <strong>02_주문라인_실적</strong>에 올라와 있는 품목 줄을 <strong>열람</strong>합니다. 판매 종료일·분류는 <strong>상품 항목 분류</strong>에서 바꾼 뒤 <strong>탭·주문라인 갱신</strong>으로 02를 다시 맞춥니다. 행이 많으면 일부만 보일 수 있습니다.</p>
                 <p class="sp-an-ol__warn" id="sp-an-olWarn" hidden></p>
-                <div class="sp-an-ol-scroll" id="sp-an-olScroll" role="region" aria-label="품목 줄 인정·집계 반영"></div>
+                <div class="sp-an-ol-scroll" id="sp-an-olScroll" role="region" aria-label="품목 줄 열람"></div>
               </div>
               <div class="sp-pm__loading sp-an-loading" id="sp-an-loading" hidden role="status" aria-live="polite">데이터를 불러오는 중…</div>
               <div class="sp-pm-init" id="sp-an-init" hidden>
