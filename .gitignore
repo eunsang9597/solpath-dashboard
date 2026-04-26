@@ -8,11 +8,21 @@ credentials.json
 *.pem
 *.p12
 
-# --- 프론트: 런타임(JS/CSS)은 eunsang9597/solpath-dashboard-front. 모노레포에는 jsDelivr 핀·스니펫만 추적
+# --- 프론트: 배포·편집은 형제 -front; 모노레포엔 **소스(동기·검수)** + 핀·스니펫
 front/*
+!front/
 !front/SOLPATH_CDN_COMMIT
 !front/IMWEB_SNIPPET_INJECT.html
 !front/IMWEB_SNIPPET.html
+!front/README.md
+!front/js/
+!front/js/**
+!front/css/
+!front/css/**
+!front/scripts/
+!front/scripts/**
+!front/docs/
+!front/docs/**
 # 배포용 일회 클론(solpath-dashboard-front)
 .tmp-solpath-dashboard-front/
 

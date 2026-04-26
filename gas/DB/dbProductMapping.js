@@ -251,13 +251,29 @@ function dbProductMappingState_() {
   var id = p.getProperty(DB_PROP_SHEETS_OPERATIONS_ID);
   id = id != null ? String(id).trim() : '';
   if (!id) {
-    return { ok: true, data: { ready: false, reason: 'NO_OPERATIONS_SHEET', masterSpreadsheetUrl: masterUrl, productMappingSheetName: DB_SHEET_PRODUCT_MAPPING } };
+    return {
+      ok: true,
+      data: dbMergeAnalyticsIntoPmData_({
+        ready: false,
+        reason: 'NO_OPERATIONS_SHEET',
+        masterSpreadsheetUrl: masterUrl,
+        productMappingSheetName: DB_SHEET_PRODUCT_MAPPING
+      })
+    };
   }
   if (!dbDriveSpreadsheetIdIsUsableNow_(id)) {
     try {
       p.deleteProperty(DB_PROP_SHEETS_OPERATIONS_ID);
     } catch (d) {}
-    return { ok: true, data: { ready: false, reason: 'NO_OPERATIONS_SHEET', masterSpreadsheetUrl: masterUrl, productMappingSheetName: DB_SHEET_PRODUCT_MAPPING } };
+    return {
+      ok: true,
+      data: dbMergeAnalyticsIntoPmData_({
+        ready: false,
+        reason: 'NO_OPERATIONS_SHEET',
+        masterSpreadsheetUrl: masterUrl,
+        productMappingSheetName: DB_SHEET_PRODUCT_MAPPING
+      })
+    };
   }
   try {
     var ss = SpreadsheetApp.openById(id);
@@ -265,23 +281,39 @@ function dbProductMappingState_() {
       try {
         p.deleteProperty(DB_PROP_SHEETS_OPERATIONS_ID);
       } catch (d) {}
-      return { ok: true, data: { ready: false, reason: 'NO_OPERATIONS_SHEET', masterSpreadsheetUrl: masterUrl, productMappingSheetName: DB_SHEET_PRODUCT_MAPPING } };
+      return {
+        ok: true,
+        data: dbMergeAnalyticsIntoPmData_({
+          ready: false,
+          reason: 'NO_OPERATIONS_SHEET',
+          masterSpreadsheetUrl: masterUrl,
+          productMappingSheetName: DB_SHEET_PRODUCT_MAPPING
+        })
+      };
     }
     return {
       ok: true,
-      data: {
+      data: dbMergeAnalyticsIntoPmData_({
         ready: true,
         masterSpreadsheetUrl: openSyncMasterSpreadsheetUrl_(),
         operationsSpreadsheetId: id,
         operationsSpreadsheetUrl: 'https://docs.google.com/spreadsheets/d/' + id + '/edit',
         productMappingSheetName: DB_SHEET_PRODUCT_MAPPING
-      }
+      })
     };
   } catch (x) {
     try {
       p.deleteProperty(DB_PROP_SHEETS_OPERATIONS_ID);
     } catch (d) {}
-    return { ok: true, data: { ready: false, reason: 'NO_OPERATIONS_SHEET', masterSpreadsheetUrl: masterUrl, productMappingSheetName: DB_SHEET_PRODUCT_MAPPING } };
+    return {
+      ok: true,
+      data: dbMergeAnalyticsIntoPmData_({
+        ready: false,
+        reason: 'NO_OPERATIONS_SHEET',
+        masterSpreadsheetUrl: masterUrl,
+        productMappingSheetName: DB_SHEET_PRODUCT_MAPPING
+      })
+    };
   }
 }
 

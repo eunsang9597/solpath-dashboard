@@ -1,4 +1,4 @@
-# 솔패스 대시보드 (Solpath Academy Dashboard)
+# 솔루션편입 대시보드 (Solpath Academy Dashboard)
 
 > 아임웹 기반 온라인 학원의 회원·매출·재등록을 한 화면에서 관리하는 **내부용 운영 대시보드**.  
 > 1인 운영 환경을 위해 **애자일** 방식으로 빠르게 가치를 만들어가는 실전 1인 개발 프로젝트.
@@ -138,6 +138,8 @@ flowchart LR
 
 - [docs/SPEC.md](./docs/SPEC.md) — 정본 명세 (기능·데이터 모델·규칙)
 - [docs/BACKEND_API.md](./docs/BACKEND_API.md) — HTTP 계약 (아임웹 연동 + 자체 Web App 요청/응답·오류)
+- [docs/ANALYTICS_REPORTS.md](./docs/ANALYTICS_REPORTS.md) — 집계·분석(매출·건수) 전용 시트 `SHEETS_ANALYTICS_ID`·KPI 스키마
+- 임웹: 정적·jsDelivr는 **같은 부모 옆(형제) 클론** `solpath-dashboard-front` — 이 워크스페이스 `front/`와 수동 동기 → **형제** push 후, 그 **HEAD**로 `front/SOLPATH_CDN_COMMIT` + `apply-solpath-cdn-pin.sh` (상세: [.cursor/rules/git-push-dual-remotes.mdc](.cursor/rules/git-push-dual-remotes.mdc))
 - [docs/GAS_WEBAPP_SHEETS.md](./docs/GAS_WEBAPP_SHEETS.md) — GAS Web App 배포·JSONP·CORS·시트 `getRange`/`setValues` (운영 트러블슈팅)
 - [process.md](./process.md) — 일일 작업 로그 · 변경 이력 · 사전 준비 · GAS 원천 동기화 규정(주문·속성)
 - [gas/README.md](./gas/README.md) — `clasp` / `gas/` 푸시

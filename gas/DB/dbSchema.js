@@ -60,6 +60,62 @@ var DB_PRODUCT_MAPPING_HEADERS = [
   'notes'
 ];
 
+/**
+ * 층 2(집계·리포트) — 대시보드(임베드) **전용** 파일. Script Property: `SHEETS_ANALYTICS_ID` (docs/ANALYTICS_DASHBOARD_NEXT.md)
+ */
+var DB_PROP_SHEETS_ANALYTICS_ID = 'SHEETS_ANALYTICS_ID';
+
+/** 연·월 목표 — `goal_target` = `entire` 또는 internal 대분류 키 (빈칸으로 entire 금지) */
+var DB_SHEET_ANALYTICS_GOALS = '01_연월_목표';
+/** 마스터 `order_items` 1:1 + 실결제·스냅샷 + report_as / 인정 / x (이 파일에서만 쓰기) */
+var DB_SHEET_ANALYTICS_ORDER_LINES = '02_주문라인_실적';
+
+/** @type {string[]} */
+var DB_ANALYTICS_GOALS_HEADERS = ['year', 'month', 'goal_target', 'sales_target', 'people_target'];
+
+/**
+ * @type {string[]}
+ * line_net_amount = order_items line_price - line_price_sale. 환불: section_status에 cancel
+ */
+var DB_ANALYTICS_ORDER_LINE_HEADERS = [
+  'order_section_item_no',
+  'order_item_code',
+  'order_no',
+  'order_time',
+  'prod_no',
+  'prod_name',
+  'line_net_amount',
+  'section_status',
+  'internal_category',
+  'lifecycle',
+  'add_time',
+  'report_as_prod_no',
+  'last_recognition_date',
+  'x_set'
+];
+
+/* --- 이전 집계 탭(이름·데이터 이행용) --- */
+var DB_SHEET_ANALYTICS_KPI_LEGACY = 'kpi_매출건수_목표';
+var DB_SHEET_ANALYTICS_KPI_OLD = '01_일월간_매출_인원_목표';
+var DB_SHEET_ANALYTICS_FACT_LEGACY = 'fact_매출건수_일별';
+var DB_SHEET_ANALYTICS_PRODUCT_END_LEGACY = '03_상품_매출인정_종료';
+
+/**
+ * 리포트 `dbAnalyticsFactRowsGet_` 메모리 결과 형식 (롱) — 02_주문라인_실적에서 집계해 채움
+ * @type {string[]}
+ */
+var DB_ANALYTICS_FACT_HEADERS = [
+  'date_ymd',
+  'metric',
+  'internal_category',
+  'prod_no',
+  'value',
+  'batch_id',
+  'updated_at'
+];
+
+var DB_ANALYTICS_PRODUCT_END_HEADERS = ['prod_no', 'last_inclusive_year', 'last_inclusive_month', 'updated_at'];
+
 /** 끝 2열: docs/SPEC.md §5.1.1 공통 */
 var DB_META_SUFFIX = ['fetched_at', 'source_sync_id'];
 
@@ -79,7 +135,9 @@ var DB_MEMBERS_HEADERS = [
   'recommend_target_code',
   'last_login_time',
   'member_grade',
-  'group_json'
+  'group_json',
+  /** `GET /member-info/groups`의 `title` — `group`의 `siteGroupCode`와 매칭한 문자열 배열 JSON */
+  'group_titles'
 ].concat(DB_META_SUFFIX);
 
 /** @type {string[]} */

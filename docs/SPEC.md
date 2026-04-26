@@ -137,7 +137,9 @@ flowchart TD
 
 아래는 **아임웹 공개 문서(old-developers.imweb.me) 기준 필드명**과, Google Sheets **원천 시트에 실제로 적재할 컬럼**만 정리한 것이다. 상세 스키마(열 순서·헤더 명·GAS 메타 `fetched_at` 등)는 Phase 1 A단계에서 컬럼 정의서로 확정한다.
 
-#### 3.3.1 Members — `GET /v2/member/members` (응답 필드 20개 중 **13개 수집**)
+#### 3.3.1 Members — `GET /v2/member/members` (응답 20필드 중 **13개 수집** + **`group`** + **파생** `group_titles`)
+
+회원 **목록/상세** 응답의 위 13필드 외에, **`group`**(회원이 속한 사이트 그룹, 구조는 API 그대로)는 **`group_json` 열**에 JSON 문자열로 저장한다. **그룹 표시명**은 Open API `GET /member-info/groups`의 `siteGroupCode`↔`title` 맵으로 `group`에 등장한 코드 순서의 **문자열 배열**을 **`group_titles` 열**에 JSON으로 적는다(맵에 없으면 코드 문자열로 폴백). GAS: `dbSyncMembersOpen`, `dbSchema.js`의 `DB_MEMBERS_HEADERS` 참고.
 
 | API 필드 (문서 순서) | 수집 | 비고 |
 |---|---|---|
@@ -161,6 +163,8 @@ flowchart TD
 | `last_login_time` | ○ | |
 | `point_amount` | ✕ | |
 | `member_grade` | ○ | **등급 혜택(할인) 분석은 하지 않음** — 수강생 구분·세그먼트용으로만 사용 |
+| `group` | ○ | 시트 열 `group_json`. 위 표의 20필드 인벤토리 밖·실제 members 응답에 포함(동기 시 저장) |
+| (파생) | ○ | 시트 열 `group_titles` — `GET /member-info/groups` + `group`의 코드. **Open API** 응답, 아임웹 v2 members 필드가 아님 |
 
 #### 3.3.2 Orders (주문 본체) — `GET /v2/shop/orders` (탑레벨·중첩 중 **10컬럼**)
 
@@ -447,7 +451,7 @@ flowchart LR
 
 필드 단위는 **§3.3**이 정본이다. 요약:
 
-- `members` — 회원 스냅샷. API 20필드 중 13필드 수집(§3.3.1). 별도 `email` 열 없음(로그인 `uid`가 이메일인 경우 동일). 추천인 코드 2개는 **저장·미노출** (§3.3.1).
+- `members` — 회원 스냅샷. API 20필드 중 13필드 수집(§3.3.1) + `group`→`group_json` + 파생 `group_titles`(§3.3.1). 별도 `email` 열 없음(로그인 `uid`가 이메일인 경우 동일). 추천인 코드 2개는 **저장·미노출** (§3.3.1).
 - `orders` — **주문서** 단위 1행. 주문번호, 주문일시, 주문자(회원코드/이름/연락처), `payment` 합산 금액 5개(total_price, price_sale, point, coupon, payment_amount) — §3.3.2. **결제수단·쿠폰코드·주문서 폼**은 수집하지 않음.
 - `order_items` — **품목 주문**(상품 라인) 단위. 품목주문번호, 상위 주문번호, `status`/`claim_*`, 상품번호·상품명, 라인 `payment` 5필드, 옵션 `value_name_list` raw + `options_count` — §3.3.3. **환불·취소 집계**는 이 시트의 클레임 필드 + 라인 금액(주문 본체에 별도 환불액 없음, §3.3.2).
 - `products` — 상품 메타 12필드(§3.3.4). `edit_time` 기준 증분 동기화 권장.
@@ -504,12 +508,17 @@ erDiagram
 | `gender` | String | | `F` / `M` 등 API 그대로 |
 | `birth` | String | | 민감. API 형식 그대로 |
 | `addr` | String | | 민감. 시·구 |
-| `marketing_agree_sms` | String | | `Y`/`N` |
+| `sms_agree` | String | | `marketing_agree_sms` → 시트 `sms_agree` |
+| `email_agree` | String | | `marketing_agree_email` → 시트 `email_agree` |
 | `join_time` | String | | API가 주는 문자열 그대로 또는 정규화 |
 | `recommend_code` | String | | UI 기본 비노출(§3.3.1) |
 | `recommend_target_code` | String | | 동일 |
 | `last_login_time` | String | | |
 | `member_grade` | String | | |
+| `group_json` | String (JSON) | | Open API `group` |
+| `group_titles` | String (JSON 배열) | | `GET /member-info/groups`의 `title`·코드 폴백(§3.3.1) |
+
+**메타 2열** `fetched_at`·`source_sync_id`는 위 §5.1.1 **공통**과 동일하게 시트 **맨 오른쪽**에 둔다.
 
 ---
 
@@ -626,7 +635,7 @@ erDiagram
 학원이 실명 인증을 받지 않는 온라인 서비스이고, 대시보드는 최소 권한·최소 노출 + **개인 식별 가능 데이터의 파일 유출 경로만 구조적으로 차단**한다.
 
 #### 원칙
-- **수집**: `members`에는 §3.3.1이 정한 **필드만** 저장한다(전 필드 full copy 아님). **별도 `email` 열은 두지 않음** — 아임웹 `uid`가 곧 로그인 ID(이메일일 수 있음)이다.
+- **수집**: `members`에는 §3.3.1이 정한 **필드·`group_json`·파생 `group_titles`만** 저장한다(전 필드 full copy 아님). **별도 `email` 열은 두지 않음** — 아임웹 `uid`가 곧 로그인 ID(이메일일 수 있음)이다.
 - **대시보드 UI 노출**: **이름 + 아임웹 아이디(`uid`) + 연락처(전화번호)** 는 업무상 필요로 기본 노출. 민감 필드(**생년월일·주소(시·구)** 등)는 상세 화면에서 **마스킹 표시**하고 "원본 보기" 버튼을 눌러야 해제.
 - **다운로드**: **통계·집계 리포트는 허용, 개인 식별 가능 리스트는 금지** — 상세 규칙은 §6.17
 - **감사 로그**: "원본 보기" 클릭 등 PII 열람 행위는 `audit_log`에 기록.

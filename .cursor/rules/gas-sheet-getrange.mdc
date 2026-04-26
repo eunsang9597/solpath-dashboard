@@ -1,0 +1,28 @@
+---
+description: GAS Sheet.getRange — 3·4번째 인자는 개수(행/열 수). 1+length 금지.
+alwaysApply: true
+---
+
+# Google Apps Script — `Sheet.getRange` (반복 실수 방지)
+
+## API (공식)
+
+`getRange(row, column, numRows, numColumns)`
+
+- **3번째 = 행 개수**, **4번째 = 열 개수** (끝 행·끝 열 인덱스가 **아님**).
+- 2행부터 데이터 `N`행을 쓸 때: `getRange(2, 1, N, numCols)` — 세 번째 인자는 **`N`**, 데이터 배열 `.length`와 **동일**해야 `setValues`가 성공한다.
+
+## 금지 (이렇게 쓰면 행 수가 1 많아짐)
+
+- `getRange(2, 1, 1 + out.length, w).setValues(out)` → 범위만 한 행 더 김 → *The data has 261 but the range has 262*.
+- `getRange(2, 1, 2 + out.length - 1, w)` → 위와 동일하게 `1 + length`와 같음.
+- “2행부터니까 +1”이라는 직관은 **틀림**. 이미 시작 행이 `2`로 박혀 있음.
+
+## 권장
+
+- 1행 헤더 + 2행부터 2차원 배열 전부 쓸 때는 **`dbSetValuesFromRow2_(sheet, values, nCols)`** (`gas/DB/dbSheets.js`)만 쓰거나, 동일 규칙으로 `getRange(2, 1, values.length, nCols).setValues(...)`.
+- 새 `getRange` + `setValues`를 `gas/**/*.js`에 추가하기 전에 이 규칙을 다시 읽을 것.
+
+## 오류 메시지 (사용자에게 이렇게 보임)
+
+`The number of rows in the data does not match the number of rows in the range` → 거의 항상 위 오해.

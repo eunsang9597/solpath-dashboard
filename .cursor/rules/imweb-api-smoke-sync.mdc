@@ -1,0 +1,8 @@
+---
+description: (비활성) gas/testapi.js — 현재 파일 없음, 재도입 시 아래 절 복원
+alwaysApply: false
+---
+
+# 아임웹 API ↔ 스모크 테스트 동기화
+
+`gas/testapi.js`가 레포에 **다시 생기기 전까지**는 이 절을 적용하지 않는다. 재도입 시: 엔드포인트는 스모크 배열/URL 호출로 `docs/BACKEND_API.md`와 맞출 것.

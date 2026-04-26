@@ -1,5 +1,9 @@
 /**
  * 스프레드시트 open / 시트·헤더 보장. (read-only for humans: 쓰기는 이 모듈 + 동기 루틴만)
+ *
+ * **CRITICAL — `Sheet.getRange(row, col, numRows, numCols)`**: 3·4번째는 **개수**.
+ * 2행부터 N행 데이터 → `getRange(2, 1, N, cols)` — `1+N` / `2+N-1` 금지 → setValues 행 불일치 오류.
+ * 프로젝트 규칙: `.cursor/rules/gas-sheet-getrange.mdc`
  */
 
 /**

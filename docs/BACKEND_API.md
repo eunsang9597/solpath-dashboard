@@ -688,7 +688,7 @@ curl 'https://openapi.imweb.me/products/1/options/O2024092566f3726054a3a?unitCod
 
 | `members` (순서: `DB_MEMBERS_HEADERS`) | Open API (camelCase) |
 |----------|----------|
-| `addr` / `sms_agree` / `email_agree` / `group_json` | `address` / `smsAgree` / `emailAgree` / `group` |
+| `addr` / `sms_agree` / `email_agree` / `group_json` / `group_titles` | `address` / `smsAgree` / `emailAgree` / `group` / (파생) `GET /member-info/groups`의 `siteGroupCode`↔`title`으로 `group`에 나온 코드 순서대로 **문자열 배열 JSON** |
 | `member_code`…`recommend_target_code`·`last_login_time`·`member_grade` | `memberCode`…`recommendTargetCode`·`lastLoginTime`·`grade` (나머지는 이름만 snake↔camel) |
 
 [SPEC.md](./SPEC.md) §3.3.2·3.3.3 — Shop v2 주문/품목; Open만 쓰면 **동기화는 Open 경로**를 정본으로 둔다.
@@ -760,7 +760,8 @@ action=syncOpenFull
 
 ```json
 { "ok": false, "error": "SYNC_FAILED", "message": "…" }
-{ "ok": false, "error": "UNKNOWN_ACTION", "allowed": ["ping", "syncOpenFull"] }
+{ "ok": false, "error": "UNKNOWN_ACTION", "allowed": ["…"] }
+(정본 목록 — `gas/HttpOpenSync.js` 의 `openSyncAllowedActions_()`)
 ```
 
 **OPTIONS** — `doOptions` (빈 응답; 일부 런타임은 무시).
@@ -794,7 +795,12 @@ action=syncOpenFull
   "masterSpreadsheetUrl": "https://docs.google.com/spreadsheets/d/…/edit",
   "operationsSpreadsheetId": "…",
   "operationsSpreadsheetUrl": "https://docs.google.com/spreadsheets/d/…/edit",
-  "productMappingSheetName": "product_mapping"
+  "productMappingSheetName": "product_mapping",
+  "analyticsReady": true,
+  "analyticsReason": "",
+  "analyticsSpreadsheetUrl": "https://docs.google.com/spreadsheets/d/…/edit",
+  "analyticsKpiSheetName": "kpi_매출건수_목표",
+  "analyticsFactSheetName": "fact_매출건수_일별"
 }
 ```
 
@@ -804,12 +810,18 @@ action=syncOpenFull
 {
   "ready": false,
   "reason": "NO_OPERATIONS_SHEET",
-  "masterSpreadsheetUrl": "https://docs.google.com/spreadsheets/d/…/edit"
+  "masterSpreadsheetUrl": "https://docs.google.com/spreadsheets/d/…/edit",
+  "analyticsReady": false,
+  "analyticsReason": "NO_ANALYTICS_SHEET",
+  "analyticsSpreadsheetUrl": "",
+  "analyticsKpiSheetName": "kpi_매출건수_목표",
+  "analyticsFactSheetName": "fact_매출건수_일별"
 }
 ```
 
 - `masterSpreadsheetUrl` — 원천 `SHEETS_MASTER_ID` 기준 URL(빈 문자열 수 있음). `ready: true`일 때도 내려 **원천/운영 둘 다** 「시트로 열기」 링크에 씀.
 - `reason` — 문자열 코드로 통일 (`NO_OPERATIONS_SHEET` | …).
+- `analytics*` — **집계·분석** 전용 파일(`SHEETS_ANALYTICS_ID`) — [ANALYTICS_REPORTS.md](./ANALYTICS_REPORTS.md). 운영 DB와 **독립적으로** 없을 수 있음.
 
 #### 2.3.2 `GET` `productMappingList` (JSONP)
 
@@ -917,7 +929,22 @@ action=initOperationsSheets
 
 ---
 
-### 2.4 향후 엔드포인트 (템플릿)
+### 2.4 집계·분석 (매출·건수 목표) — `SHEETS_ANALYTICS_ID`
+
+스키마·파일명·Drive 규칙: [ANALYTICS_REPORTS.md](./ANALYTICS_REPORTS.md). GAS: `gas/DB/dbAnalytics.js` · `HttpOpenSync.js`.
+
+| `action` (GET JSONP) | 용도 |
+|----------------------|------|
+| `initAnalyticsSheets` | `솔루션편입_집계_매출건수` 생성, `kpi_매출건수_목표` / `fact_매출건수_일별` 탭+헤더, `SHEETS_ANALYTICS_ID` 저장 |
+| `analyticsTargetsGet` | `ok: true`, `data.rows` — 시트 2행~ (camelCase 필드) |
+| `analyticsTargetsApply` | `payload` = `{"rows":[...]}` — **전체 치환**. `rows: []` 허용(목표만 비움) |
+| `analyticsResetAll` | 목표+fact 본문(2행~) 모두 비움 |
+
+`productMappingState` (§2.3.1) 응답에 `analyticsReady`·`analyticsSpreadsheetUrl` 등이 **함께** 포함된다(추가 JSONP 없이 링크 동기).
+
+---
+
+### 2.5 향후 엔드포인트 (템플릿)
 
 추가할 때마다 아래 블록을 복사한다.
 
@@ -966,5 +993,6 @@ action=initOperationsSheets
 | 2026-04-25 | **GAS** — `HttpOpenSync.js`: `POST` `action=ping|syncOpenFull` · CORS. `dbSyncOpenAll` 반환. 토큰 필드 제거(위젯에서 문구 확인만) |
 | 2026-04-25 | **GAS** — `TextOutput`에 CORS `setHeader` 없음·브라우저는 **JSONP** (`GET ?format=jsonp`). `getRange` 3·4인자=**행/열 개수** (`dbSheets.js`). 상세: [GAS_WEBAPP_SHEETS.md](./GAS_WEBAPP_SHEETS.md) · §2~4 갱신 |
 | 2026-04-25 | **§2.3** — `productMappingState` / `productMappingList` (GET JSONP), `initOperationsSheets` / `productMappingApply` (POST). [SCHEMA_PRODUCT_MAPPING.md](./SCHEMA_PRODUCT_MAPPING.md), [front/docs/PRODUCT_CLASSIFICATION_UI.md](../front/docs/PRODUCT_CLASSIFICATION_UI.md) |
+| 2026-04-25 | **§2.4** — `SHEETS_ANALYTICS_ID`, `initAnalyticsSheets` / `analyticsTargetsGet` / `analyticsTargetsApply` / `analyticsResetAll`, `productMappingState`에 analytics 필드 병합. [ANALYTICS_REPORTS.md](./ANALYTICS_REPORTS.md) |
 
 이후부터는 **날짜당 한 줄** 위주로 쌓고, 상세는 [process.md](../process.md) 변경 이력·[GAS_WEBAPP_SHEETS.md](./GAS_WEBAPP_SHEETS.md)에 남긴다.

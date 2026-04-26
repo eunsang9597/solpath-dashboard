@@ -1,7 +1,132 @@
 /**
  * Open API `GET /member-info/members` — 전체 페이지 **스냅샷** → `members` 시트.
  * (Open API list[].camelCase — `dbSchema` 헤더로 매핑)
+ * 그룹 표시명: `GET /member-info/groups`로 `siteGroupCode` → `title` 맵 후 회원 `group`과 조합 → `group_titles` 열
+ * (`DB_GROUP_TITLE_OVERRIDES_`는 API `title`보다 우선)
  */
+
+/**
+ * `group_titles`용 — `siteGroupCode` → 고정 표시명 (아임웹 API `title` 대신/덮어쓰기)
+ * @type {Object<string, string>}
+ */
+var DB_GROUP_TITLE_OVERRIDES_ = {
+  g2025093056fe132e458fd: '관리자'
+};
+
+/**
+ * @param {Object<string, string>} map `dbMemberInfoFetchGroupCodeToTitleMap_` 결과
+ */
+function dbMemberMergeGroupTitleOverrides_(map) {
+  map = map || {};
+  var k;
+  for (k in DB_GROUP_TITLE_OVERRIDES_) {
+    if (Object.prototype.hasOwnProperty.call(DB_GROUP_TITLE_OVERRIDES_, k)) {
+      map[k] = DB_GROUP_TITLE_OVERRIDES_[k];
+    }
+  }
+  return map;
+}
+
+/**
+ * `GET /member-info/groups` 전체 페이지 → `{ siteGroupCode: title, ... }`
+ * @param {string} access
+ * @param {string} unitCode
+ * @return {Object<string, string>}
+ */
+function dbMemberInfoFetchGroupCodeToTitleMap_(access, unitCode) {
+  var map = {};
+  var page = 1;
+  var pageSize = 100;
+  while (true) {
+    var g = imwebTGet_('/member-info/groups', { page: page, limit: pageSize, unitCode: unitCode }, access);
+    if (g._http !== 200) {
+      throw new Error('GET /member-info/groups http=' + g._http + ' ' + String(g._text).slice(0, 400));
+    }
+    var j = JSON.parse(g._text || '{}');
+    if (j.statusCode !== 200 || j.data == null) {
+      throw new Error('member-info/groups body: ' + String(g._text).slice(0, 400));
+    }
+    var data = j.data;
+    var rawList = data.list;
+    var items = [];
+    if (rawList == null) {
+      break;
+    }
+    if (Array.isArray(rawList)) {
+      items = rawList;
+    } else if (typeof rawList === 'object') {
+      items = [rawList];
+    }
+    var ix;
+    for (ix = 0; ix < items.length; ix++) {
+      var it = items[ix] || {};
+      var code = it.siteGroupCode != null ? String(it.siteGroupCode).trim() : '';
+      if (code.length) {
+        map[code] = it.title != null ? String(it.title).trim() : '';
+      }
+    }
+    var cur = data.currentPage != null ? Number(data.currentPage) : page;
+    var tot = data.totalPage != null ? Number(data.totalPage) : 1;
+    if (cur >= tot) {
+      break;
+    }
+    page++;
+  }
+  return map;
+}
+
+/**
+ * 회원 `group`에서 `siteGroupCode`(및 변형) 문자열 목록
+ * @param {*} groupVal
+ * @return {string[]}
+ */
+function dbMemberExtractSiteGroupCodes_(groupVal) {
+  if (groupVal == null) {
+    return [];
+  }
+  var out = [];
+  var seen = {};
+  function add(c) {
+    c = c != null ? String(c).trim() : '';
+    if (c.length && !seen[c]) {
+      seen[c] = 1;
+      out.push(c);
+    }
+  }
+  if (typeof groupVal === 'string') {
+    add(groupVal);
+    return out;
+  }
+  if (Array.isArray(groupVal)) {
+    var i;
+    for (i = 0; i < groupVal.length; i++) {
+      var it = groupVal[i];
+      if (it == null) {
+        continue;
+      }
+      if (typeof it === 'string') {
+        add(it);
+      } else if (typeof it === 'object') {
+        if (it.siteGroupCode != null) {
+          add(it.siteGroupCode);
+        } else if (it.groupCode != null) {
+          add(it.groupCode);
+        } else if (it.code != null) {
+          add(it.code);
+        }
+      }
+    }
+    return out;
+  }
+  if (typeof groupVal === 'object') {
+    if (groupVal.siteGroupCode != null) {
+      add(groupVal.siteGroupCode);
+    } else if (groupVal.groupCode != null) {
+      add(groupVal.groupCode);
+    }
+  }
+  return out;
+}
 
 function dbSyncMembersOpen() {
   var p = PropertiesService.getScriptProperties();
@@ -25,6 +150,7 @@ function dbSyncMembersOpen() {
   var nowIso = t0.toISOString();
 
   try {
+    var codeToTitle = dbMemberMergeGroupTitleOverrides_(dbMemberInfoFetchGroupCodeToTitleMap_(access, uc));
     while (true) {
       var g = imwebTGet_('/member-info/members', { page: page, limit: pageSize, unitCode: uc }, access);
       if (g._http !== 200) {
@@ -41,7 +167,7 @@ function dbSyncMembersOpen() {
       }
       var k;
       for (k = 0; k < list.length; k++) {
-        all.push(dbMapMemberRowOpen_(list[k], nowIso, syncId));
+        all.push(dbMapMemberRowOpen_(list[k], nowIso, syncId, codeToTitle));
       }
       var cur = data.currentPage != null ? Number(data.currentPage) : page;
       var tot = data.totalPage != null ? Number(data.totalPage) : 1;
@@ -74,10 +200,21 @@ function dbSyncMembersOpen() {
 
 /**
  * @param {*} m member list item
+ * @param {Object<string, string>|undefined} codeToTitle `siteGroupCode` → `title`
  */
-function dbMapMemberRowOpen_(m, fetchedAtIso, sourceSyncId) {
+function dbMapMemberRowOpen_(m, fetchedAtIso, sourceSyncId, codeToTitle) {
   m = m || {};
   var g = m.group;
+  var codes = dbMemberExtractSiteGroupCodes_(g);
+  var titleList = [];
+  var ti;
+  for (ti = 0; ti < codes.length; ti++) {
+    var cd = codes[ti];
+    var t0 = codeToTitle && Object.prototype.hasOwnProperty.call(codeToTitle, cd) ? codeToTitle[cd] : '';
+    t0 = t0 != null ? String(t0).trim() : '';
+    titleList.push(t0.length ? t0 : cd);
+  }
+  var groupTitlesCell = titleList.length ? JSON.stringify(titleList) : '';
   return [
     m.memberCode != null ? String(m.memberCode) : '',
     m.uid != null ? String(m.uid) : '',
@@ -94,6 +231,7 @@ function dbMapMemberRowOpen_(m, fetchedAtIso, sourceSyncId) {
     m.lastLoginTime != null ? String(m.lastLoginTime) : '',
     m.grade != null ? String(m.grade) : '',
     g != null && (Array.isArray(g) || (typeof g === 'object' && g !== null)) ? JSON.stringify(g) : '',
+    groupTitlesCell,
     fetchedAtIso,
     sourceSyncId != null ? String(sourceSyncId) : ''
   ];
