@@ -175,7 +175,6 @@ export const SYNC_PAGE_SHELL_HTML = `<div class="app-shell app-shell--v9">
                 </div>
                 <p class="sp-an-viz__lede" id="sp-an-vizLede">위 [기간]에서 월까지 고르면, <strong>가로 날짜 · 세로 상품군(또는 단품)</strong> 격자로 순매출을 봅니다. 교재·자소서는 상품군만 묶습니다.</p>
                 <p class="sp-an-viz__warn" id="sp-an-vizWarn" hidden></p>
-                <div class="sp-an-viz__summary" id="sp-an-vizSummary" aria-label="목표·전년"></div>
                 <div class="sp-an-viz-scroll" id="sp-an-vizScroll" role="region" aria-label="일별 순매출 표"></div>
               </div>
               <div class="sp-an-ol" id="sp-an-ol" hidden>

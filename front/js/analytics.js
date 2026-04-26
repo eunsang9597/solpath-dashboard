@@ -343,7 +343,6 @@ export function initAnalytics(mount) {
     vizScroll: /** @type {HTMLElement | null} */ (mount.querySelector('#sp-an-vizScroll')),
     vizLede: /** @type {HTMLElement | null} */ (mount.querySelector('#sp-an-vizLede')),
     vizWarn: /** @type {HTMLElement | null} */ (mount.querySelector('#sp-an-vizWarn')),
-    vizSummary: /** @type {HTMLElement | null} */ (mount.querySelector('#sp-an-vizSummary')),
     people: /** @type {HTMLElement | null} */ (mount.querySelector('#sp-an-people')),
     peopleY: /** @type {HTMLInputElement | null} */ (mount.querySelector('#sp-an-peopleY')),
     peopleM: /** @type {HTMLSelectElement | null} */ (mount.querySelector('#sp-an-peopleM')),
@@ -823,85 +822,6 @@ export function initAnalytics(mount) {
     }
   }
 
-  function renderVizSummary_(report, y, m, scp) {
-    if (!el.vizSummary) {
-      return;
-    }
-    const sc = scp && scp.length ? scp : 'entire';
-    const goalKey = sc === 'entire' ? 'entire' : sc;
-    let tgt = null;
-    let ti;
-    for (ti = 0; ti < localRows.length; ti++) {
-      const row = localRows[ti] || {};
-      if (Math.floor(Number(row.month)) !== m || Math.floor(Number(row.year)) !== y) {
-        continue;
-      }
-      const g = String(row.goal_target != null ? row.goal_target : row.scopeKey != null ? row.scopeKey : '').trim();
-      if (g === goalKey) {
-        tgt = row;
-        break;
-      }
-    }
-    const cur0 = (report && report.current) || {};
-    const mt = (cur0 && cur0.monthTotals) || {};
-    const order0 = (report && report.categoryOrder) || [];
-    let actualNet = 0;
-    if (sc === 'entire') {
-      for (let ci = 0; ci < order0.length; ci++) {
-        const c = String(order0[ci]);
-        const t0 = mt[c];
-        if (t0) {
-          actualNet += (t0.sales != null ? Number(t0.sales) : 0) - (t0.refund != null ? Number(t0.refund) : 0);
-        }
-      }
-    } else {
-      const t1 = mt[sc];
-      if (t1) {
-        actualNet = (t1.sales != null ? Number(t1.sales) : 0) - (t1.refund != null ? Number(t1.refund) : 0);
-      }
-    }
-    const gSales = tgt != null && tgt.targetAmount != null && String(tgt.targetAmount).length ? Number(tgt.targetAmount) : null;
-    const gCnt = tgt != null && tgt.targetCount != null && String(tgt.targetCount).length ? Number(tgt.targetCount) : null;
-    const pyRoll = report && report.previousYear && report.previousYear.roll;
-    const ptot = (pyRoll && pyRoll.monthTotals) || {};
-    let prevNet = 0;
-    if (sc === 'entire') {
-      for (let pi = 0; pi < order0.length; pi++) {
-        const c2 = String(order0[pi]);
-        const t2 = ptot[c2];
-        if (t2) {
-          prevNet += (t2.sales != null ? Number(t2.sales) : 0) - (t2.refund != null ? Number(t2.refund) : 0);
-        }
-      }
-    } else {
-      const t3 = ptot[sc];
-      if (t3) {
-        prevNet = (t3.sales != null ? Number(t3.sales) : 0) - (t3.refund != null ? Number(t3.refund) : 0);
-      }
-    }
-    const pAvail = report && report.previousYearDataAvailable === true;
-    const pctG =
-      gSales != null && isFinite(gSales) && gSales > 0
-        ? ' 달성률 ' + ((actualNet / gSales) * 100).toFixed(1) + '%'
-        : '';
-    const vsPrev =
-      pAvail && isFinite(prevNet)
-        ? '전년 동월(순) ' + fmtKrw_(prevNet) + '. '
-        : '전년 데이터 없음(동월 집계가 비었을 수 있습니다). ';
-    el.vizSummary.innerHTML =
-      '<div class="sp-an-viz__summarybox">' +
-      '<p class="sp-an-viz__summaryp"><strong>목표(매출)</strong> ' +
-      (gSales != null && isFinite(gSales) ? fmtKrw_(gSales) : '—') +
-      (gCnt != null && isFinite(gCnt) ? ' · 목표(건수) ' + fmtInt_(gCnt) : '') +
-      (pctG ? ' · ' + pctG : '') +
-      '</p><p class="sp-an-viz__summaryp"><strong>이번 달 실제(순, 필터)</strong> ' +
-      fmtKrw_(actualNet) +
-      '</p><p class="sp-an-viz__summaryp sp-an-viz__summaryp--sub">' +
-      vsPrev +
-      (pAvail && isFinite(prevNet) && prevNet !== 0 && isFinite(actualNet) ? '전년比 ' + (((actualNet - prevNet) / Math.abs(prevNet)) * 100).toFixed(1) + '%' : '') +
-      '</p></div>';
-  }
-
   /**
    * @param {Record<string, unknown>|null|undefined} report
    * @param {Object[]|null} factRows
@@ -916,8 +836,6 @@ export function initAnalytics(mount) {
     const byDay = (cur && cur.byDay) || {};
     const order = (report && report.categoryOrder) || [];
     if (!order.length) {
-      const scpEmpty = (el.vizScope && el.vizScope.value) || 'entire';
-      renderVizSummary_(report, y, m, scpEmpty);
       el.vizTitle && (el.vizTitle.textContent = '솔루션편입 · 일별 순매출 · ' + y + '년 ' + m + '월');
       el.vizScroll.innerHTML =
         '<p class="sp-an-viz__empty">대분류 데이터가 없어 표를 만들지 못했습니다. 집계가 비었거나 아직 만들어지지 않았을 수 있습니다.</p>';
@@ -1130,7 +1048,6 @@ export function initAnalytics(mount) {
       }
     }
 
-    renderVizSummary_(report, y, m, scp0);
     el.vizTitle && (el.vizTitle.textContent = '솔루션편입 · 일별 순매출 · ' + y + '년 ' + m + '월');
     el.vizScroll.innerHTML =
       '<table class="sp-an-viz-table"><thead>' +
