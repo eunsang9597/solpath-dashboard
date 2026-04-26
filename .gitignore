@@ -8,8 +8,13 @@ credentials.json
 *.pem
 *.p12
 
-# --- 프론트: 별도 GitHub 레포(front/ 안에서 git init). 중첩 .git vs 메타 레포 충돌 방지 ---
-/front/
+# --- 프론트: 런타임(JS/CSS)은 eunsang9597/solpath-dashboard-front. 모노레포에는 jsDelivr 핀·스니펫만 추적
+front/*
+!front/SOLPATH_CDN_COMMIT
+!front/IMWEB_SNIPPET_INJECT.html
+!front/IMWEB_SNIPPET.html
+# 배포용 일회 클론(solpath-dashboard-front)
+.tmp-solpath-dashboard-front/
 
 # --- OS / editor cruft ---
 .DS_Store
