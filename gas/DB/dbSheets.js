@@ -95,6 +95,23 @@ function dbEnsureHeaderRow1_(sheet, headers) {
 }
 
 /**
+ * 헤더·데이터가 `nKeep`열을 넘어 남아 있으면 그 열만 비움(스키마 축소 시 구 열 이름·값 제거)
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet
+ * @param {number} nKeep
+ */
+function dbSheetClearColumnsAfter_(sheet, nKeep) {
+  if (!sheet || typeof nKeep !== 'number' || !isFinite(nKeep) || nKeep < 1) {
+    return;
+  }
+  var lc = sheet.getLastColumn();
+  if (lc <= nKeep) {
+    return;
+  }
+  var lr = Math.max(sheet.getLastRow(), 1);
+  sheet.getRange(1, nKeep + 1, lr, lc).clearContent();
+}
+
+/**
  * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} ss
  * @param {string} name
  * @param {string[]} headers

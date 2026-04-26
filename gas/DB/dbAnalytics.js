@@ -195,6 +195,7 @@ function dbAnGetOrderLinesSheet_(ss) {
   var sh = ss.getSheetByName(DB_SHEET_ANALYTICS_ORDER_LINES);
   if (sh) {
     dbEnsureHeaderRow1_(sh, DB_ANALYTICS_ORDER_LINE_HEADERS);
+    dbSheetClearColumnsAfter_(sh, DB_ANALYTICS_ORDER_LINE_HEADERS.length);
     return sh;
   }
   var old = ss.getSheetByName(DB_SHEET_ANALYTICS_FACT_LEGACY);
@@ -208,9 +209,12 @@ function dbAnGetOrderLinesSheet_(ss) {
   sh = ss.getSheetByName(DB_SHEET_ANALYTICS_ORDER_LINES);
   if (sh) {
     dbEnsureHeaderRow1_(sh, DB_ANALYTICS_ORDER_LINE_HEADERS);
+    dbSheetClearColumnsAfter_(sh, DB_ANALYTICS_ORDER_LINE_HEADERS.length);
     return sh;
   }
-  return dbGetOrCreateSheetWithHeaders_(ss, DB_SHEET_ANALYTICS_ORDER_LINES, DB_ANALYTICS_ORDER_LINE_HEADERS);
+  sh = dbGetOrCreateSheetWithHeaders_(ss, DB_SHEET_ANALYTICS_ORDER_LINES, DB_ANALYTICS_ORDER_LINE_HEADERS);
+  dbSheetClearColumnsAfter_(sh, DB_ANALYTICS_ORDER_LINE_HEADERS.length);
+  return sh;
 }
 
 /**
