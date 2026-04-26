@@ -772,12 +772,28 @@ a.sp-an-head__cta.sp-sync-head__link:hover {
   font-weight: 600;
 }
 
-/* 주 누적 행: 7일 블록의 마지막 날(또는 월 말) = 해당 주 합계 확정 */
+/* 주 누적 행: 달력 주 구간이 이 달에서 끝나는 날 = 그 구간 누적 확정(일 합·월누적 행과 톤 분리) */
 .sp-an-viz-table tr.sp-an-viz__row-mrun td.sp-an-viz__wk-total {
-  font-weight: 700;
-  color: #062a52;
-  background: rgba(11, 92, 173, 0.14) !important;
-  border-color: rgba(11, 92, 173, 0.35);
+  font-weight: 800;
+  font-size: calc(0.7rem + var(--sp-text-bump));
+  color: #053049;
+  background: linear-gradient(165deg, #bfe8f2 0%, #7ec8e8 42%, #4ba3c9 100%) !important;
+  border: 2px solid #1a7ea8 !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.65),
+    0 0 0 1px rgba(26, 126, 168, 0.25);
+}
+
+/* 월 누적 행: 맨 오른쪽 월 합(순) 열 — 주 마감(청록)과 구분되는 보라 톤 */
+.sp-an-viz-table tr.sp-an-viz__row-mrun2 td.sp-an-viz__mtd-total {
+  font-weight: 800;
+  font-size: calc(0.7rem + var(--sp-text-bump));
+  color: #3d1f5c;
+  background: linear-gradient(165deg, #ede4ff 0%, #d4c4fc 38%, #b49cf0 100%) !important;
+  border: 2px solid #7c4ddb !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.7),
+    0 0 0 1px rgba(124, 77, 219, 0.28);
 }
 .sp-an-viz__sum-col {
   background: #f6f7f9 !important;

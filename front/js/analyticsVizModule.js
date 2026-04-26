@@ -129,8 +129,74 @@ export function daysInMonth(y, m) {
 }
 
 /**
- * @param {number} d day of month
+ * @param {number} y
+ * @param {number} m 1–12
+ * @param {number} dom
+ * @return {Date} 해당 일이 속한 주의 월요일 00:00 (로컬)
  */
-export function startOfBlockWeekInMonth(d) {
-  return (Math.ceil(d / 7) - 1) * 7 + 1;
+function mondayOfWeekLocal_(y, m, dom) {
+  const dt = new Date(y, m - 1, dom);
+  const dow = dt.getDay();
+  const off = dow === 0 ? -6 : 1 - dow;
+  dt.setDate(dt.getDate() + off);
+  dt.setHours(0, 0, 0, 0);
+  return dt;
+}
+
+/**
+ * 달력 주(월~일): 이 연·월 안에서만 합산할 때의 구간 시작일(1~31).
+ * 이전 달에 속한 월요일이면 그 주는 이 달에서는 1일부터.
+ * @param {number} y
+ * @param {number} m
+ * @param {number} dom
+ * @return {number}
+ */
+export function firstDomCalendarWeekInMonth(y, m, dom) {
+  const mon = mondayOfWeekLocal_(y, m, dom);
+  const monthStart = new Date(y, m - 1, 1);
+  monthStart.setHours(0, 0, 0, 0);
+  if (mon.getTime() < monthStart.getTime()) {
+    return 1;
+  }
+  return mon.getDate();
+}
+
+/**
+ * 같은 달력 주 구간이 이 달에서 끝나는 마지막 일(말일로 잘림).
+ * @param {number} y
+ * @param {number} m
+ * @param {number} dom
+ * @return {number}
+ */
+export function lastDomCalendarWeekInMonth(y, m, dom) {
+  const mon = mondayOfWeekLocal_(y, m, dom);
+  const sun = new Date(mon.getFullYear(), mon.getMonth(), mon.getDate() + 6);
+  sun.setHours(0, 0, 0, 0);
+  const monthEnd = new Date(y, m, 0);
+  monthEnd.setHours(0, 0, 0, 0);
+  const rangeEnd = sun.getTime() <= monthEnd.getTime() ? sun : monthEnd;
+  return rangeEnd.getDate();
+}
+
+/**
+ * 이 달 1~daysN 각 일이 속하는 "달력 주 조각"의 1부터 시작하는 주차 번호.
+ * @param {number} y
+ * @param {number} m
+ * @param {number} daysN
+ * @return {number[]} 인덱스 dom(1~daysN) → 주차; [0] 미사용
+ */
+export function calendarWeekOrdinalsByDom(y, m, daysN) {
+  const out = /** @type {number[]} */ ([0]);
+  let ix = 0;
+  let prevT = /** @type {number|null} */ (null);
+  for (let d = 1; d <= daysN; d++) {
+    const mon = mondayOfWeekLocal_(y, m, d);
+    const t = mon.getTime();
+    if (prevT === null || t !== prevT) {
+      ix++;
+      prevT = t;
+    }
+    out[d] = ix;
+  }
+  return out;
 }

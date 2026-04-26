@@ -2,7 +2,14 @@
  * 매출·구매 인원(품목 줄) 지표 — GAS JSONP
  */
 import { GAS_BASE_URL, GAS_MODE } from './config.js';
-import { aggregateFactRows, daysInMonth, lineCountsByMonthCategoryYear, startOfBlockWeekInMonth } from './analyticsVizModule.js';
+import {
+  aggregateFactRows,
+  calendarWeekOrdinalsByDom,
+  daysInMonth,
+  firstDomCalendarWeekInMonth,
+  lastDomCalendarWeekInMonth,
+  lineCountsByMonthCategoryYear
+} from './analyticsVizModule.js';
 
 const SCOPE_LABEL = { category: '대분류', product: '상품' };
 
@@ -235,8 +242,99 @@ function getAnFilterYm_(elP) {
   const m = parseInt(String(elP.filterM.value), 10);
   return {
     y: isFinite(y) ? y : yNow,
-    m: isFinite(m) && m >= 1 && m <= 12 ? m : mNow
+    m: isFinite(m) && m >= 0 && m <= 12 ? m : mNow
   };
+}
+
+/**
+ * 필터 월 → 화면에만 쓰는 이름(「전체」= 연도 단위 일별 표)
+ * @param {number} m
+ * @return {string}
+ */
+function anFilterMonthLabel_(m) {
+  if (m === 0) {
+    return '전체';
+  }
+  if (m >= 1 && m <= 12) {
+    return String(m) + '월';
+  }
+  return String(m);
+}
+
+/**
+ * 목표(KPI) 표 월 칸 — 저장값 그대로 두고 표시만(연간 한 줄은 숫자 노출 안 함)
+ * @param {unknown} monthRaw
+ * @return {string}
+ */
+function anKpiMonthCellLabel_(monthRaw) {
+  const n = Math.floor(Number(monthRaw));
+  if (n === 0) {
+    return '연간';
+  }
+  if (n >= 1 && n <= 12) {
+    return String(n) + '월';
+  }
+  return String(monthRaw != null ? monthRaw : '');
+}
+
+/**
+ * 일별이 연도 전체일 때 상단 카드·목표 매칭에 쓸 대표 월(1–12)
+ * @param {number} y
+ * @param {number} filterM
+ * @return {number}
+ */
+function monthForActualsCard_(y, filterM) {
+  if (filterM >= 1 && filterM <= 12) {
+    return filterM;
+  }
+  const yNow = new Date().getFullYear();
+  const mNow = new Date().getMonth() + 1;
+  if (y < yNow) {
+    return 12;
+  }
+  if (y > yNow) {
+    return 1;
+  }
+  return mNow;
+}
+
+/**
+ * @param {number} y
+ * @param {number} mo
+ * @param {number} dom
+ * @return {string}
+ */
+function ymdPadParts_(y, mo, dom) {
+  const mm = mo < 10 ? '0' + mo : String(mo);
+  const dd = dom < 10 ? '0' + dom : String(dom);
+  return y + '-' + mm + '-' + dd;
+}
+
+/**
+ * 일별 순매출 표 가로축 — 단월 또는 연도 전체(필터에서 전체)
+ * @param {number} y
+ * @param {number} m
+ * @return {string[]}
+ */
+function buildYmdSequenceForViz_(y, m) {
+  const seq = [];
+  if (m >= 1 && m <= 12) {
+    const n = daysInMonth(y, m);
+    let d;
+    for (d = 1; d <= n; d++) {
+      seq.push(ymdPadParts_(y, m, d));
+    }
+  } else if (m === 0) {
+    let mo;
+    for (mo = 1; mo <= 12; mo++) {
+      const n = daysInMonth(y, mo);
+      let d2;
+      for (d2 = 1; d2 <= n; d2++) {
+        seq.push(ymdPadParts_(y, mo, d2));
+      }
+    }
+  }
+  return seq;
 }
 
 /**
@@ -409,8 +507,10 @@ export function initAnalytics(mount) {
   let _boundsMinYear = null;
   /** @type {number|null} */
   let _boundsMaxYear = null;
-  /** 목표(KPI) 표만 연도·월 0 행 필터 */
+  /** 목표(KPI) 표만 연간 한 줄 행 필터 */
   let _kpiAnnualRows = false;
+  /** 연·월 필터: 첫 `rebuildFilterYearMonth_`에서만 HTML 기본(1월) 대신 당월로 맞춤 */
+  let _anPeriodFilterBootstrapped = false;
 
   function syncKpiAnnualBtn_() {
     if (!el.btnKpiAnnual) {
@@ -448,7 +548,7 @@ export function initAnalytics(mount) {
     sel.appendChild(o0);
     const z = document.createElement('option');
     z.value = '0';
-    z.textContent = '0(연간)';
+    z.textContent = '연간';
     sel.appendChild(z);
     for (let m = 1; m <= 12; m++) {
       const o = document.createElement('option');
@@ -465,7 +565,7 @@ export function initAnalytics(mount) {
     sel.innerHTML = '';
     const z = document.createElement('option');
     z.value = '0';
-    z.textContent = '0(연간)';
+    z.textContent = '연간';
     sel.appendChild(z);
     for (let m = 1; m <= 12; m++) {
       const o = document.createElement('option');
@@ -808,12 +908,18 @@ export function initAnalytics(mount) {
       }
     }
     el.filterY.value = String(ySel);
-    const mSel = parseInt(curMStr, 10);
-    if (!isFinite(mSel) || mSel < 1 || mSel > 12) {
-      el.filterM.value = String(mNow0);
-    } else {
-      el.filterM.value = String(mSel);
+    let mPick = parseInt(curMStr, 10);
+    if (!_anPeriodFilterBootstrapped) {
+      _anPeriodFilterBootstrapped = true;
+      if (ySel === yNow0) {
+        mPick = mNow0;
+      } else if (!isFinite(mPick) || mPick < 0 || mPick > 12) {
+        mPick = 1;
+      }
+    } else if (!isFinite(mPick) || mPick < 0 || mPick > 12) {
+      mPick = ySel === yNow0 ? mNow0 : 1;
     }
+    el.filterM.value = String(mPick);
     if (GAS_MODE.canSync && !GAS_MODE.useMock) {
       void loadMasterActuals_();
     }
@@ -836,6 +942,9 @@ export function initAnalytics(mount) {
     const mf = parseInt(String(el.filterM.value), 10);
     if (!isFinite(mf)) {
       return true;
+    }
+    if (mf === 0) {
+      return yr === yf && mr >= 1 && mr <= 12;
     }
     return yr === yf && mr === mf;
   }
@@ -962,8 +1071,15 @@ export function initAnalytics(mount) {
     if (!el.vizScroll) {
       return;
     }
+    const mIsYear = m === 0;
     if (el.vizPeriodMeta) {
-      el.vizPeriodMeta.textContent = m >= 1 && m <= 12 ? '· ' + y + '년 ' + m + '월' : '';
+      if (m >= 1 && m <= 12) {
+        el.vizPeriodMeta.textContent = '· ' + y + '년 ' + anFilterMonthLabel_(m);
+      } else if (mIsYear) {
+        el.vizPeriodMeta.textContent = '· ' + y + '년 ' + anFilterMonthLabel_(0);
+      } else {
+        el.vizPeriodMeta.textContent = '';
+      }
     }
     const cur = report && report.current;
     const byDay = (cur && cur.byDay) || {};
@@ -974,21 +1090,53 @@ export function initAnalytics(mount) {
       paintVizScopeStrip_(report, y, m);
       return;
     }
+    const ymdSeq = buildYmdSequenceForViz_(y, m);
+    if (!ymdSeq.length) {
+      el.vizScroll.innerHTML = '<p class="sp-an-viz__empty">표 기간을 만들지 못했습니다.</p>';
+      paintVizScopeStrip_(report, y, m);
+      return;
+    }
+    const colN = ymdSeq.length;
+    const sumHead = mIsYear ? '연 합(순)' : '월 합(순)';
+    const mtdLabel = mIsYear ? '연 누적(순, YTD)' : '월 누적(순, MTD)';
+    const mtdTitle = mIsYear
+      ? '연 순매출 합계(순) — 연 누적(말일)과 동일'
+      : '월 순매출 합계(순) — 월 누적(말일)과 동일';
+
     const scp0 = (el.vizScope && el.vizScope.value) || 'entire';
-    const daysN = daysInMonth(y, m);
     const names = (report && report.prodNameByNo) || {};
     const fr = factRows != null && factRows.length ? factRows : [];
     const aggP = fr.length ? aggregateFactRows(fr, y, m) : { byDayCat: {}, byDayProd: {} };
     const bdp = aggP.byDayProd != null ? aggP.byDayProd : {};
     let theadWeek = '<tr><th class="sp-an-viz__row-h sp-an-viz__whead" scope="col">주</th>';
     let theadDay = '<tr><th class="sp-an-viz__row-h sp-an-viz__dhead" scope="col">일</th>';
-    let d;
-    for (d = 1; d <= daysN; d++) {
-      const wk = Math.ceil(d / 7);
-      theadWeek += '<th class="sp-an-viz__whead" scope="col" title="' + m + '월 ' + wk + '주">' + wk + '주</th>';
-      theadDay += '<th class="sp-an-viz__dhead" scope="col">' + d + '일</th>';
+    let ci;
+    for (ci = 0; ci < colN; ci++) {
+      const ymdH = ymdSeq[ci];
+      const prH = ymdH.split('-');
+      const yH = parseInt(prH[0], 10);
+      const moH = parseInt(prH[1], 10);
+      const domH = parseInt(prH[2], 10);
+      const dnH = daysInMonth(yH, moH);
+      const wkOrd = calendarWeekOrdinalsByDom(yH, moH, dnH)[domH];
+      theadWeek +=
+        '<th class="sp-an-viz__whead" scope="col" title="' +
+        yH +
+        '년 ' +
+        moH +
+        '월 · 달력 ' +
+        wkOrd +
+        '주차(월~일, 이 달 구간)">' +
+        wkOrd +
+        '주</th>';
+      theadDay +=
+        '<th class="sp-an-viz__dhead" scope="col" title="' +
+        ymdH +
+        '">' +
+        (mIsYear ? moH + '/' + domH : String(domH) + '일') +
+        '</th>';
     }
-    theadWeek += '<th class="sp-an-viz__sum-col" scope="col">월 합(순)</th></tr>';
+    theadWeek += '<th class="sp-an-viz__sum-col" scope="col">' + sumHead + '</th></tr>';
     theadDay += '<th class="sp-an-viz__sum-col" scope="col">(순)</th></tr>';
 
     let tbody = '';
@@ -997,10 +1145,9 @@ export function initAnalytics(mount) {
       const label = AN_CATEGORY_KEY_LABEL[c] != null ? AN_CATEGORY_KEY_LABEL[c] : c;
       let rowSum = 0;
       let tds = '';
-      for (d = 1; d <= daysN; d++) {
-        const mm = m < 10 ? '0' + m : String(m);
-        const dd = d < 10 ? '0' + d : String(d);
-        const ymd = y + '-' + mm + '-' + dd;
+      let cx;
+      for (cx = 0; cx < colN; cx++) {
+        const ymd = ymdSeq[cx];
         const slice = byDay[ymd] && byDay[ymd][c] ? byDay[ymd][c] : null;
         const sales0 = slice && slice.sales != null ? Number(slice.sales) : 0;
         const ref0 = slice && slice.refund != null ? Number(slice.refund) : 0;
@@ -1012,20 +1159,18 @@ export function initAnalytics(mount) {
       tbody += '<tr><th scope="row" class="sp-an-viz__row-lbl">' + esc(label) + '</th>' + tds + '</tr>';
     }
     if (scp0 === 'entire') {
-      for (let ci = 0; ci < order.length; ci++) {
-        if (String(order[ci]) === 'unmapped') {
+      for (let ci2 = 0; ci2 < order.length; ci2++) {
+        if (String(order[ci2]) === 'unmapped') {
           continue;
         }
-        oneCatRow_(order[ci]);
+        oneCatRow_(order[ci2]);
       }
     } else if (scp0 === 'textbook' || scp0 === 'jasoseo') {
       oneCatRow_(scp0);
     } else {
       const pset = /** @type {Record<string, boolean>} */ ({});
-      for (d = 1; d <= daysN; d++) {
-        const mm0 = m < 10 ? '0' + m : String(m);
-        const dd0 = d < 10 ? '0' + d : String(d);
-        const ymdX = y + '-' + mm0 + '-' + dd0;
+      for (ci = 0; ci < colN; ci++) {
+        const ymdX = ymdSeq[ci];
         const bmap = bdp[ymdX] || {};
         var kyx;
         for (kyx in bmap) {
@@ -1042,10 +1187,8 @@ export function initAnalytics(mount) {
         const labP = pno0 && names[pno0] != null && String(names[pno0]).length ? String(names[pno0]) : '상품 ' + pno0;
         let rowSumP = 0;
         let tdsP = '';
-        for (d = 1; d <= daysN; d++) {
-          const mm1 = m < 10 ? '0' + m : String(m);
-          const dd1 = d < 10 ? '0' + d : String(d);
-          const ymdP = y + '-' + mm1 + '-' + dd1;
+        for (ci = 0; ci < colN; ci++) {
+          const ymdP = ymdSeq[ci];
           const slP = bdp[ymdP] && bdp[ymdP][kpk] ? bdp[ymdP][kpk] : null;
           const sP = slP && slP.sales != null ? Number(slP.sales) : 0;
           const rP = slP && slP.refund != null ? Number(slP.refund) : 0;
@@ -1059,17 +1202,15 @@ export function initAnalytics(mount) {
       if (!pList.length) {
         tbody +=
           '<tr><th colspan="' +
-          (daysN + 2) +
-          '" class="sp-an-viz__empty">이 대분류에 잡힌 품목 줄이 이 달에 없습니다.</th></tr>';
+          (colN + 2) +
+          '" class="sp-an-viz__empty">이 대분류에 잡힌 품목 줄이 이 기간에 없습니다.</th></tr>';
       }
     }
 
     let rfd = '';
     let totalCol = 0;
-    for (d = 1; d <= daysN; d++) {
-      const mm2 = m < 10 ? '0' + m : String(m);
-      const dd2 = d < 10 ? '0' + d : String(d);
-      const ymd2 = y + '-' + mm2 + '-' + dd2;
+    for (ci = 0; ci < colN; ci++) {
+      const ymd2 = ymdSeq[ci];
       let dr = 0;
       if (scp0 === 'entire') {
         const cats0 = byDay[ymd2] || {};
@@ -1092,10 +1233,8 @@ export function initAnalytics(mount) {
     tbody += '<tr class="sp-an-viz__row-refund"><th scope="row" class="sp-an-viz__row-lbl">환불(일 합)</th>' + rfd + '</tr>';
 
     const dailyNet = [];
-    for (d = 1; d <= daysN; d++) {
-      const mm3 = m < 10 ? '0' + m : String(m);
-      const dd3 = d < 10 ? '0' + d : String(d);
-      const ymd3 = y + '-' + mm3 + '-' + dd3;
+    for (ci = 0; ci < colN; ci++) {
+      const ymd3 = ymdSeq[ci];
       const cats1 = byDay[ymd3] || {};
       let sumNet = 0;
       if (scp0 === 'entire') {
@@ -1134,30 +1273,47 @@ export function initAnalytics(mount) {
     tbody += '<tr class="sp-an-viz__row-total"><th scope="row" class="sp-an-viz__row-lbl">일 합(순)</th>' + totD + '</tr>';
 
     let wkCum = '<tr class="sp-an-viz__row-mrun"><th scope="row" class="sp-an-viz__row-lbl">주 누적(순)</th>';
-    for (d = 1; d <= daysN; d++) {
-      const sW = startOfBlockWeekInMonth(d);
-      let cW = 0;
-      for (let d0w = sW; d0w <= d; d0w++) {
-        cW += dailyNet[d0w - 1] != null ? dailyNet[d0w - 1] : 0;
+    for (ci = 0; ci < colN; ci++) {
+      const ymdW = ymdSeq[ci];
+      const prW = ymdW.split('-');
+      const y1 = parseInt(prW[0], 10);
+      const mo1 = parseInt(prW[1], 10);
+      const dom1 = parseInt(prW[2], 10);
+      const sW = firstDomCalendarWeekInMonth(y1, mo1, dom1);
+      const ymdStart = ymdPadParts_(y1, mo1, sW);
+      let iStart = ymdSeq.indexOf(ymdStart);
+      if (iStart < 0) {
+        iStart = ci;
       }
-      const weekEndDay = Math.min(daysN, Math.ceil(d / 7) * 7);
-      const isWeekClose = d === weekEndDay;
+      let cW = 0;
+      let ii;
+      for (ii = iStart; ii <= ci; ii++) {
+        cW += dailyNet[ii] != null ? dailyNet[ii] : 0;
+      }
+      const weekEndDay = lastDomCalendarWeekInMonth(y1, mo1, dom1);
+      const isWeekClose = dom1 === weekEndDay;
       wkCum +=
         '<td' +
-        (isWeekClose ? ' class="sp-an-viz__wk-total" title="이번 주(1–7일 블록) 누적 합 — 주간 마감일"' : '') +
+        (isWeekClose ? ' class="sp-an-viz__wk-total" title="이 달 기준 달력 주(월~일) 구간 누적 — 이 달에서의 구간 마지막일"' : '') +
         '>' +
         fmtKrw_(cW) +
         '</td>';
     }
     wkCum += '<td class="sp-an-viz__sum-col">' + fmtKrw_(monthGrand) + '</td></tr>';
     tbody += wkCum;
-    let mtdC = '<tr class="sp-an-viz__row-mrun sp-an-viz__row-mrun2"><th scope="row" class="sp-an-viz__row-lbl">월 누적(순, MTD)</th>';
+    let mtdC =
+      '<tr class="sp-an-viz__row-mrun sp-an-viz__row-mrun2"><th scope="row" class="sp-an-viz__row-lbl">' + mtdLabel + '</th>';
     let runM = 0;
-    for (d = 1; d <= daysN; d++) {
-      runM += dailyNet[d - 1] != null ? dailyNet[d - 1] : 0;
+    for (ci = 0; ci < colN; ci++) {
+      runM += dailyNet[ci] != null ? dailyNet[ci] : 0;
       mtdC += '<td>' + fmtKrw_(runM) + '</td>';
     }
-    mtdC += '<td class="sp-an-viz__sum-col">' + fmtKrw_(monthGrand) + '</td></tr>';
+    mtdC +=
+      '<td class="sp-an-viz__sum-col sp-an-viz__mtd-total" title="' +
+      mtdTitle +
+      '">' +
+      fmtKrw_(monthGrand) +
+      '</td></tr>';
     tbody += mtdC;
 
     paintVizScopeStrip_(report, y, m);
@@ -1706,10 +1862,15 @@ export function initAnalytics(mount) {
     const ym = getAnFilterYm_(el);
     if (el.vizLede) {
       el.vizLede.textContent =
-        ym.y +
-        '년 ' +
-        ym.m +
-        '월 · 순매출(매출−환불). 행은 대분류 또는 상품, 열은 일자입니다. 환불은 일별로 − 합산.';
+        ym.m === 0
+          ? ym.y +
+            '년 ' +
+            anFilterMonthLabel_(0) +
+            ' · 순매출(매출−환불). 열은 해당 연도 1~12월 일자. 행은 대분류 또는 상품. 환불은 일별 − 합산.'
+          : ym.y +
+            '년 ' +
+            anFilterMonthLabel_(ym.m) +
+            ' · 순매출(매출−환불). 행은 대분류 또는 상품, 열은 일자입니다. 환불은 일별로 − 합산.';
     }
     if (el.vizWarn) {
       el.vizWarn.setAttribute('hidden', '');
@@ -1798,7 +1959,7 @@ export function initAnalytics(mount) {
         '<td>' +
         esc(r.year) +
         '</td><td>' +
-        esc(r.month) +
+        esc(anKpiMonthCellLabel_(r.month)) +
         '</td><td>' +
         esc(SCOPE_LABEL[sc] || sc) +
         '</td><td>' +
@@ -1825,7 +1986,7 @@ export function initAnalytics(mount) {
           '이 표는 목표만 보입니다. 위「실적 요약」이 동기화 주문 기준이고, 목표는 아래에서 한 줄씩 넣은 뒤「이 줄을 표에 넣기」를 누릅니다.';
       } else if (_kpiAnnualRows) {
         tdE.textContent =
-          '선택 연도에 월 0(연간) 목표 행이 없습니다. 연간 목표를 넣었는지, 연도를 바꿔 보세요.';
+          '선택 연도에 연간 목표 행이 없습니다. 연간 목표를 넣었는지, 연도를 바꿔 보세요.';
       } else {
         tdE.textContent =
           '지금 고른 연·월에 맞는 목표 행이 없습니다. 연도나 월을 바꿔 보세요.';
@@ -1906,6 +2067,7 @@ export function initAnalytics(mount) {
       el.actualsWarn.textContent = '';
     }
     const ym = getAnFilterYm_(el);
+    const mCard = monthForActualsCard_(ym.y, ym.m);
     const url = String(GAS_BASE_URL).trim();
     _lastMasterActuals = null;
     paintActualsCompareUi_();
@@ -1913,7 +2075,7 @@ export function initAnalytics(mount) {
       const r = await gasJsonpWithParams(
         url,
         'analyticsMasterActualsGet',
-        { year: String(ym.y), month: String(ym.m) },
+        { year: String(ym.y), month: String(mCard) },
         90000
       );
       if (!r || !r.ok) {
@@ -1931,8 +2093,15 @@ export function initAnalytics(mount) {
         return;
       }
       const d = (r.data && r.data) || {};
-      _lastMasterActuals = { y: ym.y, m: ym.m, d: d };
+      _lastMasterActuals = { y: ym.y, m: mCard, d: d };
       paintActualsCompareUi_();
+      if (el.actualsWarn && ym.m === 0) {
+        el.actualsWarn.textContent =
+          '월이 「전체」일 때 일별 순매출은 그 해 1~12월입니다. 위 실적 카드·목표 비교는 ' +
+          mCard +
+          '월 기준입니다.';
+        el.actualsWarn.removeAttribute('hidden');
+      }
     } catch (e) {
       _lastMasterActuals = null;
       paintActualsCompareUi_();
@@ -2036,7 +2205,7 @@ export function initAnalytics(mount) {
       return { ok: false, msg: '연도는 2000–2100 사이입니다.' };
     }
     if (mo < 0 || mo > 12) {
-      return { ok: false, msg: '월은 0(연간)–12입니다.' };
+      return { ok: false, msg: '월은 연간 또는 1–12월입니다.' };
     }
     if (sc !== 'category' && sc !== 'product') {
       return { ok: false, msg: '범위를 고릅니다.' };
