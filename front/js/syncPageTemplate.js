@@ -6,7 +6,7 @@ export const SYNC_PAGE_SHELL_HTML = `<div class="app-shell app-shell--v9">
         <div class="brand">
           <span class="brand-mark" aria-hidden="true"></span>
           <div>
-            <h1>솔루션편입 대시보드</h1>
+            <div class="brand__title">솔루션편입 대시보드</div>
             <p class="sp-cdn-build" id="sp-cdnBuild" title="" hidden aria-label="프론트 jsDelivr 핀(임웹에 넣은 스니펫과 Network의 app.js @ 일치)"></p>
           </div>
         </div>
@@ -95,13 +95,13 @@ export const SYNC_PAGE_SHELL_HTML = `<div class="app-shell app-shell--v9">
         >
           <div class="panel panel--hero" id="sp-an-root">
             <div class="panel__head sp-an-head">
-              <h2 class="sp-panel-eyebrow" id="sp-an-eyebrow">솔루션편입 · 매출·구매 인원</h2>
+              <div class="sp-panel-eyebrow" id="sp-an-eyebrow" role="heading" aria-level="2">솔루션편입 · 매출·구매 인원</div>
               <div class="sp-an-head__right" id="sp-an-external" hidden>
-                <button type="button" class="btn btn--secondary" id="sp-an-btnRepair" hidden>
+                <button type="button" class="btn btn--secondary sp-an-head__cta" id="sp-an-btnRepair" hidden>
                   탭·주문라인 갱신
                 </button>
                 <a
-                  class="btn btn--secondary sp-sync-head__link"
+                  class="btn btn--secondary sp-sync-head__link sp-an-head__cta"
                   id="sp-an-linkSheet"
                   href="#"
                   target="_blank"
@@ -116,10 +116,10 @@ export const SYNC_PAGE_SHELL_HTML = `<div class="app-shell app-shell--v9">
               </p>
               <p class="sp-pm__hint" id="sp-an-hint" hidden></p>
               <div class="sp-an-pillar sp-an-pillar--sales" id="sp-an-pillarSales">
-                <h2 class="sp-an-pillar__title">매출 현황</h2>
+                <div class="sp-an-pillar__title" role="heading" aria-level="2">매출 현황</div>
                 <p class="sp-an-pillar__lede">선택 연·월 요약과 일별 순매출 표, 품목 줄·목표(KPI) 입력까지 한 흐름으로 이어집니다.</p>
               <div class="sp-an-salesUnified" id="sp-an-actuals" hidden>
-                <h3 class="sp-an-salesUnified__h">매출 · 선택 기간</h3>
+                <div class="sp-an-salesUnified__h" role="heading" aria-level="3">매출 · 선택 기간</div>
                 <p class="sp-an-salesUnified__lede" id="sp-an-actualsLede" aria-live="polite">위 <strong>연·월(1–12)</strong>은 실적 카드·일별 표·월별 목표 행을 같이 맞춥니다. <strong>연간 목표(월 0)</strong>만 보려면 옆 버튼을 켜서 아래 KPI 표만 필터합니다. 첫 줄 카드의 매출·주문은 집계 시트 기준이며 <strong>미분류·교재·자소서 대분류는 제외</strong>합니다(테스트 라이프사이클·관리자·테스트 그룹 주문은 02 재구축 시 제외). 막대·(±%)는 <strong>전체(사이트) 목표</strong>가 있으면 그 목표, 없으면 <strong>전년 동월</strong> 대비입니다.</p>
                 <div class="sp-an-filters sp-an-filters--period" id="sp-an-filters">
                   <label class="sp-an-filters__f"><span class="sp-pm-filters__lbl">연도</span>
@@ -164,7 +164,7 @@ export const SYNC_PAGE_SHELL_HTML = `<div class="app-shell app-shell--v9">
                   </div>
                   <div class="sp-an-metric-row sp-an-metric-row--secondary" id="sp-an-actSecondary">
                     <div class="sp-an-metric-row2-head">
-                      <h4 class="sp-an-metric-row2__title" id="sp-an-actRow2Title">이번 기간 목표</h4>
+                      <div class="sp-an-metric-row2__title" id="sp-an-actRow2Title" role="heading" aria-level="4">이번 기간 목표</div>
                       <p class="sp-an-metric-row2__sub" id="sp-an-actRow2Sub" hidden></p>
                     </div>
                     <div class="sp-an-metric-row2-cards">
@@ -182,7 +182,7 @@ export const SYNC_PAGE_SHELL_HTML = `<div class="app-shell app-shell--v9">
                 <p class="sp-an-actuals__warn" id="sp-an-actualsWarn" hidden></p>
                 <div class="sp-an-vizSection" id="sp-an-viz" hidden>
                   <div class="sp-an-viz__subhead">
-                    <h4 class="sp-an-viz__h4" id="sp-an-vizHeading"><span class="sp-an-viz__h4-main">일별 순매출</span> <span class="sp-an-viz__h4-meta" id="sp-an-vizPeriodMeta"></span></h4>
+                    <div class="sp-an-viz__h4" id="sp-an-vizHeading" role="heading" aria-level="4"><span class="sp-an-viz__h4-main">일별 순매출</span> <span class="sp-an-viz__h4-meta" id="sp-an-vizPeriodMeta"></span></div>
                     <div class="sp-an-viz__toolbar" id="sp-an-vizToolbar">
                       <label class="sp-an-filters__f"><span class="sp-pm-filters__lbl">보기 범위</span>
                         <select class="sp-confirm" id="sp-an-vizScope" title="전체(사이트) 합계는 모든 대분류 포함. 범위 좁히기: 솔패스·솔루틴·챌린지(상품 행)">
@@ -198,7 +198,7 @@ export const SYNC_PAGE_SHELL_HTML = `<div class="app-shell app-shell--v9">
                 </div>
               </div>
               <div class="sp-an-ol" id="sp-an-ol" hidden>
-                <h3 class="sp-an-ol__title">품목 줄 · 인정일·집계 반영</h3>
+                <div class="sp-an-ol__title" role="heading" aria-level="3">품목 줄 · 인정일·집계 반영</div>
                 <p class="sp-an-ol__lede" id="sp-an-olLede">위에서 고른 <strong>연·월</strong>과 같은 달·주문일 기준으로 품목 줄을 불러옵니다. 여기서 바꾼 인정일·집계 제외 여부는 드라이브 집계 시트에도 반영됩니다. 행이 많으면 일부만 보일 수 있습니다.</p>
                 <p class="sp-an-ol__warn" id="sp-an-olWarn" hidden></p>
                 <div class="sp-an-ol-scroll" id="sp-an-olScroll" role="region" aria-label="품목 줄 인정·집계 반영"></div>
@@ -269,7 +269,7 @@ export const SYNC_PAGE_SHELL_HTML = `<div class="app-shell app-shell--v9">
               </div>
 
               <div class="sp-an-pillar sp-an-pillar--buyers" id="sp-an-pillarBuyers">
-                <h2 class="sp-an-pillar__title">구매 인원 현황</h2>
+                <div class="sp-an-pillar__title" role="heading" aria-level="2">구매 인원 현황</div>
                 <p class="sp-an-pillar__lede">한 번의 주문 안의 품목 줄(건)을 세어, 날짜·상품군별로 봅니다. 사람 수가 아니라 <strong>품목 줄 수</strong>입니다.</p>
               <div class="sp-an-people" id="sp-an-people" hidden>
                 <div class="sp-an-people__toolbar" id="sp-an-peopleToolbar">
@@ -304,7 +304,7 @@ export const SYNC_PAGE_SHELL_HTML = `<div class="app-shell app-shell--v9">
         >
         <div class="panel panel--hero">
           <div class="panel__head sp-sync-head">
-            <h2 class="sp-panel-eyebrow" id="sp-panel-sync-h">데이터 동기화</h2>
+            <div class="sp-panel-eyebrow" id="sp-panel-sync-h" role="heading" aria-level="2">데이터 동기화</div>
             <div class="sp-sync-head__right">
               <span class="chip chip--soft" id="sp-envChip">미연결</span>
               <a
@@ -352,7 +352,7 @@ export const SYNC_PAGE_SHELL_HTML = `<div class="app-shell app-shell--v9">
         >
           <div class="panel panel--hero" id="sp-pm-root">
             <div class="panel__head sp-pm-head">
-              <h2 class="sp-panel-eyebrow" id="sp-pm-eyebrow">상품 항목 분류</h2>
+              <div class="sp-panel-eyebrow" id="sp-pm-eyebrow" role="heading" aria-level="2">상품 항목 분류</div>
               <div class="sp-pm-head__right sp-pm-external" id="sp-pm-external" hidden>
                 <a
                   class="sp-pm-external__link"

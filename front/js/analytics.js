@@ -1140,7 +1140,14 @@ export function initAnalytics(mount) {
       for (let d0w = sW; d0w <= d; d0w++) {
         cW += dailyNet[d0w - 1] != null ? dailyNet[d0w - 1] : 0;
       }
-      wkCum += '<td>' + fmtKrw_(cW) + '</td>';
+      const weekEndDay = Math.min(daysN, Math.ceil(d / 7) * 7);
+      const isWeekClose = d === weekEndDay;
+      wkCum +=
+        '<td' +
+        (isWeekClose ? ' class="sp-an-viz__wk-total" title="이번 주(1–7일 블록) 누적 합 — 주간 마감일"' : '') +
+        '>' +
+        fmtKrw_(cW) +
+        '</td>';
     }
     wkCum += '<td class="sp-an-viz__sum-col">' + fmtKrw_(monthGrand) + '</td></tr>';
     tbody += wkCum;
