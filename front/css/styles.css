@@ -779,6 +779,17 @@ a.sp-an-head__cta.sp-sync-head__link:hover {
 .sp-an-viz-table .sp-an-viz__dhead {
   font-size: calc(0.62rem + var(--sp-text-bump));
 }
+/* 연간 표: 아직 오지 않은 날·개시(첫 주문) 이전 날 — 합산 제외, 표시만 */
+.sp-an-viz-table td.sp-an-viz__cell-na {
+  color: #94a3b8;
+  text-align: center;
+  font-weight: 500;
+  background: #f8fafc !important;
+}
+.sp-an-viz-table tr.sp-an-viz__row-refund td.sp-an-viz__cell-na {
+  color: #94a3b8;
+  background: #f1f5f9 !important;
+}
 .sp-an-viz-table tr.sp-an-viz__row-refund td:not(.sp-an-viz__row-lbl) {
   color: #9a1c1c;
   background: #fff5f4;

@@ -3,11 +3,11 @@
  */
 
 /**
- * 마스터 `orders.order_time` 스캔 — 대시보드 기간 선택의 **연도 하한·상한**(데이터 없으면 null).
- * @return {{ minYear: ?number, maxYear: ?number }}
+ * 마스터 `orders.order_time` 스캔 — 대시보드 기간 선택의 **연도 하한·상한**·**가장 이른 주문일(서울)** (데이터 없으면 null).
+ * @return {{ minYear: ?number, maxYear: ?number, minYmd: ?string }}
  */
 function dbAnalyticsOrderYearBoundsForUi_() {
-  var empty = { minYear: null, maxYear: null };
+  var empty = { minYear: null, maxYear: null, minYmd: null };
   var ss;
   try {
     ss = dbOpenMaster_();
@@ -22,6 +22,7 @@ function dbAnalyticsOrderYearBoundsForUi_() {
   var colTime = 2;
   var minY = 100000;
   var maxY = 0;
+  var minYmd = /** @type {string|null} */ (null);
   var BATCH = 4000;
   var r0;
   for (r0 = 2; r0 <= lr; r0 += BATCH) {
@@ -30,7 +31,7 @@ function dbAnalyticsOrderYearBoundsForUi_() {
     var j;
     for (j = 0; j < vals.length; j++) {
       var ymd = dbAnAnyToSeoulYmd_(vals[j][0]);
-      if (!ymd || ymd.length < 4) {
+      if (!ymd || ymd.length < 8) {
         continue;
       }
       var yy = parseInt(ymd.slice(0, 4), 10);
@@ -43,12 +44,15 @@ function dbAnalyticsOrderYearBoundsForUi_() {
       if (yy > maxY) {
         maxY = yy;
       }
+      if (!minYmd || ymd < minYmd) {
+        minYmd = ymd;
+      }
     }
   }
   if (minY === 100000) {
     return empty;
   }
-  return { minYear: minY, maxYear: maxY };
+  return { minYear: minY, maxYear: maxY, minYmd: minYmd };
 }
 
 /**
@@ -63,6 +67,9 @@ function dbMergeAnalyticsIntoPmData_(data) {
   }
   if (yb.maxYear != null) {
     data.analyticsOrderMaxYear = yb.maxYear;
+  }
+  if (yb.minYmd != null && String(yb.minYmd).length >= 8) {
+    data.analyticsOrderMinYmd = yb.minYmd;
   }
   var a = dbAnalyticsStateFields_();
   data.analyticsReady = a.analyticsReady;

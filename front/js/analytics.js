@@ -55,6 +55,47 @@ function sumNetAllMonthTotals_(mt) {
   return s;
 }
 
+/** 서울 기준 오늘 날짜 `yyyy-MM-dd` */
+function seoulYmdToday_() {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Seoul',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).formatToParts(new Date());
+  const y = parts.find(function (p) {
+    return p.type === 'year';
+  });
+  const mo = parts.find(function (p) {
+    return p.type === 'month';
+  });
+  const da = parts.find(function (p) {
+    return p.type === 'day';
+  });
+  return (y && y.value) + '-' + (mo && mo.value) + '-' + (da && da.value);
+}
+
+/**
+ * 연간 일별 격자에서 합산 제외·셀 `—` 처리할 날짜(서울 ymd 문자열 비교).
+ * @param {string} ymd
+ * @param {string} todayYmd
+ * @param {string|null|undefined} minDataYmd 마스터 첫 주문일 — 없으면 과거 구간은 마스킹 안 함
+ * @return {boolean}
+ */
+function vizYmdExcludedFromYearGrid_(ymd, todayYmd, minDataYmd) {
+  if (!ymd || ymd.length < 10) {
+    return true;
+  }
+  if (ymd > todayYmd) {
+    return true;
+  }
+  const lo = minDataYmd != null ? String(minDataYmd).trim() : '';
+  if (lo.length >= 10 && ymd < lo) {
+    return true;
+  }
+  return false;
+}
+
 /**
  * @param {string} scope
  * @param {string} key
@@ -507,6 +548,8 @@ export function initAnalytics(mount) {
   let _boundsMinYear = null;
   /** @type {number|null} */
   let _boundsMaxYear = null;
+  /** @type {string|null} 마스터 첫 주문일(서울 yyyy-MM-dd) — 연간 표에서 개시 전 칸 마스킹 */
+  let _boundsMinYmd = null;
   /** 목표(KPI) 표만 연간 한 줄 행 필터 */
   let _kpiAnnualRows = false;
   /** 연·월 필터: 첫 `rebuildFilterYearMonth_`에서만 HTML 기본(1월) 대신 당월로 맞춤 */
@@ -1097,6 +1140,13 @@ export function initAnalytics(mount) {
       return;
     }
     const colN = ymdSeq.length;
+    const todayYmdViz = seoulYmdToday_();
+    const colExcluded = ymdSeq.map(function (ymd0) {
+      if (!mIsYear) {
+        return false;
+      }
+      return vizYmdExcludedFromYearGrid_(ymd0, todayYmdViz, _boundsMinYmd);
+    });
     const sumHead = mIsYear ? '연 합(순)' : '월 합(순)';
     const mtdLabel = mIsYear ? '연 누적(순, YTD)' : '월 누적(순, MTD)';
     const mtdTitle = mIsYear
@@ -1152,8 +1202,12 @@ export function initAnalytics(mount) {
         const sales0 = slice && slice.sales != null ? Number(slice.sales) : 0;
         const ref0 = slice && slice.refund != null ? Number(slice.refund) : 0;
         const net0 = sales0 - ref0;
-        rowSum += net0;
-        tds += '<td>' + (net0 !== 0 ? fmtKrw_(net0) : '0') + '</td>';
+        if (colExcluded[cx]) {
+          tds += '<td class="sp-an-viz__cell-na">—</td>';
+        } else {
+          rowSum += net0;
+          tds += '<td>' + (net0 !== 0 ? fmtKrw_(net0) : '0') + '</td>';
+        }
       }
       tds += '<td class="sp-an-viz__sum-col">' + fmtKrw_(rowSum) + '</td>';
       tbody += '<tr><th scope="row" class="sp-an-viz__row-lbl">' + esc(label) + '</th>' + tds + '</tr>';
@@ -1193,8 +1247,12 @@ export function initAnalytics(mount) {
           const sP = slP && slP.sales != null ? Number(slP.sales) : 0;
           const rP = slP && slP.refund != null ? Number(slP.refund) : 0;
           const nP = sP - rP;
-          rowSumP += nP;
-          tdsP += '<td>' + (nP !== 0 ? fmtKrw_(nP) : '0') + '</td>';
+          if (colExcluded[ci]) {
+            tdsP += '<td class="sp-an-viz__cell-na">—</td>';
+          } else {
+            rowSumP += nP;
+            tdsP += '<td>' + (nP !== 0 ? fmtKrw_(nP) : '0') + '</td>';
+          }
         }
         tdsP += '<td class="sp-an-viz__sum-col">' + fmtKrw_(rowSumP) + '</td>';
         tbody += '<tr><th scope="row" class="sp-an-viz__row-lbl sp-an-viz__row-lbl--prod">↳ ' + esc(labP) + '</th>' + tdsP + '</tr>';
@@ -1211,23 +1269,27 @@ export function initAnalytics(mount) {
     let totalCol = 0;
     for (ci = 0; ci < colN; ci++) {
       const ymd2 = ymdSeq[ci];
-      let dr = 0;
-      if (scp0 === 'entire') {
-        const cats0 = byDay[ymd2] || {};
-        var ckey;
-        for (ckey in cats0) {
-          if (!Object.prototype.hasOwnProperty.call(cats0, ckey)) {
-            continue;
-          }
-          const sl = cats0[ckey];
-          dr += sl && sl.refund != null ? Number(sl.refund) : 0;
-        }
+      if (colExcluded[ci]) {
+        rfd += '<td class="sp-an-viz__cell-na">—</td>';
       } else {
-        const sl0 = (byDay[ymd2] && byDay[ymd2][scp0]) || {};
-        dr = sl0 && sl0.refund != null ? Number(sl0.refund) : 0;
+        let dr = 0;
+        if (scp0 === 'entire') {
+          const cats0 = byDay[ymd2] || {};
+          var ckey;
+          for (ckey in cats0) {
+            if (!Object.prototype.hasOwnProperty.call(cats0, ckey)) {
+              continue;
+            }
+            const sl = cats0[ckey];
+            dr += sl && sl.refund != null ? Number(sl.refund) : 0;
+          }
+        } else {
+          const sl0 = (byDay[ymd2] && byDay[ymd2][scp0]) || {};
+          dr = sl0 && sl0.refund != null ? Number(sl0.refund) : 0;
+        }
+        rfd += '<td>–' + fmtKrw_(dr) + '</td>';
+        totalCol += dr;
       }
-      rfd += '<td>–' + fmtKrw_(dr) + '</td>';
-      totalCol += dr;
     }
     rfd += '<td class="sp-an-viz__sum-col">–' + fmtKrw_(totalCol) + '</td>';
     tbody += '<tr class="sp-an-viz__row-refund"><th scope="row" class="sp-an-viz__row-lbl">환불(일 합)</th>' + rfd + '</tr>';
@@ -1235,29 +1297,36 @@ export function initAnalytics(mount) {
     const dailyNet = [];
     for (ci = 0; ci < colN; ci++) {
       const ymd3 = ymdSeq[ci];
-      const cats1 = byDay[ymd3] || {};
       let sumNet = 0;
-      if (scp0 === 'entire') {
-        var ck2;
-        for (ck2 in cats1) {
-          if (!Object.prototype.hasOwnProperty.call(cats1, ck2)) {
-            continue;
+      if (!colExcluded[ci]) {
+        const cats1 = byDay[ymd3] || {};
+        if (scp0 === 'entire') {
+          var ck2;
+          for (ck2 in cats1) {
+            if (!Object.prototype.hasOwnProperty.call(cats1, ck2)) {
+              continue;
+            }
+            const s2 = cats1[ck2];
+            const s2a = s2 && s2.sales != null ? Number(s2.sales) : 0;
+            const s2b = s2 && s2.refund != null ? Number(s2.refund) : 0;
+            sumNet += s2a - s2b;
           }
-          const s2 = cats1[ck2];
-          const s2a = s2 && s2.sales != null ? Number(s2.sales) : 0;
-          const s2b = s2 && s2.refund != null ? Number(s2.refund) : 0;
-          sumNet += s2a - s2b;
+        } else {
+          const s2a = (cats1[scp0] && cats1[scp0].sales != null) ? Number(cats1[scp0].sales) : 0;
+          const s2b = (cats1[scp0] && cats1[scp0].refund != null) ? Number(cats1[scp0].refund) : 0;
+          sumNet = s2a - s2b;
         }
-      } else {
-        const s2a = (cats1[scp0] && cats1[scp0].sales != null) ? Number(cats1[scp0].sales) : 0;
-        const s2b = (cats1[scp0] && cats1[scp0].refund != null) ? Number(cats1[scp0].refund) : 0;
-        sumNet = s2a - s2b;
       }
       dailyNet.push(sumNet);
     }
     const mt = (cur && cur.monthTotals) || {};
     let monthGrand = 0;
-    if (scp0 === 'entire') {
+    if (mIsYear) {
+      let gi;
+      for (gi = 0; gi < dailyNet.length; gi++) {
+        monthGrand += dailyNet[gi] != null ? dailyNet[gi] : 0;
+      }
+    } else if (scp0 === 'entire') {
       monthGrand = sumNetAllMonthTotals_(mt);
     } else {
       const t4 = mt[scp0];
@@ -1267,37 +1336,47 @@ export function initAnalytics(mount) {
     }
     let totD = '';
     for (let di0 = 0; di0 < dailyNet.length; di0++) {
-      totD += '<td>' + (dailyNet[di0] !== 0 ? fmtKrw_(dailyNet[di0]) : '0') + '</td>';
+      if (colExcluded[di0]) {
+        totD += '<td class="sp-an-viz__cell-na">—</td>';
+      } else {
+        totD += '<td>' + (dailyNet[di0] !== 0 ? fmtKrw_(dailyNet[di0]) : '0') + '</td>';
+      }
     }
     totD += '<td class="sp-an-viz__sum-col">' + fmtKrw_(monthGrand) + '</td>';
     tbody += '<tr class="sp-an-viz__row-total"><th scope="row" class="sp-an-viz__row-lbl">일 합(순)</th>' + totD + '</tr>';
 
     let wkCum = '<tr class="sp-an-viz__row-mrun"><th scope="row" class="sp-an-viz__row-lbl">주 누적(순)</th>';
     for (ci = 0; ci < colN; ci++) {
-      const ymdW = ymdSeq[ci];
-      const prW = ymdW.split('-');
-      const y1 = parseInt(prW[0], 10);
-      const mo1 = parseInt(prW[1], 10);
-      const dom1 = parseInt(prW[2], 10);
-      const sW = firstDomCalendarWeekInMonth(y1, mo1, dom1);
-      const ymdStart = ymdPadParts_(y1, mo1, sW);
-      let iStart = ymdSeq.indexOf(ymdStart);
-      if (iStart < 0) {
-        iStart = ci;
+      if (colExcluded[ci]) {
+        wkCum += '<td class="sp-an-viz__cell-na">—</td>';
+      } else {
+        const ymdW = ymdSeq[ci];
+        const prW = ymdW.split('-');
+        const y1 = parseInt(prW[0], 10);
+        const mo1 = parseInt(prW[1], 10);
+        const dom1 = parseInt(prW[2], 10);
+        const sW = firstDomCalendarWeekInMonth(y1, mo1, dom1);
+        const ymdStart = ymdPadParts_(y1, mo1, sW);
+        let iStart = ymdSeq.indexOf(ymdStart);
+        if (iStart < 0) {
+          iStart = ci;
+        }
+        let cW = 0;
+        let ii;
+        for (ii = iStart; ii <= ci; ii++) {
+          if (!colExcluded[ii]) {
+            cW += dailyNet[ii] != null ? dailyNet[ii] : 0;
+          }
+        }
+        const weekEndDay = lastDomCalendarWeekInMonth(y1, mo1, dom1);
+        const isWeekClose = dom1 === weekEndDay;
+        wkCum +=
+          '<td' +
+          (isWeekClose ? ' class="sp-an-viz__wk-total" title="이 달 기준 달력 주(월~일) 구간 누적 — 이 달에서의 구간 마지막일"' : '') +
+          '>' +
+          fmtKrw_(cW) +
+          '</td>';
       }
-      let cW = 0;
-      let ii;
-      for (ii = iStart; ii <= ci; ii++) {
-        cW += dailyNet[ii] != null ? dailyNet[ii] : 0;
-      }
-      const weekEndDay = lastDomCalendarWeekInMonth(y1, mo1, dom1);
-      const isWeekClose = dom1 === weekEndDay;
-      wkCum +=
-        '<td' +
-        (isWeekClose ? ' class="sp-an-viz__wk-total" title="이 달 기준 달력 주(월~일) 구간 누적 — 이 달에서의 구간 마지막일"' : '') +
-        '>' +
-        fmtKrw_(cW) +
-        '</td>';
     }
     wkCum += '<td class="sp-an-viz__sum-col">' + fmtKrw_(monthGrand) + '</td></tr>';
     tbody += wkCum;
@@ -1305,8 +1384,12 @@ export function initAnalytics(mount) {
       '<tr class="sp-an-viz__row-mrun sp-an-viz__row-mrun2"><th scope="row" class="sp-an-viz__row-lbl">' + mtdLabel + '</th>';
     let runM = 0;
     for (ci = 0; ci < colN; ci++) {
-      runM += dailyNet[ci] != null ? dailyNet[ci] : 0;
-      mtdC += '<td>' + fmtKrw_(runM) + '</td>';
+      if (colExcluded[ci]) {
+        mtdC += '<td class="sp-an-viz__cell-na">—</td>';
+      } else {
+        runM += dailyNet[ci] != null ? dailyNet[ci] : 0;
+        mtdC += '<td>' + fmtKrw_(runM) + '</td>';
+      }
     }
     mtdC +=
       '<td class="sp-an-viz__sum-col sp-an-viz__mtd-total" title="' +
@@ -2164,6 +2247,8 @@ export function initAnalytics(mount) {
     const mx = d && d.analyticsOrderMaxYear != null ? Number(d.analyticsOrderMaxYear) : NaN;
     _boundsMinYear = isFinite(mn) ? Math.floor(mn) : null;
     _boundsMaxYear = isFinite(mx) ? Math.floor(mx) : null;
+    const ymd0 = d && d.analyticsOrderMinYmd != null ? String(d.analyticsOrderMinYmd).trim() : '';
+    _boundsMinYmd = /^\d{4}-\d{2}-\d{2}$/.test(ymd0) ? ymd0 : null;
     ready = Boolean(d && d.analyticsReady === true);
     applyAnalyticsHeaderUrls(mount, d);
     syncAnUi_();
