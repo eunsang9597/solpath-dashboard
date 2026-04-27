@@ -15,7 +15,7 @@ const SCOPE_LABEL = { category: '대분류', product: '상품' };
 
 /** 시트·API용 영문 키 → 표에만 한글 (저장 값은 그대로) */
 const AN_CATEGORY_KEY_LABEL = {
-  unmapped: '미분류',
+  unmapped: '상품군 미정',
   solpass: '솔패스',
   solutine: '솔루틴',
   challenge: '챌린지',
@@ -23,11 +23,11 @@ const AN_CATEGORY_KEY_LABEL = {
   jasoseo: '자소서'
 };
 
-/** 보기 범위 셀렉트에 넣는 대분류(전체 제외) — 미분류·교재·자소서 제외 */
+/** 보기 범위 셀렉트에 넣는 대분류(전체 제외) — 상품군 미정·교재·자소서 제외 */
 const VIZ_SCOPE_DROPDOWN_KEYS = { solpass: true, solutine: true, challenge: true };
 
-/** 상단 실적·전년·목표 비교 축 — 집계 02 기준, 미분류·교재·자소서 제외 */
-const AN_ACTUAL_EXCL_NOTE = ' (미분류·교재·자소서 제외)';
+/** 상단 실적·전년·목표 비교 축 — 주문 실적 집계 기준, 상품군 미정·교재·자소서 제외 */
+const AN_ACTUAL_EXCL_NOTE = ' (상품군 미정·교재·자소서 제외)';
 
 /**
  * `monthTotals` 전 카테고리 순매출 합(사이트 전체 합계용).
@@ -105,6 +105,10 @@ function productSaleWindowOverlapsMonth_(addYmd, salesEndYmd, y, m) {
     salesEndYmd != null && String(salesEndYmd).trim().length >= 10
       ? String(salesEndYmd).trim().slice(0, 10)
       : '9999-12-31';
+  /* 등록일이 판매 종료보다 늦으면 구간 무효 — 빈 종료일은 상한 9999로만 유효 */
+  if (lo > hi) {
+    return false;
+  }
   return lo <= b.end && b.start <= hi;
 }
 
@@ -1186,7 +1190,7 @@ export function initAnalytics(mount) {
     const order = (report && report.categoryOrder) || [];
     if (!order.length) {
       el.vizScroll.innerHTML =
-        '<p class="sp-an-viz__empty">대분류 데이터가 없어 표를 만들지 못했습니다. 집계가 비었거나 아직 만들어지지 않았을 수 있습니다.</p>';
+        '<p class="sp-an-viz__empty">상품군별 데이터가 없어 표를 만들지 못했습니다. 아직 동기화·집계가 안 됐을 수 있습니다.</p>';
       paintVizScopeStrip_(report, y, m);
       return;
     }
@@ -1318,7 +1322,7 @@ export function initAnalytics(mount) {
         tbody +=
           '<tr><th colspan="' +
           (colN + 2) +
-          '" class="sp-an-viz__empty">이 대분류에 잡힌 품목 줄이 이 기간에 없습니다.</th></tr>';
+          '" class="sp-an-viz__empty">이 상품군에 해당하는 품목이 이 기간에 없습니다.</th></tr>';
       }
     }
 
@@ -1551,7 +1555,7 @@ export function initAnalytics(mount) {
       el.peopleMatrix.innerHTML =
         '<p class="sp-an-viz__empty sp-an-people-matrix__caption">' +
         esc(String(useY)) +
-        '년 1~12월 구매 건수(상품군·월별 합, 미분류 제외). 아직 지나지 않은 달은 비웁니다.</p>' +
+        '년 1~12월 구매 건수(상품군·월별 합, 상품군 미정은 제외). 아직 지나지 않은 달은 비웁니다.</p>' +
         '<table class="sp-an-viz-table sp-an-people__matrix"><thead>' +
         tHH +
         '</thead><tbody>' +
@@ -1603,11 +1607,11 @@ export function initAnalytics(mount) {
     const useY = isFinite(py0) ? py0 : y;
     const useM = isFinite(pm0) && pm0 >= 1 && pm0 <= 12 ? pm0 : m;
     if (el.peopleLede) {
-      el.peopleLede.textContent =
+      el.peopleLede.innerHTML =
         useY +
         '년 ' +
         useM +
-        '월 — 날짜별 구매 건수입니다. 표시 행은 상품 매핑 기준으로 이 달과 판매 기간이 겹치는 품목입니다(미분류·테스트 라이프사이클 제외). 교재는 품목별이 아니라 「교재」 한 줄 합계입니다. 아래에 같은 연도 기준 월×상품군 합계가 함께 표시됩니다.';
+        '월 — 날짜별 구매 건수입니다. <strong>품목 분류</strong>에서 <strong>지금 판매 중(진행)</strong>으로 두었고, 이 달과 판매 기간이 겹치는 품목만 보입니다(상품군 미정·판매 종료·시험용·옛 상품 제외). 교재는 「교재」 한 줄로 합칩니다. 아래에 같은 연도 기준 월×상품군 합계가 함께 표시됩니다.';
     }
     if (el.peopleGrid) {
       el.peopleGrid.innerHTML = '<p class="sp-an-viz__empty">불러오는 중…</p>';
@@ -1661,7 +1665,8 @@ export function initAnalytics(mount) {
               continue;
             }
             const lifeM = String(pr.lifecycle != null ? pr.lifecycle : '').trim().toLowerCase();
-            if (lifeM === 'test') {
+            /* 구매 건수 표: 진행(active)만 — 만료·시험용·옛 상품 제외 */
+            if (lifeM !== 'active') {
               continue;
             }
             if (
@@ -1699,7 +1704,7 @@ export function initAnalytics(mount) {
           }
         }
       } catch (_pmE) {
-        /* 매핑 목록 없으면 표시 행 없음(집계는 위 fact만 사용) */
+        /* 품목 분류 목록 없으면 표시 행 없음(집계는 위 fact만 사용) */
       }
       const daysN2 = daysInMonth(useY, useM);
       const pKeysAll = Object.keys(pKeys);
@@ -1834,7 +1839,7 @@ export function initAnalytics(mount) {
         tbG =
           '<tr><td colspan="' +
           nc +
-          '" class="sp-an-viz__empty">이 달에 표시할 상품이 없습니다. (원천 목록·판매 기간과 겹치는 품목이 없거나 목록을 불러오지 못했습니다.)</td></tr>';
+          '" class="sp-an-viz__empty">이 달에 표시할 상품이 없습니다. (품목 분류·판매 기간이 맞는 품목이 없거나 목록을 불러오지 못했습니다.)</td></tr>';
       }
       let sumB =
         '<tr class="sp-an-people__sumrow"><th scope="row" title="날짜별 열은 그날 전체 구매 합(건)">이 달 합계</th>';
@@ -2162,7 +2167,7 @@ export function initAnalytics(mount) {
             ? String(r.error.message)
             : errMsg_(r);
         if (el.actualsWarn) {
-          el.actualsWarn.textContent = msg || '집계를 가져오지 못했습니다.';
+          el.actualsWarn.textContent = msg || '실적 숫자를 가져오지 못했습니다.';
           el.actualsWarn.removeAttribute('hidden');
         }
         logSolpathApi_('analyticsMasterActualsGet', r, null);
@@ -2180,7 +2185,7 @@ export function initAnalytics(mount) {
       paintActualsCompareUi_();
       logSolpathApi_('analyticsMasterActualsGet', null, e);
       if (el.actualsWarn) {
-        el.actualsWarn.textContent = '집계 요청이 끝나지 않았습니다.';
+        el.actualsWarn.textContent = '실적 요청이 끝나지 않았습니다.';
         el.actualsWarn.removeAttribute('hidden');
       }
     }
@@ -2365,7 +2370,7 @@ export function initAnalytics(mount) {
         ready = true;
         syncAnUi_();
         await loadTargets();
-        setHint('드라이브에 목표 표가 준비됐습니다. 위 실적은 항상 마스터·동기화 기준이고, 아래는 선택 목표만 적습니다.', true);
+        setHint('드라이브에 목표 표가 준비됐습니다. 위 실적은 연동된 주문·동기화 기준이고, 아래는 팀에서 정한 목표만 적습니다.', true);
         window.requestAnimationFrame(function () {
           if (el.actuals) {
             el.actuals.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -2376,8 +2381,8 @@ export function initAnalytics(mount) {
         const m = e && e.message != null ? String(e.message) : '';
         setHint(
           m === 'timeout'
-            ? '응답이 지연되었습니다. [네트워크/timeout]'
-            : '요청이 끝나지 않았습니다. [콘솔에 상세]',
+            ? '응답이 지연되었습니다. 잠시 뒤 다시 시도해 주세요.'
+            : '요청이 끝나지 않았습니다. 문제가 계속되면 담당자에게 알려 주세요.',
           true
         );
       } finally {
@@ -2394,14 +2399,14 @@ export function initAnalytics(mount) {
         return;
       }
       if (!ready) {
-        setHint('먼저 집계용 드라이브 시트를 연 뒤 다시 누릅니다.', true);
+        setHint('먼저 지표용 드라이브 파일을 만든·연 뒤 다시 눌러 주세요.', true);
         return;
       }
       el.btnRepair.disabled = true;
       if (el.loading) {
         el.loading.removeAttribute('hidden');
       }
-      setHint('탭 이행·주문라인을 마스터에서 다시 채우는 중…', true);
+      setHint('지표 시트 구조를 맞추고 주문 품목 목록을 다시 채우는 중…', true);
       try {
         const r = await gasJsonpWithParams(url, 'analyticsSheetsRepair', null, 120000);
         if (!r || !r.ok) {
@@ -2413,8 +2418,8 @@ export function initAnalytics(mount) {
         const wn = d1.written != null && isFinite(Number(d1.written)) ? Number(d1.written) : null;
         setHint(
           wn != null
-            ? '집계 시트를 맞추고 품목 줄 ' + wn + '행을 갱신했습니다.'
-            : '집계 시트를 맞추고 마스터에서 품목 줄을 다시 채웠습니다.',
+            ? '지표 시트를 맞추고 주문 품목 ' + wn + '줄을 반영했습니다.'
+            : '지표 시트를 맞추고 주문 품목 목록을 다시 채웠습니다.',
           true
         );
         await loadTargets();
@@ -2424,8 +2429,8 @@ export function initAnalytics(mount) {
         const m = e && e.message != null ? String(e.message) : '';
         setHint(
           m === 'timeout'
-            ? '응답이 지연되었습니다. [네트워크/timeout]'
-            : '요청이 끝나지 않았습니다. [콘솔에 상세]',
+            ? '응답이 지연되었습니다. 잠시 뒤 다시 시도해 주세요.'
+            : '요청이 끝나지 않았습니다. 문제가 계속되면 담당자에게 알려 주세요.',
           true
         );
       } finally {

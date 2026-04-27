@@ -465,10 +465,20 @@ function dbPmReadMappingMap_() {
     if (se.length > 10) {
       se = se.slice(0, 10);
     }
+    var icCell = String(line[2] != null ? line[2] : '')
+      .trim()
+      .toLowerCase();
+    var internal_category =
+      icCell && _DB_PM_CATEGORIES.indexOf(icCell) >= 0 ? icCell : 'unmapped';
+    var lifeCell = String(line[3] != null ? line[3] : '')
+      .trim()
+      .toLowerCase();
+    var lifecycle =
+      lifeCell && _DB_PM_LIFECYCLES.indexOf(lifeCell) >= 0 ? lifeCell : 'active';
     o[pk] = {
       product_name: String(line[1] != null ? line[1] : '').trim(),
-      internal_category: String(line[2] != null ? line[2] : '').trim() || 'unmapped',
-      lifecycle: String(line[3] != null ? line[3] : '').trim() || 'active',
+      internal_category: internal_category,
+      lifecycle: lifecycle,
       created_at: String(line[4] != null ? line[4] : ''),
       updated_at: String(line[5] != null ? line[5] : ''),
       notes: String(line[6] != null ? line[6] : ''),

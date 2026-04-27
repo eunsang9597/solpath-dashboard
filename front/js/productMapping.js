@@ -9,7 +9,7 @@ const CAT_ROW4 = CAT_ORDER.filter(function (c) {
   return c !== 'unmapped';
 });
 const CAT_LABEL = {
-  unmapped: '미분류',
+  unmapped: '상품군 미정',
   solpass: '솔패스',
   solutine: '솔루틴',
   challenge: '챌린지',
@@ -443,7 +443,7 @@ export function initProductMapping(mount) {
       const nT = testRows.length;
       parts.push('<div class="sp-pm-cat-block sp-pm-cat-block--lifecycle-test">');
       parts.push(
-        '<details class="sp-pm-cat sp-pm-cat--lifecycle-test" data-cat="lifecycle-test"><summary class="sp-pm-cat__sum"><span class="sp-pm-cat__title">상태·테스트' +
+        '<details class="sp-pm-cat sp-pm-cat--lifecycle-test" data-cat="lifecycle-test"><summary class="sp-pm-cat__sum"><span class="sp-pm-cat__title">상태·시험·검수용' +
           '</span><span class="sp-pm-cat__badge">' +
           escAttr(String(nTestAll) + '개') +
           '</span> <span class="sp-pm-cat__n">' +
@@ -636,12 +636,12 @@ export function initProductMapping(mount) {
       if (c === 'PM_BAD_INTERNAL') {
         return emsg.error.message != null && String(emsg.error.message).length
           ? String(emsg.error.message)
-          : '내부 대분류를 저장할 수 없습니다. 해당 줄에서 대분류를 다시 고른 뒤 저장하세요.';
+          : '상품군을 저장할 수 없습니다. 해당 줄에서 상품군을 다시 고른 뒤 저장하세요.';
       }
       if (c === 'PM_SALES_END_REQUIRED' || c === 'PM_BAD_SALES_END') {
         return emsg.error.message != null && String(emsg.error.message).length
           ? String(emsg.error.message)
-          : '만료·(구)상품은 판매 종료일(yyyy-MM-dd)이 필요합니다.';
+          : '만료·(구)상품은 판매 종료일(예: 2026-04-01)이 필요합니다.';
       }
     }
     if (typeof emsg.error === 'string' && emsg.error.length) {
@@ -671,7 +671,7 @@ export function initProductMapping(mount) {
       return '상태를 저장할 수 없습니다. 해당 줄에서 상태를 다시 고른 뒤 저장하세요.';
     }
     if (t.indexOf('internal_category') >= 0 && t.indexOf('허용') >= 0) {
-      return '내부 대분류를 저장할 수 없습니다. 해당 줄에서 대분류를 다시 고른 뒤 저장하세요.';
+      return '상품군을 저장할 수 없습니다. 해당 줄에서 상품군을 다시 고른 뒤 저장하세요.';
     }
     return t;
   }
@@ -945,7 +945,7 @@ export function initProductMapping(mount) {
       return;
     }
     const ok = window.confirm(
-      '「상품 매핑(분류)」에 적어 둔 내용을 비우고, 데이터 동기화에 올라와 있는 상품 목록만 보고 다시 채웁니다.\n\n' +
+      '품목 분류 시트에 적어 둔 내용을 비우고, 데이터 동기화에 올라와 있는 상품 목록만 보고 다시 채웁니다.\n\n' +
         '지금까지 바꾼 분류·상태는 복구할 수 없습니다. 정말 진행할까요?'
     );
     if (!ok) {
@@ -968,7 +968,7 @@ export function initProductMapping(mount) {
       const n = r.data && r.data.seededRowCount != null ? Number(r.data.seededRowCount) : 0;
       await loadList();
       setHint(
-        '초기화했습니다. 동기화 목록 기준 ' + n + '건 · 기본값은 미분류·진행으로 맞춤.',
+        '초기화했습니다. 동기화 목록 기준 ' + n + '건 · 기본은 상품군 미정·진행으로 맞춤.',
         true
       );
       syncFooterAndInstruct();

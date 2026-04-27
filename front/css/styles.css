@@ -960,6 +960,13 @@ a.sp-an-head__cta.sp-sync-head__link:hover {
   list-style: none;
 }
 
+.sp-an-kpi__sum-hint {
+  font-weight: 500;
+  font-size: calc(0.78rem + var(--sp-text-bump));
+  color: var(--muted);
+  margin-left: 0.25rem;
+}
+
 .sp-an-kpi__fold[open] > .sp-an-kpi__sum {
   margin-bottom: 0.5rem;
   border-bottom: 1px dashed #dde3eb;
