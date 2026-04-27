@@ -297,6 +297,79 @@ function errMsg_(r) {
 }
 
 /**
+ * 표(thead/tbody) DOM을 시트용 2차원 값·병합 정보로 변환.
+ * @param {HTMLElement | null} host
+ * @return {{ rows: string[][], merges: Array<{row:number,col:number,rowspan:number,colspan:number}> } | null}
+ */
+function captureTableGridForExport_(host) {
+  if (!host) {
+    return null;
+  }
+  const table = host.tagName === 'TABLE' ? /** @type {HTMLTableElement} */ (host) : host.querySelector('table');
+  if (!table) {
+    return null;
+  }
+  const trList = Array.from(table.querySelectorAll('tr'));
+  if (!trList.length) {
+    return null;
+  }
+  /** @type {string[][]} */
+  const rows = [];
+  /** @type {Array<{row:number,col:number,rowspan:number,colspan:number}>} */
+  const merges = [];
+  /** @type {Record<string, boolean>} */
+  const occupied = {};
+  let maxCol = 0;
+  for (let r = 0; r < trList.length; r++) {
+    const tr = trList[r];
+    const outRow = [];
+    let c = 0;
+    const cells = Array.from(tr.children).filter(function (n) {
+      return n.tagName === 'TH' || n.tagName === 'TD';
+    });
+    for (let ci = 0; ci < cells.length; ci++) {
+      while (occupied[r + ':' + c]) {
+        c += 1;
+      }
+      const td = /** @type {HTMLTableCellElement} */ (cells[ci]);
+      const rs = Math.max(1, Number(td.rowSpan || 1));
+      const cs = Math.max(1, Number(td.colSpan || 1));
+      const txt = String(td.textContent != null ? td.textContent : '')
+        .replace(/\s+/g, ' ')
+        .trim();
+      outRow[c] = txt;
+      if (rs > 1 || cs > 1) {
+        merges.push({ row: r + 1, col: c + 1, rowspan: rs, colspan: cs });
+      }
+      for (let rr = 0; rr < rs; rr++) {
+        for (let cc = 0; cc < cs; cc++) {
+          if (rr === 0 && cc === 0) {
+            continue;
+          }
+          occupied[r + rr + ':' + (c + cc)] = true;
+        }
+      }
+      c += cs;
+    }
+    if (c > maxCol) {
+      maxCol = c;
+    }
+    rows.push(outRow);
+  }
+  for (let r = 0; r < rows.length; r++) {
+    if (rows[r].length < maxCol) {
+      rows[r].length = maxCol;
+    }
+    for (let c = 0; c < maxCol; c++) {
+      if (rows[r][c] == null) {
+        rows[r][c] = '';
+      }
+    }
+  }
+  return { rows: rows, merges: merges };
+}
+
+/**
  * @param {string} action
  * @param {object|null} result
  * @param {Error|unknown} [caught]
@@ -496,14 +569,102 @@ export function applyAnalyticsHeaderUrls(mount, d) {
  * @param {Record<string, unknown>} r
  * @return {object}
  */
+/**
+ * 목표 행 year/month — 시트 Date·문자가 섞여도 저장 검증 실패 방지
+ * @param {unknown} raw
+ * @return {number}
+ */
+function coercePayloadGoalYear_(raw) {
+  if (raw instanceof Date && !isNaN(raw.getTime())) {
+    return raw.getFullYear();
+  }
+  const n = Math.floor(Number(raw));
+  return isFinite(n) ? n : NaN;
+}
+
+/**
+ * @param {unknown} raw
+ * @return {number}
+ */
+function coercePayloadGoalMonth_(raw) {
+  if (raw instanceof Date && !isNaN(raw.getTime())) {
+    return raw.getMonth() + 1;
+  }
+  const n = Math.floor(Number(raw));
+  if (n === 0) {
+    return 0;
+  }
+  if (n >= 1 && n <= 12) {
+    return n;
+  }
+  const s = String(raw != null ? raw : '').trim();
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
+    const d = new Date(s);
+    if (!isNaN(d.getTime())) {
+      return d.getMonth() + 1;
+    }
+  }
+  return NaN;
+}
+
+/** 한글·표기 → 서버 허용 키 (저장 페이로드용) */
+function normalizePayloadGoalTargetKey_(raw) {
+  const t = String(raw != null ? raw : '')
+    .trim()
+    .toLowerCase();
+  if (!t.length) {
+    return '';
+  }
+  if (KPI_GOAL_TARGET_SET[t]) {
+    return t;
+  }
+  const aliases = /** @type {Record<string, string>} */ ({
+    전체: 'entire',
+    솔패스: 'solpass',
+    챌린지: 'challenge',
+    솔루틴: 'solutine'
+  });
+  return aliases[t] != null ? aliases[t] : t;
+}
+
+/**
+ * 목표 금액·건수 — 쉼표·공백 포함 문자열도 저장 검증 통과용으로 정리
+ * @param {unknown} v
+ * @return {number}
+ */
+function parseGoalAmountForPayload_(v) {
+  if (v == null || v === '') {
+    return 0;
+  }
+  if (typeof v === 'number' && isFinite(v)) {
+    return Math.max(0, v);
+  }
+  const n = Number(String(v).replace(/[, \s\u00a0]/g, '').trim());
+  return isFinite(n) && n >= 0 ? n : 0;
+}
+
 function rowToPayload_(r) {
-  const y = Math.floor(Number(r.year));
-  const mo = Math.floor(Number(r.month));
-  const gt0 = String(r.goal_target != null ? r.goal_target : '').trim().toLowerCase();
-  const sk = String(r.scopeKey != null ? r.scopeKey : r.scope_key != null ? r.scope_key : '').trim().toLowerCase();
+  const y = coercePayloadGoalYear_(r.year);
+  const mo = coercePayloadGoalMonth_(r.month);
+  const gt0 = normalizePayloadGoalTargetKey_(
+    String(
+      r.goal_target != null
+        ? r.goal_target
+        : r.goalTarget != null
+          ? r.goalTarget
+          : ''
+    ).trim()
+  );
+  const sk = normalizePayloadGoalTargetKey_(
+    String(r.scopeKey != null ? r.scopeKey : r.scope_key != null ? r.scope_key : '').trim()
+  );
   const goalTarget = gt0 || sk;
-  const ta = Math.max(0, Number(r.targetAmount != null ? r.targetAmount : r.target_amount != null ? r.target_amount : 0));
-  const tc = Math.max(0, Number(r.targetCount != null ? r.targetCount : r.target_count != null ? r.target_count : 0));
+  const ta = parseGoalAmountForPayload_(
+    r.targetAmount != null ? r.targetAmount : r.target_amount != null ? r.target_amount : 0
+  );
+  const tc = parseGoalAmountForPayload_(
+    r.targetCount != null ? r.targetCount : r.target_count != null ? r.target_count : 0
+  );
   return {
     year: y,
     month: mo,
@@ -547,6 +708,7 @@ export function initAnalytics(mount) {
     subLede: /** @type {HTMLElement | null} */ (mount.querySelector('#sp-an-subLede')),
     table: /** @type {HTMLElement | null} */ (mount.querySelector('#sp-an-table')),
     tableWrap: /** @type {HTMLElement | null} */ (mount.querySelector('#sp-an-tableWrap')),
+    btnExportKpi: /** @type {HTMLButtonElement | null} */ (mount.querySelector('#sp-an-btnExportKpi')),
     kpiBlock: /** @type {HTMLElement | null} */ (mount.querySelector('#sp-an-kpi')),
     filterY: /** @type {HTMLSelectElement | null} */ (mount.querySelector('#sp-an-filterY')),
     filterM: /** @type {HTMLSelectElement | null} */ (mount.querySelector('#sp-an-filterM')),
@@ -565,6 +727,7 @@ export function initAnalytics(mount) {
     vizPeriodMeta: /** @type {HTMLElement | null} */ (mount.querySelector('#sp-an-vizPeriodMeta')),
     vizScope: /** @type {HTMLSelectElement | null} */ (mount.querySelector('#sp-an-vizScope')),
     vizScopeStrip: /** @type {HTMLElement | null} */ (mount.querySelector('#sp-an-vizScopeStrip')),
+    btnExportViz: /** @type {HTMLButtonElement | null} */ (mount.querySelector('#sp-an-btnExportViz')),
     vizScroll: /** @type {HTMLElement | null} */ (mount.querySelector('#sp-an-vizScroll')),
     vizLede: /** @type {HTMLElement | null} */ (mount.querySelector('#sp-an-vizLede')),
     vizWarn: /** @type {HTMLElement | null} */ (mount.querySelector('#sp-an-vizWarn')),
@@ -575,6 +738,8 @@ export function initAnalytics(mount) {
     peopleWarn: /** @type {HTMLElement | null} */ (mount.querySelector('#sp-an-peopleWarn')),
     peopleGrid: /** @type {HTMLElement | null} */ (mount.querySelector('#sp-an-peopleGrid')),
     peopleMatrix: /** @type {HTMLElement | null} */ (mount.querySelector('#sp-an-peopleMatrix')),
+    btnExportPeopleDaily: /** @type {HTMLButtonElement | null} */ (mount.querySelector('#sp-an-btnExportPeopleDaily')),
+    btnExportPeopleYear: /** @type {HTMLButtonElement | null} */ (mount.querySelector('#sp-an-btnExportPeopleYear')),
     anBusyOverlay: /** @type {HTMLElement | null} */ (mount.querySelector('#sp-an-loadingOverlay')),
     anBusyTitle: /** @type {HTMLElement | null} */ (mount.querySelector('#sp-an-loadingOverlay-title')),
     anBusyDesc: /** @type {HTMLElement | null} */ (mount.querySelector('#sp-an-loadingOverlay-desc'))
@@ -657,6 +822,46 @@ export function initAnalytics(mount) {
       el.hint.removeAttribute('hidden');
     } else {
       el.hint.setAttribute('hidden', '');
+    }
+  }
+
+  async function exportTableToDriveSheet_(tableType, title, host) {
+    const cap = captureTableGridForExport_(host);
+    if (!cap || !cap.rows.length) {
+      setHint('내보낼 표가 아직 없습니다. 먼저 표를 불러와 주세요.', true);
+      return;
+    }
+    const payload = { tableType: tableType, title: title, rows: cap.rows, merges: cap.merges };
+    const encLen = encodeURIComponent(JSON.stringify(payload)).length;
+    if (encLen > 120000) {
+      setHint('표가 너무 커서 한 번에 내보낼 수 없습니다. 기간/범위를 좁혀 다시 시도해 주세요.', true);
+      return;
+    }
+    showAnBusyOverlay_('시트 저장 중', '표 데이터를 구글 시트로 저장합니다. 잠시만 기다려 주세요.');
+    try {
+      const r = await gasJsonpWithParams(
+        url,
+        'analyticsTableExport',
+        { payload: JSON.stringify(payload) },
+        120000
+      );
+      if (!r || !r.ok) {
+        setHint(errMsg_(r) || '시트 저장에 실패했습니다.', true);
+        return;
+      }
+      const d = (r.data && r.data) || {};
+      const sheetUrl = d.spreadsheetUrl != null ? String(d.spreadsheetUrl) : '';
+      const folderUrl = d.folderUrl != null ? String(d.folderUrl) : '';
+      setHint(
+        sheetUrl
+          ? '시트를 만들었습니다. 파일: ' + sheetUrl + (folderUrl ? ' · 폴더: ' + folderUrl : '')
+          : '시트를 만들었습니다.',
+        true
+      );
+    } catch (e) {
+      setHint('시트 저장 요청이 끝나지 않았습니다. 잠시 뒤 다시 시도해 주세요.', true);
+    } finally {
+      hideAnBusyOverlay_();
     }
   }
 
@@ -769,22 +974,28 @@ export function initAnalytics(mount) {
   }
 
   function normalizeLoadedGoalRow_(x) {
-    const gTarget = String(
-      x.goal_target != null
-        ? x.goal_target
-        : x.goalTarget != null
-          ? x.goalTarget
-          : x.scopeKey != null
-            ? x.scopeKey
-            : ''
-    )
-      .trim()
-      .toLowerCase();
-    const sk = gTarget || String(x.scopeKey != null ? x.scopeKey : x.scope_key != null ? x.scope_key : '').trim().toLowerCase();
+    const gTarget = normalizePayloadGoalTargetKey_(
+      String(
+        x.goal_target != null
+          ? x.goal_target
+          : x.goalTarget != null
+            ? x.goalTarget
+            : x.scopeKey != null
+              ? x.scopeKey
+              : ''
+      ).trim()
+    );
+    const sk =
+      gTarget ||
+      normalizePayloadGoalTargetKey_(
+        String(x.scopeKey != null ? x.scopeKey : x.scope_key != null ? x.scope_key : '').trim()
+      );
+    const yL = coercePayloadGoalYear_(x.year);
+    const mL = coercePayloadGoalMonth_(x.month);
     return {
-      year: x.year,
-      month: x.month,
-      goal_target: gTarget,
+      year: isFinite(yL) ? yL : x.year,
+      month: isFinite(mL) ? mL : x.month,
+      goal_target: gTarget || sk,
       scope: 'category',
       scopeKey: sk,
       targetAmount:
@@ -1019,15 +1230,21 @@ export function initAnalytics(mount) {
     }
 
     if (bl.kind !== 'none') {
-      el.actRow2Title.textContent = '이번 기간 목표';
+      el.actRow2Title.textContent = mv === 0 ? '연간 목표' : '이번 기간 목표';
+      let sub2 = '';
       if (bl.kind === 'sum') {
-        el.actRow2Sub.textContent =
+        sub2 =
           '「전체」목표 한 줄이 없을 때 — 솔패스·챌린지·솔루틴에 넣은 목표를 합산해 비교합니다.';
-        el.actRow2Sub.removeAttribute('hidden');
       } else if (bl.kind === 'single') {
         const labS = AN_CATEGORY_KEY_LABEL[cardScope] != null ? AN_CATEGORY_KEY_LABEL[cardScope] : cardScope;
+        sub2 = '위 일별 순매출 「보기 범위」(' + labS + ')와 같은 목표 구분 한 줄입니다.';
+      }
+      if (mv === 0) {
         el.actRow2Sub.textContent =
-          '위 일별 순매출 「보기 범위」(' + labS + ')와 같은 목표 구분 한 줄입니다.';
+          '표의 월 0(연간) 목표 행과, 이 연도 누적 실적을 맞춥니다.' + (sub2 ? ' ' + sub2 : '');
+        el.actRow2Sub.removeAttribute('hidden');
+      } else if (sub2) {
+        el.actRow2Sub.textContent = sub2;
         el.actRow2Sub.removeAttribute('hidden');
       } else {
         el.actRow2Sub.textContent = '';
@@ -2293,7 +2510,14 @@ export function initAnalytics(mount) {
       el.actualsWarn.textContent = '';
     }
     const ym = getAnFilterYm_(el);
-    const mCard = ym.m === 0 ? 0 : monthForActualsCard_(ym.y, ym.m);
+    let mCard;
+    if (_kpiAnnualRows) {
+      mCard = 0;
+    } else if (ym.m === 0) {
+      mCard = 0;
+    } else {
+      mCard = monthForActualsCard_(ym.y, ym.m);
+    }
     const url = String(GAS_BASE_URL).trim();
     _lastMasterActuals = null;
     paintActualsCompareUi_();
@@ -2481,6 +2705,54 @@ export function initAnalytics(mount) {
   if (el.filterM) {
     el.filterM.addEventListener('change', onAnPeriodChange_);
   }
+  if (el.btnExportKpi) {
+    el.btnExportKpi.addEventListener('click', function () {
+      const ym = getAnFilterYm_(el);
+      void exportTableToDriveSheet_(
+        'kpi_goals',
+        '실적목표_' + ym.y + '년',
+        el.table
+      );
+    });
+  }
+  if (el.btnExportViz) {
+    el.btnExportViz.addEventListener('click', function () {
+      const ym = getAnFilterYm_(el);
+      const sc = el.vizScope && el.vizScope.value ? String(el.vizScope.value) : 'entire';
+      void exportTableToDriveSheet_(
+        'viz_daily_sales',
+        '일별순매출_' + ym.y + '년_' + anFilterMonthLabel_(ym.m) + '_' + sc,
+        el.vizScroll
+      );
+    });
+  }
+  if (el.btnExportPeopleDaily) {
+    el.btnExportPeopleDaily.addEventListener('click', function () {
+      if (!el.peopleY || !el.peopleM) {
+        return;
+      }
+      const y = parseInt(String(el.peopleY.value || ''), 10);
+      const m = parseInt(String(el.peopleM.value || ''), 10);
+      void exportTableToDriveSheet_(
+        'people_daily_count',
+        '구매건수_일별_' + (isFinite(y) ? y : '') + '년_' + (isFinite(m) ? m + '월' : ''),
+        el.peopleGrid
+      );
+    });
+  }
+  if (el.btnExportPeopleYear) {
+    el.btnExportPeopleYear.addEventListener('click', function () {
+      if (!el.peopleY) {
+        return;
+      }
+      const y = parseInt(String(el.peopleY.value || ''), 10);
+      void exportTableToDriveSheet_(
+        'people_year_matrix',
+        '구매건수_연도월합계_' + (isFinite(y) ? y + '년' : ''),
+        el.peopleMatrix
+      );
+    });
+  }
   if (el.btnKpiAnnual) {
     el.btnKpiAnnual.addEventListener('click', function () {
       _kpiAnnualRows = !_kpiAnnualRows;
@@ -2488,8 +2760,8 @@ export function initAnalytics(mount) {
       render();
       setHint(
         _kpiAnnualRows
-          ? '아래 실적 목표 표만 「연간」행으로 좁혔습니다. 표 위치로 스크롤합니다.'
-          : '목표 표를 다시 이 연도·월 기준으로 보여 줍니다.',
+          ? '연간 모드: 표는 월 0(연간) 목표만, 맨 위 카드는 이 연도 합계 실적·연간 목표로 맞춥니다. 표로 스크롤합니다.'
+          : '월간 모드: 표는 이 연도 목표 전체, 카드는 위에서 고른 월(또는 전체) 실적입니다.',
         true
       );
       window.requestAnimationFrame(function () {
@@ -2498,6 +2770,7 @@ export function initAnalytics(mount) {
           scrollEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         }
       });
+      void loadMasterActuals_();
     });
   }
 
