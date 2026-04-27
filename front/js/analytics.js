@@ -76,6 +76,39 @@ function seoulYmdToday_() {
 }
 
 /**
+ * @param {number} y
+ * @param {number} m
+ * @return {{ start: string, end: string }}
+ */
+function monthBoundsYmd_(y, m) {
+  const mm = m < 10 ? '0' + m : String(m);
+  const lastD = daysInMonth(y, m);
+  const dd = lastD < 10 ? '0' + lastD : String(lastD);
+  return { start: y + '-' + mm + '-01', end: y + '-' + mm + '-' + dd };
+}
+
+/**
+ * 원천 상품 등록일~판매 종료일(종료일 당일 포함, 종료일 비면 계속) 구간이 집계 연·월과 겹치는지.
+ * @param {string} [addYmd]
+ * @param {string} [salesEndYmd]
+ * @param {number} y
+ * @param {number} m
+ * @return {boolean}
+ */
+function productSaleWindowOverlapsMonth_(addYmd, salesEndYmd, y, m) {
+  const b = monthBoundsYmd_(y, m);
+  const lo =
+    addYmd != null && String(addYmd).trim().length >= 10
+      ? String(addYmd).trim().slice(0, 10)
+      : '1970-01-01';
+  const hi =
+    salesEndYmd != null && String(salesEndYmd).trim().length >= 10
+      ? String(salesEndYmd).trim().slice(0, 10)
+      : '9999-12-31';
+  return lo <= b.end && b.start <= hi;
+}
+
+/**
  * 연간 일별 격자에서 합산 제외·셀 `—` 처리할 날짜(서울 ymd 문자열 비교).
  * @param {string} ymd
  * @param {string} todayYmd
@@ -519,12 +552,9 @@ export function initAnalytics(mount) {
     peopleWarn: /** @type {HTMLElement | null} */ (mount.querySelector('#sp-an-peopleWarn')),
     peopleGrid: /** @type {HTMLElement | null} */ (mount.querySelector('#sp-an-peopleGrid')),
     peopleMatrix: /** @type {HTMLElement | null} */ (mount.querySelector('#sp-an-peopleMatrix')),
-    peopleYearDetails: /** @type {HTMLDetailsElement | null} */ (
-      mount.querySelector('#sp-an-peopleYearDetails')
-    ),
-    ol: /** @type {HTMLElement | null} */ (mount.querySelector('#sp-an-ol')),
-    olScroll: /** @type {HTMLElement | null} */ (mount.querySelector('#sp-an-olScroll')),
-    olWarn: /** @type {HTMLElement | null} */ (mount.querySelector('#sp-an-olWarn'))
+    anBusyOverlay: /** @type {HTMLElement | null} */ (mount.querySelector('#sp-an-loadingOverlay')),
+    anBusyTitle: /** @type {HTMLElement | null} */ (mount.querySelector('#sp-an-loadingOverlay-title')),
+    anBusyDesc: /** @type {HTMLElement | null} */ (mount.querySelector('#sp-an-loadingOverlay-desc'))
   };
   if (!el.init || !el.body) {
     return;
@@ -554,6 +584,33 @@ export function initAnalytics(mount) {
   let _kpiAnnualRows = false;
   /** 연·월 필터: 첫 `rebuildFilterYearMonth_`에서만 HTML 기본(1월) 대신 당월로 맞춤 */
   let _anPeriodFilterBootstrapped = false;
+  /**
+   * @param {string} [title]
+   * @param {string} [desc]
+   */
+  function showAnBusyOverlay_(title, desc) {
+    if (!el.anBusyOverlay) {
+      return;
+    }
+    if (el.anBusyTitle && title) {
+      el.anBusyTitle.textContent = title;
+    }
+    if (el.anBusyDesc && desc) {
+      el.anBusyDesc.textContent = desc;
+    }
+    el.anBusyOverlay.removeAttribute('hidden');
+    el.anBusyOverlay.setAttribute('aria-hidden', 'false');
+    el.anBusyOverlay.setAttribute('aria-busy', 'true');
+  }
+
+  function hideAnBusyOverlay_() {
+    if (!el.anBusyOverlay) {
+      return;
+    }
+    el.anBusyOverlay.setAttribute('hidden', '');
+    el.anBusyOverlay.setAttribute('aria-hidden', 'true');
+    el.anBusyOverlay.removeAttribute('aria-busy');
+  }
 
   function syncKpiAnnualBtn_() {
     if (!el.btnKpiAnnual) {
@@ -1435,7 +1492,7 @@ export function initAnalytics(mount) {
   }
 
   /**
-   * 연도별 월×상품군 표 — `details`를 펼쳤을 때만 호출 (year 전체 fact 요청).
+   * 연도별 월×상품군 표 — 선택 연도 전체 fact(`month:0`) 요청.
    * @param {string} base
    * @param {number} useY
    * @return {Promise<void>}
@@ -1474,6 +1531,9 @@ export function initAnalytics(mount) {
       let tBB = '';
       for (let oi0 = 0; oi0 < ordC.length; oi0++) {
         const cname = String(ordC[oi0]);
+        if (cname === 'unmapped') {
+          continue;
+        }
         const labC = AN_CATEGORY_KEY_LABEL[cname] != null ? AN_CATEGORY_KEY_LABEL[cname] : cname;
         tBB += '<tr><th scope="row" class="sp-an-viz__row-lbl">' + esc(labC) + '</th>';
         let rTot = 0;
@@ -1491,7 +1551,7 @@ export function initAnalytics(mount) {
       el.peopleMatrix.innerHTML =
         '<p class="sp-an-viz__empty sp-an-people-matrix__caption">' +
         esc(String(useY)) +
-        '년 1~12월 구매 건수(상품군·월별 합). 아직 지나지 않은 달은 비웁니다.</p>' +
+        '년 1~12월 구매 건수(상품군·월별 합, 미분류 제외). 아직 지나지 않은 달은 비웁니다.</p>' +
         '<table class="sp-an-viz-table sp-an-people__matrix"><thead>' +
         tHH +
         '</thead><tbody>' +
@@ -1499,7 +1559,7 @@ export function initAnalytics(mount) {
         '</tbody></table>';
     } catch (_e) {
       el.peopleMatrix.innerHTML =
-        '<p class="sp-an-viz__empty">연도 표를 불러오지 못했습니다. 위에서 연도를 확인한 뒤 다시 펼쳐 보세요.</p>';
+        '<p class="sp-an-viz__empty">연도 표를 불러오지 못했습니다. 위에서 연도를 확인한 뒤 다시 시도해 주세요.</p>';
     }
   }
 
@@ -1509,9 +1569,10 @@ export function initAnalytics(mount) {
    * @param {number} m fact 필터 월(1~12) — `alignFromFilter`가 참이면 인원 Y/M이 여기에 맞춤
    * @param {Object[]|null} monthRows `analyticsFactRowsGet(y, m)`와 같은 기간 캐시(있으면 재요청 생략)
    * @param {boolean} [alignFromFilter] 위 기간[기간]과 인원 Y/M을 맞출지(초기·매출 다시불러오기)
+   * @param {boolean} [skipBusyOverlay] 참이면 전체 화면 로딩 모달을 켜지 않음(`loadFactViz_`가 이미 띄운 경우)
    * @return {Promise<void>}
    */
-  async function loadPeopleViz_(base, y, m, monthRows, alignFromFilter) {
+  async function loadPeopleViz_(base, y, m, monthRows, alignFromFilter, skipBusyOverlay) {
     if (!el.people) {
       return;
     }
@@ -1522,6 +1583,13 @@ export function initAnalytics(mount) {
     if (m < 1 || m > 12) {
       el.people.setAttribute('hidden', '');
       return;
+    }
+    const skipBusy = skipBusyOverlay === true;
+    if (!skipBusy) {
+      showAnBusyOverlay_(
+        '불러오는 중',
+        '구매 건수 표와 연도별 합계를 불러옵니다. 잠시만 기다려 주세요.'
+      );
     }
     el.people.removeAttribute('hidden');
     if (el.peopleWarn) {
@@ -1539,14 +1607,13 @@ export function initAnalytics(mount) {
         useY +
         '년 ' +
         useM +
-        '월 — 날짜별 구매 건수입니다. 연·월 합계 표는 아래를 펼쳐 불러옵니다.';
+        '월 — 날짜별 구매 건수입니다. 표시 행은 상품 매핑 기준으로 이 달과 판매 기간이 겹치는 품목입니다(미분류·테스트 라이프사이클 제외). 교재는 품목별이 아니라 「교재」 한 줄 합계입니다. 아래에 같은 연도 기준 월×상품군 합계가 함께 표시됩니다.';
     }
     if (el.peopleGrid) {
       el.peopleGrid.innerHTML = '<p class="sp-an-viz__empty">불러오는 중…</p>';
     }
-    if (el.peopleMatrix && (!el.peopleYearDetails || !el.peopleYearDetails.open)) {
-      el.peopleMatrix.innerHTML =
-        '<p class="sp-an-viz__empty">연도·월·상품군 구매 건수 표는 위 항목을 펼치면 이 자리에서 불러옵니다.</p>';
+    if (el.peopleMatrix) {
+      el.peopleMatrix.innerHTML = '<p class="sp-an-viz__empty">불러오는 중…</p>';
     }
     try {
       var rUse = /** @type {Object[]} */ ([]);
@@ -1570,24 +1637,75 @@ export function initAnalytics(mount) {
       const aggL = rUse.length ? aggregateFactRows(rUse, useY, useM) : { byDayProd: {} };
       const bdpG = aggL.byDayProd || {};
       const pKeys = /** @type {Record<string, boolean>} */ ({});
-      for (const ymdG in bdpG) {
-        if (!Object.prototype.hasOwnProperty.call(bdpG, ymdG)) {
-          continue;
-        }
-        const kmap = bdpG[ymdG];
-        var kz;
-        for (kz in kmap) {
-          if (Object.prototype.hasOwnProperty.call(kmap, kz)) {
-            pKeys[kz] = true;
-          }
+      /** 교재 행 1줄 집계 — 팩트 키는 `textbook\tprod_no`, 표시 행만 가상 키 */
+      const PEOPLE_TB_AGG_PNO = '__sp_tb_agg__';
+      /** @type {string[]} */
+      let peopleTextbookPnos = [];
+      const peopleTbPnoSeen = /** @type {Record<string, boolean>} */ ({});
+      let namesP = /** @type {Record<string, string>} */ ({});
+      const repNames = (_vizReport && _vizReport.prodNameByNo) || {};
+      let nk;
+      for (nk in repNames) {
+        if (Object.prototype.hasOwnProperty.call(repNames, nk)) {
+          namesP[nk] = String(repNames[nk] != null ? repNames[nk] : '');
         }
       }
-      const namesP = (_vizReport && _vizReport.prodNameByNo) || {};
-      const pSorted = Object.keys(pKeys).sort();
+      try {
+        const rPm = await gasJsonpWithParams(base, 'productMappingList', {}, 120000);
+        if (rPm && rPm.ok && rPm.data && rPm.data.rows && Array.isArray(rPm.data.rows)) {
+          let ir;
+          for (ir = 0; ir < rPm.data.rows.length; ir++) {
+            const pr = rPm.data.rows[ir] || {};
+            const pnoS = pr.prod_no != null ? String(pr.prod_no).trim() : '';
+            if (!pnoS.length) {
+              continue;
+            }
+            const lifeM = String(pr.lifecycle != null ? pr.lifecycle : '').trim().toLowerCase();
+            if (lifeM === 'test') {
+              continue;
+            }
+            if (
+              !productSaleWindowOverlapsMonth_(
+                pr.add_time_ymd != null ? String(pr.add_time_ymd) : '',
+                pr.sales_end != null ? String(pr.sales_end) : '',
+                useY,
+                useM
+              )
+            ) {
+              continue;
+            }
+            let catM = pr.internal_category != null ? String(pr.internal_category).trim() : 'unmapped';
+            if (!catM.length) {
+              catM = 'unmapped';
+            }
+            if (catM === 'unmapped') {
+              continue;
+            }
+            const pn0 = pr.product_name != null ? String(pr.product_name).trim() : '';
+            if (pn0.length && !namesP[pnoS]) {
+              namesP[pnoS] = pn0;
+            }
+            if (catM === 'textbook') {
+              if (!peopleTbPnoSeen[pnoS]) {
+                peopleTbPnoSeen[pnoS] = true;
+                peopleTextbookPnos.push(pnoS);
+              }
+            } else {
+              pKeys[catM + '\t' + pnoS] = true;
+            }
+          }
+          if (peopleTextbookPnos.length) {
+            pKeys['textbook\t' + PEOPLE_TB_AGG_PNO] = true;
+          }
+        }
+      } catch (_pmE) {
+        /* 매핑 목록 없으면 표시 행 없음(집계는 위 fact만 사용) */
+      }
       const daysN2 = daysInMonth(useY, useM);
+      const pKeysAll = Object.keys(pKeys);
       const catSeen = /** @type {Record<string, boolean>} */ ({});
-      for (let cs = 0; cs < pSorted.length; cs++) {
-        const ks = pSorted[cs];
+      for (let cs = 0; cs < pKeysAll.length; cs++) {
+        const ks = pKeysAll[cs];
         const cks = ks.indexOf('\t') >= 0 ? String(ks.split('\t')[0] || '').trim() : '';
         if (cks) {
           catSeen[cks] = true;
@@ -1611,6 +1729,21 @@ export function initAnalytics(mount) {
           uniqueCats.push(c1);
         }
       }
+      /** 표·rowspan용: 열 순서(uniqueCats)와 동일하게 카테고리 묶음 정렬, 같은 카테고리 안에서는 상품 키 문자열 */
+      const catRankPeople_ = /** @type {Record<string, number>} */ ({});
+      for (let cr = 0; cr < uniqueCats.length; cr++) {
+        catRankPeople_[String(uniqueCats[cr])] = cr;
+      }
+      const pSorted = pKeysAll.slice().sort(function (a, b) {
+        const pa = a.indexOf('\t') >= 0 ? String(a.split('\t')[0] || '').trim() : '';
+        const pb = b.indexOf('\t') >= 0 ? String(b.split('\t')[0] || '').trim() : '';
+        const ra = Object.prototype.hasOwnProperty.call(catRankPeople_, pa) ? catRankPeople_[pa] : 9999;
+        const rb = Object.prototype.hasOwnProperty.call(catRankPeople_, pb) ? catRankPeople_[pb] : 9999;
+        if (ra !== rb) {
+          return ra - rb;
+        }
+        return a < b ? -1 : a > b ? 1 : 0;
+      });
       let theg = '<tr><th class="sp-an-viz__row-h" scope="col">상품(과정)</th>';
       for (let d2 = 1; d2 <= daysN2; d2++) {
         theg += '<th class="sp-an-people__d" scope="col">' + d2 + '일</th>';
@@ -1627,49 +1760,84 @@ export function initAnalytics(mount) {
           '</th>';
       }
       theg += '<th class="sp-an-viz__sum-col sp-an-people__col--tot" scope="col">구매 합(건)</th></tr>';
-      const sumByCat = /** @type {Record<string, number>} */ ({});
-      for (let si = 0; si < uniqueCats.length; si++) {
-        sumByCat[String(uniqueCats[si])] = 0;
-      }
-      let tbG = '';
+      /** @type {{ catRow: string, lab1: string, rs: number, tdDays: string }[]} */
+      const rowItems = [];
       for (let pi0 = 0; pi0 < pSorted.length; pi0++) {
         const kk = pSorted[pi0];
         const catRow = kk.indexOf('\t') >= 0 ? String(kk.split('\t')[0] || '').trim() : '';
         const pno1 = kk.indexOf('\t') >= 0 ? kk.split('\t').slice(1).join('\t') : '';
-        const lab1 = pno1 && namesP[pno1] != null && String(namesP[pno1]).length ? String(namesP[pno1]) : kk;
+        const isTbAgg = catRow === 'textbook' && pno1 === PEOPLE_TB_AGG_PNO;
+        const lab1 = isTbAgg
+          ? String(AN_CATEGORY_KEY_LABEL.textbook != null ? AN_CATEGORY_KEY_LABEL.textbook : '교재')
+          : pno1 && namesP[pno1] != null && String(namesP[pno1]).length
+            ? String(namesP[pno1])
+            : kk;
         let rs = 0;
-        let tdG = '';
+        let tdDays = '';
         for (let d2 = 1; d2 <= daysN2; d2++) {
           const mma = useM < 10 ? '0' + useM : String(useM);
           const dda = d2 < 10 ? '0' + d2 : String(d2);
           const ymdA = useY + '-' + mma + '-' + dda;
-          const h = bdpG[ymdA] && bdpG[ymdA][kk] ? bdpG[ymdA][kk] : null;
-          const nL = h && h.lines != null ? Number(h.lines) : 0;
+          let nL = 0;
+          if (isTbAgg) {
+            let tbi;
+            for (tbi = 0; tbi < peopleTextbookPnos.length; tbi++) {
+              const subK = 'textbook\t' + peopleTextbookPnos[tbi];
+              const h0 = bdpG[ymdA] && bdpG[ymdA][subK] ? bdpG[ymdA][subK] : null;
+              nL += h0 && h0.lines != null ? Number(h0.lines) : 0;
+            }
+          } else {
+            const h = bdpG[ymdA] && bdpG[ymdA][kk] ? bdpG[ymdA][kk] : null;
+            nL = h && h.lines != null ? Number(h.lines) : 0;
+          }
           rs += nL;
-          tdG += '<td>' + (nL ? fmtInt_(nL) : '0') + '</td>';
+          tdDays += '<td>' + (nL ? fmtInt_(nL) : '0') + '</td>';
         }
-        if (catRow && Object.prototype.hasOwnProperty.call(sumByCat, catRow)) {
-          sumByCat[catRow] += rs;
-        }
+        rowItems.push({ catRow: catRow, lab1: lab1, rs: rs, tdDays: tdDays });
+      }
+      let tbG = '';
+      for (let ri = 0; ri < rowItems.length; ri++) {
+        const R = rowItems[ri];
+        let tdG = R.tdDays;
+        const catR = String(R.catRow || '').trim();
         for (let cj0 = 0; cj0 < uniqueCats.length; cj0++) {
           const ccol = String(uniqueCats[cj0]);
           const cmod2 = cj0 % 3;
-          const cell0 = ccol === catRow ? rs : 0;
-          tdG +=
-            '<td class="sp-an-viz__sum-col sp-an-people__col--cat sp-an-people__col--c' +
-            cmod2 +
-            '">' +
-            (cell0 ? fmtInt_(cell0) : '0') +
-            '</td>';
+          const baseCls = 'sp-an-viz__sum-col sp-an-people__col--cat sp-an-people__col--c' + cmod2;
+          if (!catR.length || ccol !== catR) {
+            tdG +=
+              '<td class="' + baseCls + ' sp-an-people__row-cat-na" title="해당 상품 카테고리 아님">—</td>';
+          } else if (ri > 0 && String(rowItems[ri - 1].catRow || '').trim() === ccol) {
+            /* 앞 행과 같은 카테고리 연속 → rowspan으로 이미 출력됨 */
+          } else {
+            let runLen = 1;
+            let runSum = R.rs;
+            for (let t = ri + 1; t < rowItems.length && String(rowItems[t].catRow || '').trim() === ccol; t++) {
+              runLen++;
+              runSum += rowItems[t].rs;
+            }
+            tdG +=
+              '<td class="' +
+              baseCls +
+              ' sp-an-people__cat-merge" rowspan="' +
+              runLen +
+              '" title="같은 카테고리(연속 행) 이 달 구매 합(건)">' +
+              fmtInt_(runSum) +
+              '</td>';
+          }
         }
-        tdG += '<td class="sp-an-viz__sum-col sp-an-people__col--tot">' + fmtInt_(rs) + '</td>';
-        tbG += '<tr><th scope="row" class="sp-an-viz__row-lbl">' + esc(lab1) + '</th>' + tdG + '</tr>';
+        tdG += '<td class="sp-an-viz__sum-col sp-an-people__col--tot">' + fmtInt_(R.rs) + '</td>';
+        tbG += '<tr><th scope="row" class="sp-an-viz__row-lbl">' + esc(R.lab1) + '</th>' + tdG + '</tr>';
       }
       if (!pSorted.length) {
         const nc = 2 + daysN2 + (uniqueCats.length > 0 ? uniqueCats.length : 0) + 1;
-        tbG = '<tr><td colspan="' + nc + '" class="sp-an-viz__empty">이 달 집계된 구매 건수가 없습니다.</td></tr>';
+        tbG =
+          '<tr><td colspan="' +
+          nc +
+          '" class="sp-an-viz__empty">이 달에 표시할 상품이 없습니다. (원천 목록·판매 기간과 겹치는 품목이 없거나 목록을 불러오지 못했습니다.)</td></tr>';
       }
-      let sumB = '<tr class="sp-an-people__sumrow"><th scope="row">일 합(구매)</th>';
+      let sumB =
+        '<tr class="sp-an-people__sumrow"><th scope="row" title="날짜별 열은 그날 전체 구매 합(건)">이 달 합계</th>';
       let ssum = 0;
       for (let d2 = 1; d2 <= daysN2; d2++) {
         const mma2 = useM < 10 ? '0' + useM : String(useM);
@@ -1686,14 +1854,12 @@ export function initAnalytics(mount) {
         sumB += '<td>' + (dsum ? fmtInt_(dsum) : '0') + '</td>';
       }
       for (let ck0 = 0; ck0 < uniqueCats.length; ck0++) {
-        const cK = String(uniqueCats[ck0]);
         const cmod3 = ck0 % 3;
-        const tK = sumByCat[cK] != null ? sumByCat[cK] : 0;
         sumB +=
           '<td class="sp-an-viz__sum-col sp-an-people__col--cat sp-an-people__col--c' +
           cmod3 +
-          '">' +
-          (tK ? fmtInt_(tK) : '0') +
+          ' sp-an-people__row-cat-na" title="카테고리 합계는 위 표에서 같은 카테고리 병합 셀">' +
+          '—' +
           '</td>';
       }
       sumB += '<td class="sp-an-viz__sum-col sp-an-people__col--tot">' + fmtInt_(ssum) + '</td></tr>';
@@ -1701,13 +1867,15 @@ export function initAnalytics(mount) {
         el.peopleGrid.innerHTML = '<table class="sp-an-viz-table sp-an-people__grid">' + theg + tbG + sumB + '</table>';
       }
 
-      if (el.peopleYearDetails && el.peopleYearDetails.open) {
-        await loadPeopleYearMatrix_(base, useY);
-      }
+      await loadPeopleYearMatrix_(base, useY);
     } catch (e) {
       if (el.peopleWarn) {
         el.peopleWarn.textContent = '구매 건수 표를 그리지 못했습니다.';
         el.peopleWarn.removeAttribute('hidden');
+      }
+    } finally {
+      if (!skipBusy) {
+        hideAnBusyOverlay_();
       }
     }
   }
@@ -1718,36 +1886,10 @@ export function initAnalytics(mount) {
         return;
       }
       const base0 = String(GAS_BASE_URL).trim();
-      void loadPeopleViz_(
-        base0,
-        _vizY,
-        _vizM,
-        _vizRows,
-        false
-      );
+      void loadPeopleViz_(base0, _vizY, _vizM, _vizRows, false, false);
     }
     el.peopleM.addEventListener('change', onPeopleCh_);
     el.peopleY.addEventListener('change', onPeopleCh_);
-  }
-
-  if (el.peopleYearDetails) {
-    el.peopleYearDetails.addEventListener('toggle', function () {
-      if (!el.peopleYearDetails.open) {
-        if (el.peopleMatrix) {
-          el.peopleMatrix.innerHTML =
-            '<p class="sp-an-viz__empty">연도·월·상품군 구매 건수 표는 위 항목을 펼치면 이 자리에서 불러옵니다.</p>';
-        }
-        return;
-      }
-      if (!ready || GAS_MODE.useMock || !GAS_MODE.canSync) {
-        return;
-      }
-      const base0 = String(GAS_BASE_URL).trim();
-      const py =
-        el.peopleY != null && el.peopleY.value ? parseInt(el.peopleY.value, 10) : _vizY;
-      const useYy = isFinite(py) ? py : _vizY;
-      void loadPeopleYearMatrix_(base0, useYy);
-    });
   }
 
   if (el.vizScope) {
@@ -1764,146 +1906,49 @@ export function initAnalytics(mount) {
   }
 
   /**
-   * @param {string} base
-   * @param {number} y
-   * @param {number} m
-   * @return {Promise<void>}
-   */
-  async function loadOrderLinesPanel_(base, y, m) {
-    if (!el.ol || !el.olScroll) {
-      return;
-    }
-    if (GAS_MODE.useMock || !GAS_MODE.canSync || !ready) {
-      el.ol.setAttribute('hidden', '');
-      return;
-    }
-    if (m < 1 || m > 12) {
-      el.ol.setAttribute('hidden', '');
-      return;
-    }
-    el.ol.removeAttribute('hidden');
-    if (el.olWarn) {
-      el.olWarn.setAttribute('hidden', '');
-      el.olWarn.textContent = '';
-    }
-    el.olScroll.innerHTML = '<p class="sp-an-viz__empty">품목 줄을 불러오는 중…</p>';
-    try {
-      const r = await gasJsonpWithParams(
-        base,
-        'analyticsOrderLinesRawGet',
-        { year: String(y), month: String(m) },
-        120000
-      );
-      if (!r || !r.ok) {
-        if (el.olWarn) {
-          el.olWarn.textContent = formatHintWithErrorCode_(r) || '품목 줄을 불러오지 못했습니다.';
-          el.olWarn.removeAttribute('hidden');
-        }
-        el.olScroll.innerHTML = '';
-        logSolpathApi_('analyticsOrderLinesRawGet', r, null);
-        return;
-      }
-      const d0 = (r && r.data) || {};
-      const rows = d0.rows != null && Array.isArray(d0.rows) ? d0.rows : [];
-      const truncated = d0.truncated === true;
-      if (truncated && el.olWarn) {
-        el.olWarn.textContent =
-          '응답이 길어 이 표는 처음 ' +
-          rows.length +
-          '건만 담겼습니다. 나머지는 드라이브 집계 시트에서 직접 보세요.';
-        el.olWarn.removeAttribute('hidden');
-      }
-      if (!rows.length) {
-        el.olScroll.innerHTML =
-          '<p class="sp-an-viz__empty">이 달 주문일이 있는 품목 줄이 없습니다.</p>';
-        return;
-      }
-      let h =
-        '<table class="sp-an-viz-table sp-an-ol-table"><thead><tr>' +
-        '<th class="sp-an-viz__row-h" scope="col">주문일</th>' +
-        '<th class="sp-an-viz__row-h" scope="col">주문번호</th>' +
-        '<th class="sp-an-viz__row-h" scope="col">상품</th>' +
-        '<th class="sp-an-viz__row-h" scope="col">대분류</th>' +
-        '<th class="sp-an-viz__row-h" scope="col">상태</th>' +
-        '</tr></thead><tbody>';
-      for (let io = 0; io < rows.length; io++) {
-        const row = rows[io] || {};
-        const oymd0 = String(row.order_time_ymd != null ? row.order_time_ymd : '');
-        const catL0 = String(row.internal_category != null ? row.internal_category : '');
-        const life0 = String(row.lifecycle != null ? row.lifecycle : '');
-        const pnm0 = String(row.prod_name != null ? row.prod_name : '');
-        const onoA = String(row.order_no != null ? row.order_no : '');
-        const catDisp = AN_CATEGORY_KEY_LABEL[catL0] != null ? AN_CATEGORY_KEY_LABEL[catL0] : catL0;
-        const lifeDisp =
-          life0 === 'active'
-            ? '진행'
-            : life0 === 'archived'
-              ? '만료'
-              : life0 === 'legacy'
-                ? '(구)상품'
-                : life0 === 'test'
-                  ? '테스트'
-                  : life0;
-        h +=
-          '<tr>' +
-          '<td>' + esc(oymd0) + '</td>' +
-          '<td>' + esc(onoA) + '</td>' +
-          '<td class="sp-an-ol__cell-name">' + esc(pnm0) + '</td>' +
-          '<td>' + esc(catDisp) + '</td>' +
-          '<td>' + esc(lifeDisp) + '</td>' +
-          '</tr>';
-      }
-      h += '</tbody></table>';
-      el.olScroll.innerHTML = h;
-    } catch (e) {
-      if (el.olWarn) {
-        el.olWarn.textContent = '품목 줄을 불러오지 못했습니다.';
-        el.olWarn.removeAttribute('hidden');
-      }
-      el.olScroll.innerHTML = '';
-      logSolpathApi_('analyticsOrderLinesRawGet', null, e);
-    }
-  }
-
-  /**
+   * 일별 순매출 격자(`#sp-an-viz` 있을 때) + 구매 건수 표를 같은 fact 묶음으로 갱신합니다.
    * @return {Promise<void>}
    */
   async function loadFactViz_() {
-    if (!el.viz) {
-      return;
-    }
     if (GAS_MODE.useMock || !GAS_MODE.canSync) {
-      el.viz.setAttribute('hidden', '');
-      if (el.ol) {
-        el.ol.setAttribute('hidden', '');
+      if (el.viz) {
+        el.viz.setAttribute('hidden', '');
       }
       return;
     }
     if (!ready) {
-      el.viz.setAttribute('hidden', '');
+      if (el.viz) {
+        el.viz.setAttribute('hidden', '');
+      }
       return;
     }
     const ym = getAnFilterYm_(el);
-    if (el.vizLede) {
-      el.vizLede.textContent =
-        ym.m === 0
-          ? ym.y +
-            '년 ' +
-            anFilterMonthLabel_(0) +
-            ' · 순매출(매출−환불). 열은 해당 연도 1~12월 일자. 행은 대분류 또는 상품. 환불은 일별 − 합산.'
-          : ym.y +
-            '년 ' +
-            anFilterMonthLabel_(ym.m) +
-            ' · 순매출(매출−환불). 행은 대분류 또는 상품, 열은 일자입니다. 환불은 일별로 − 합산.';
+    if (el.viz) {
+      if (el.vizLede) {
+        el.vizLede.textContent =
+          ym.m === 0
+            ? ym.y +
+              '년 ' +
+              anFilterMonthLabel_(0) +
+              ' · 순매출(매출−환불). 열은 해당 연도 1~12월 일자. 행은 대분류 또는 상품. 환불은 일별 − 합산.'
+            : ym.y +
+              '년 ' +
+              anFilterMonthLabel_(ym.m) +
+              ' · 순매출(매출−환불). 행은 대분류 또는 상품, 열은 일자입니다. 환불은 일별로 − 합산.';
+      }
+      if (el.vizWarn) {
+        el.vizWarn.setAttribute('hidden', '');
+      }
+      if (el.vizScroll) {
+        el.vizScroll.innerHTML = '<p class="sp-an-viz__empty">불러오는 중…</p>';
+      }
+      el.viz.removeAttribute('hidden');
     }
-    if (el.vizWarn) {
-      el.vizWarn.setAttribute('hidden', '');
-    }
-    if (el.vizScroll) {
-      el.vizScroll.innerHTML = '<p class="sp-an-viz__empty">불러오는 중…</p>';
-    }
-    el.viz.removeAttribute('hidden');
     const base = String(GAS_BASE_URL).trim();
+    showAnBusyOverlay_(
+      '불러오는 중',
+      '매출·구매 건수 데이터를 불러옵니다. 완료될 때까지 화면이 잠시 멈춘 것처럼 보일 수 있습니다.'
+    );
     try {
       const r = await gasJsonpWithParams(
         base,
@@ -1912,19 +1957,21 @@ export function initAnalytics(mount) {
         120000
       );
       if (!r || !r.ok) {
-        if (el.vizScroll) {
-          el.vizScroll.innerHTML = '';
-        }
-        if (el.vizScopeStrip) {
-          el.vizScopeStrip.innerHTML = '';
-        }
-        if (el.vizPeriodMeta) {
-          el.vizPeriodMeta.textContent = '';
-        }
-        if (el.vizWarn) {
-          const msg = formatHintWithErrorCode_(r) || '리포트를 가져오지 못했습니다.';
-          el.vizWarn.textContent = msg;
-          el.vizWarn.removeAttribute('hidden');
+        if (el.viz) {
+          if (el.vizScroll) {
+            el.vizScroll.innerHTML = '';
+          }
+          if (el.vizScopeStrip) {
+            el.vizScopeStrip.innerHTML = '';
+          }
+          if (el.vizPeriodMeta) {
+            el.vizPeriodMeta.textContent = '';
+          }
+          if (el.vizWarn) {
+            const msg = formatHintWithErrorCode_(r) || '리포트를 가져오지 못했습니다.';
+            el.vizWarn.textContent = msg;
+            el.vizWarn.removeAttribute('hidden');
+          }
         }
         logSolpathApi_('analyticsFactReport', r, null);
         return;
@@ -1941,26 +1988,31 @@ export function initAnalytics(mount) {
       _vizRows = rowList;
       _vizY = ym.y;
       _vizM = ym.m;
-      const ord = (d0 && d0.categoryOrder) || [];
-      buildVizScopeOptions_(ord);
-      renderVizAll_(d0, rowList, ym.y, ym.m);
-      void loadPeopleViz_(base, ym.y, ym.m, rowList, true);
-      void loadOrderLinesPanel_(base, ym.y, ym.m);
+      if (el.viz) {
+        const ord = (d0 && d0.categoryOrder) || [];
+        buildVizScopeOptions_(ord);
+        renderVizAll_(d0, rowList, ym.y, ym.m);
+      }
+      await loadPeopleViz_(base, ym.y, ym.m, rowList, true, true);
     } catch (e) {
-      if (el.vizScroll) {
-        el.vizScroll.innerHTML = '';
-      }
-      if (el.vizScopeStrip) {
-        el.vizScopeStrip.innerHTML = '';
-      }
-      if (el.vizPeriodMeta) {
-        el.vizPeriodMeta.textContent = '';
-      }
-      if (el.vizWarn) {
-        el.vizWarn.textContent = '리포트 요청이 끝나지 않았습니다.';
-        el.vizWarn.removeAttribute('hidden');
+      if (el.viz) {
+        if (el.vizScroll) {
+          el.vizScroll.innerHTML = '';
+        }
+        if (el.vizScopeStrip) {
+          el.vizScopeStrip.innerHTML = '';
+        }
+        if (el.vizPeriodMeta) {
+          el.vizPeriodMeta.textContent = '';
+        }
+        if (el.vizWarn) {
+          el.vizWarn.textContent = '리포트 요청이 끝나지 않았습니다.';
+          el.vizWarn.removeAttribute('hidden');
+        }
       }
       logSolpathApi_('analyticsFactReport', null, e);
+    } finally {
+      hideAnBusyOverlay_();
     }
   }
 

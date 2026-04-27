@@ -370,6 +370,7 @@ function dbProductMappingList_() {
   var pVals = ps.getRange(2, 1, lr, nColsP).getValues();
   var idxProdNo = 0;
   var idxName = 3;
+  var idxAddTime = 9;
 
   var mapM = dbPmReadMappingMap_();
   var rows = [];
@@ -396,6 +397,10 @@ function dbProductMappingList_() {
     }
     var created_at = m && m.created_at != null ? String(m.created_at) : '';
     var updated_at = m && m.updated_at != null ? String(m.updated_at) : '';
+    var addYmd = dbAnAnyToSeoulYmd_(line[idxAddTime] != null ? line[idxAddTime] : '');
+    if (addYmd && addYmd.length > 10) {
+      addYmd = addYmd.slice(0, 10);
+    }
     if (_DB_PM_CATEGORIES.indexOf(internal_category) < 0) {
       internal_category = 'unmapped';
     }
@@ -411,6 +416,7 @@ function dbProductMappingList_() {
       lifecycle: lifecycle,
       notes: notes,
       sales_end: sales_end,
+      add_time_ymd: addYmd && addYmd.length >= 10 ? addYmd : '',
       created_at: created_at,
       updated_at: updated_at
     });

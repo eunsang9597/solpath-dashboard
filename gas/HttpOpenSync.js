@@ -105,8 +105,7 @@ function openSyncAllowedActions_() {
     'analyticsMasterActualsGet',
     'analyticsFactRebuild',
     'analyticsFactRowsGet',
-    'analyticsFactReport',
-    'analyticsOrderLinesRawGet'
+    'analyticsFactReport'
   ];
 }
 
@@ -249,19 +248,6 @@ function openSyncRouteAction_(action, e) {
       mRp = nowP.getMonth() + 1;
     }
     return { ok: true, data: dbAnalyticsFactReportComputed_(yRp, mRp) };
-  }
-  if (action === 'analyticsOrderLinesRawGet') {
-    var pOl = e.parameter || {};
-    var yOl = parseInt(String(pOl.year != null ? pOl.year : ''), 10);
-    var mOl = parseInt(String(pOl.month != null ? pOl.month : ''), 10);
-    var nowOl = new Date();
-    if (!isFinite(yOl) || yOl < 2000 || yOl > 2100) {
-      yOl = nowOl.getFullYear();
-    }
-    if (!isFinite(mOl) || mOl < 1 || mOl > 12) {
-      mOl = nowOl.getMonth() + 1;
-    }
-    return dbAnalyticsOrderLinesRawGet_(yOl, mOl);
   }
   return { ok: false, error: 'UNKNOWN_ACTION', allowed: openSyncAllowedActions_() };
 }

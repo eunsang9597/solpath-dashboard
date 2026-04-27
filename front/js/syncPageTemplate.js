@@ -86,6 +86,13 @@ export const SYNC_PAGE_SHELL_HTML = `<div class="app-shell app-shell--v9">
             <p class="sp-overlay-sub" id="sp-loadingOverlay-desc">잠시만 기다려 주세요. 수 분 걸릴 수 있습니다.</p>
           </div>
         </div>
+        <div class="sp-overlay sp-an-busy-overlay" id="sp-an-loadingOverlay" hidden aria-hidden="true">
+          <div class="sp-overlay-box">
+            <div class="sp-spinner" role="status" aria-label="불러오는 중"></div>
+            <p class="sp-overlay-text" id="sp-an-loadingOverlay-title">불러오는 중</p>
+            <p class="sp-overlay-sub" id="sp-an-loadingOverlay-desc">매출·구매 건수 표를 준비합니다. 잠시만 기다려 주세요.</p>
+          </div>
+        </div>
 
         <div class="sp-tab-panels">
         <section
@@ -118,7 +125,7 @@ export const SYNC_PAGE_SHELL_HTML = `<div class="app-shell app-shell--v9">
               <p class="sp-pm__hint" id="sp-an-hint" hidden></p>
               <div class="sp-an-pillar sp-an-pillar--sales" id="sp-an-pillarSales">
                 <div class="sp-an-pillar__title" role="heading" aria-level="2">매출 현황</div>
-                <p class="sp-an-pillar__lede">선택 연·월 요약과 일별 순매출 표, 품목 줄·목표(KPI) 입력까지 한 흐름으로 이어집니다.</p>
+                <p class="sp-an-pillar__lede">선택 연·월 요약과 목표(KPI) 입력을 한 흐름으로 확인하고 저장합니다.</p>
               <div class="sp-an-salesUnified" id="sp-an-actuals" hidden>
                 <div class="sp-an-salesUnified__h" role="heading" aria-level="3">매출 · 선택 기간</div>
                 <p class="sp-an-salesUnified__lede" id="sp-an-actualsLede" aria-live="polite">위 <strong>연도·월</strong>에서 월을 <strong>전체</strong>로 두면 일별 순매출은 그 해 1~12월을 한 번에 봅니다. <strong>연간 목표만</strong> 보려면 옆 버튼을 켜서 아래 KPI 표만 필터합니다. 첫 줄 카드의 매출·주문은 집계 시트 기준이며 <strong>미분류·교재·자소서 대분류는 제외</strong>합니다(테스트 라이프사이클·관리자·테스트 그룹 주문은 02 재구축 시 제외). 막대·(±%)는 <strong>전체(사이트) 목표</strong>가 있으면 그 목표, 없으면 <strong>전년 동월</strong> 대비입니다.</p>
@@ -182,28 +189,6 @@ export const SYNC_PAGE_SHELL_HTML = `<div class="app-shell app-shell--v9">
                   </div>
                 </div>
                 <p class="sp-an-actuals__warn" id="sp-an-actualsWarn" hidden></p>
-                <div class="sp-an-vizSection" id="sp-an-viz" hidden>
-                  <div class="sp-an-viz__subhead">
-                    <div class="sp-an-viz__h4" id="sp-an-vizHeading" role="heading" aria-level="4"><span class="sp-an-viz__h4-main">일별 순매출</span> <span class="sp-an-viz__h4-meta" id="sp-an-vizPeriodMeta"></span></div>
-                    <div class="sp-an-viz__toolbar" id="sp-an-vizToolbar">
-                      <label class="sp-an-filters__f"><span class="sp-pm-filters__lbl">보기 범위</span>
-                        <select class="sp-confirm" id="sp-an-vizScope" title="전체(사이트) 합계는 모든 대분류 포함. 범위 좁히기: 솔패스·솔루틴·챌린지(상품 행)">
-                          <option value="entire">전체(사이트) — 대분류 행</option>
-                        </select>
-                      </label>
-                    </div>
-                  </div>
-                  <div class="sp-an-viz__scopeStrip" id="sp-an-vizScopeStrip" aria-label="보기 범위 기준 요약"></div>
-                  <p class="sp-an-viz__lede" id="sp-an-vizLede">위에서 고른 <strong>연·월</strong>에 맞춰 <strong>가로 날짜 · 세로 상품군(또는 단품)</strong> 격자로 순매출을 봅니다.</p>
-                  <p class="sp-an-viz__warn" id="sp-an-vizWarn" hidden></p>
-                  <div class="sp-an-viz-scroll" id="sp-an-vizScroll" role="region" aria-label="일별 순매출 표"></div>
-                </div>
-              </div>
-              <div class="sp-an-ol" id="sp-an-ol" hidden>
-                <div class="sp-an-ol__title" role="heading" aria-level="3">품목 줄(집계 스냅샷)</div>
-                <p class="sp-an-ol__lede" id="sp-an-olLede">위에서 고른 <strong>연·월</strong>과 같은 달·주문일 기준으로, 집계 시트 <strong>02_주문라인_실적</strong>에 올라와 있는 품목 줄을 <strong>열람</strong>합니다. 판매 종료일·분류는 <strong>상품 항목 분류</strong>에서 바꾼 뒤 <strong>탭·주문라인 갱신</strong>으로 02를 다시 맞춥니다. 행이 많으면 일부만 보일 수 있습니다.</p>
-                <p class="sp-an-ol__warn" id="sp-an-olWarn" hidden></p>
-                <div class="sp-an-ol-scroll" id="sp-an-olScroll" role="region" aria-label="품목 줄 열람"></div>
               </div>
               <div class="sp-pm__loading sp-an-loading" id="sp-an-loading" hidden role="status" aria-live="polite">데이터를 불러오는 중…</div>
               <div class="sp-pm-init" id="sp-an-init" hidden>
@@ -213,8 +198,9 @@ export const SYNC_PAGE_SHELL_HTML = `<div class="app-shell app-shell--v9">
                 </div>
               </div>
               <div id="sp-an-body" hidden>
-                <details class="sp-an-kpi" id="sp-an-kpi">
-                  <summary class="sp-an-kpi__sum">목표(KPI) 표 · 부가 입력</summary>
+                <div class="sp-an-kpi" id="sp-an-kpi">
+                <div class="sp-an-kpi__headblock" role="group" aria-label="목표(KPI) 표">
+                  <div class="sp-an-kpi__headtitle" id="sp-an-kpiHeadTitle" role="heading" aria-level="3">목표(KPI) 표</div>
                 <div class="sp-an-subtabs" role="tablist" aria-label="목표 표에서 강조할 칸">
                   <button type="button" class="sp-an-subtabs__btn is-active" id="sp-an-subSales" role="tab" aria-selected="true" aria-controls="sp-an-tableWrap" tabindex="0">매출</button>
                   <button type="button" class="sp-an-subtabs__btn" id="sp-an-subCount" role="tab" aria-selected="false" aria-controls="sp-an-tableWrap" tabindex="-1">건수</button>
@@ -240,23 +226,25 @@ export const SYNC_PAGE_SHELL_HTML = `<div class="app-shell app-shell--v9">
                     </table>
                   </div>
                 </div>
+                </div>
+                <details class="sp-an-kpi__fold" id="sp-an-kpiFormFold" open>
+                  <summary class="sp-an-kpi__sum">월별 목표 입력</summary>
                 <div class="sp-an-add" id="sp-an-form">
-                  <p class="sp-an-add__title">목표 한 줄 입력</p>
                   <div class="sp-an-add__row sp-an-add__row--inline">
-                    <label class="sp-an-add__field"><span class="sp-an-add__lbl">연</span> <input type="number" class="sp-confirm" id="sp-an-inY" min="2000" max="2100" step="1" /></label>
-                    <label class="sp-an-add__field"><span class="sp-an-add__lbl">월</span>
+                    <label class="sp-an-add__field sp-an-add__field--y"><span class="sp-an-add__lbl">연</span> <input type="number" class="sp-confirm" id="sp-an-inY" min="2000" max="2100" step="1" /></label>
+                    <label class="sp-an-add__field sp-an-add__field--m"><span class="sp-an-add__lbl">월</span>
                       <select class="sp-confirm" id="sp-an-inM" title="0은 연간"></select>
                     </label>
-                    <label class="sp-an-add__field"><span class="sp-an-add__lbl">범위</span>
+                    <label class="sp-an-add__field sp-an-add__field--scope"><span class="sp-an-add__lbl">범위</span>
                       <select class="sp-confirm" id="sp-an-inScope">
                         <option value="category">대분류</option>
                         <option value="product">상품</option>
                       </select>
                     </label>
-                    <label class="sp-an-add__field sp-an-add__field--grow"><span class="sp-an-add__lbl">대상</span> <input type="text" class="sp-confirm" id="sp-an-inKey" placeholder="대분류 이름 또는 상품 번호" spellcheck="false" /></label>
-                    <label class="sp-an-add__field"><span class="sp-an-add__lbl">매출(원)</span> <input type="number" class="sp-confirm" id="sp-an-inAmt" min="0" step="1" /></label>
-                    <label class="sp-an-add__field"><span class="sp-an-add__lbl">건수</span> <input type="number" class="sp-confirm" id="sp-an-inCnt" min="0" step="1" /></label>
-                    <label class="sp-an-add__field sp-an-add__field--grow"><span class="sp-an-add__lbl">비고</span>
+                    <label class="sp-an-add__field sp-an-add__field--key"><span class="sp-an-add__lbl">대상</span> <input type="text" class="sp-confirm" id="sp-an-inKey" placeholder="대분류 이름 또는 상품 번호" spellcheck="false" /></label>
+                    <label class="sp-an-add__field sp-an-add__field--amt"><span class="sp-an-add__lbl">매출(원)</span> <input type="number" class="sp-confirm" id="sp-an-inAmt" min="0" step="1" /></label>
+                    <label class="sp-an-add__field sp-an-add__field--cnt"><span class="sp-an-add__lbl">건수</span> <input type="number" class="sp-confirm" id="sp-an-inCnt" min="0" step="1" /></label>
+                    <label class="sp-an-add__field sp-an-add__field--notes"><span class="sp-an-add__lbl">비고</span>
                     <input type="text" class="sp-confirm" id="sp-an-inNotes" maxlength="200" />
                     </label>
                   </div>
@@ -267,6 +255,7 @@ export const SYNC_PAGE_SHELL_HTML = `<div class="app-shell app-shell--v9">
                   </div>
                 </div>
                 </details>
+                </div>
               </div>
               </div>
 
@@ -282,14 +271,14 @@ export const SYNC_PAGE_SHELL_HTML = `<div class="app-shell app-shell--v9">
                     <select class="sp-confirm" id="sp-an-peopleM" title="이 달 일별 표에 쓸 월"></select>
                   </label>
                 </div>
-                <p class="sp-an-people__lede" id="sp-an-peopleLede">아래 표는 선택한 연·월의 날짜별 구매 건수입니다. 연도별 월 합계는 아래를 펼친 뒤에만 불러옵니다.</p>
+                <p class="sp-an-people__lede" id="sp-an-peopleLede">아래 표는 선택한 연·월의 날짜별 구매 건수입니다. 상품 매핑 기준으로 해당 월과 판매 기간이 겹치는 품목을 표시합니다(미분류·테스트 라이프사이클 제외, 교재는 한 줄 합계).</p>
                 <p class="sp-an-people__warn" id="sp-an-peopleWarn" hidden></p>
                 <p class="sp-an-subcap">이 달 — 날짜별 × 상품</p>
                 <div class="sp-an-people-scroll" id="sp-an-peopleGrid" role="region" aria-label="이 달 일자별 상품 구매 건수"></div>
-                <details class="sp-an-people-year" id="sp-an-peopleYearDetails">
-                  <summary class="sp-an-people-year__sum">연도별 월 합계 · 상품군별 (연도 선택 후 펼치면 불러옴)</summary>
+                <div class="sp-an-people-year" id="sp-an-peopleYearWrap">
+                  <div class="sp-an-people-year__title" role="heading" aria-level="3">연도별 월 합계 · 상품군별</div>
                   <div class="sp-an-people-scroll" id="sp-an-peopleMatrix" role="region" aria-label="선택 연도 월별 상품군 구매 건수"></div>
-                </details>
+                </div>
               </div>
               </div>
 
