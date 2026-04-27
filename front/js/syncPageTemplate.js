@@ -128,7 +128,7 @@ export const SYNC_PAGE_SHELL_HTML = `<div class="app-shell app-shell--v9">
                 <p class="sp-an-pillar__lede">선택한 연·월 실적 요약과 <strong>목표 표</strong> 입력을 한 흐름으로 확인하고 저장합니다.</p>
               <div class="sp-an-salesUnified" id="sp-an-actuals" hidden>
                 <div class="sp-an-salesUnified__h" role="heading" aria-level="3">매출 · 선택 기간</div>
-                <p class="sp-an-salesUnified__lede" id="sp-an-actualsLede" aria-live="polite">위 <strong>연도·월</strong>에서 월을 <strong>전체</strong>로 두면 일별 순매출은 그 해 1~12월을 한 번에 봅니다. <strong>연간 목표만</strong> 보려면 옆 버튼을 켜서 아래 <strong>목표 표</strong>만 좁혀 봅니다. 맨 위 카드의 매출·주문은 <strong>지표용 파일</strong> 기준이며, <strong>상품군 미정·자소서</strong>는 넣지 않습니다(교재 포함). <strong>시험용으로 둔 품목</strong>과 <strong>관리자·테스트 계정 주문</strong>은 화면 숫자에서 빼 둔 값입니다. 막대·(±%)는 <strong>전체(사이트) 목표</strong>가 있으면 그 목표, 없으면 <strong>전년 동월</strong> 대비입니다.</p>
+                <p class="sp-an-salesUnified__lede" id="sp-an-actualsLede" aria-live="polite">위 <strong>연도·월</strong>에서 월을 <strong>전체</strong>로 두면 일별 순매출은 그 해 1~12월을 한 번에 봅니다. <strong>연간 목표만</strong>을 켜면 아래 <strong>목표 표</strong>가 연간 행만 보이게 필터되고, 표 위치로 스크롤됩니다. 맨 위 카드의 매출·주문은 <strong>지표용 파일</strong> 기준이며 <strong>상품군 미정</strong>만 빼고(교재·자소서 포함), <strong>시험용 품목</strong>·<strong>관리자·테스트 계정 주문</strong>도 빼 둔 값입니다. 막대·(±%)는 <strong>「전체」목표</strong>가 있으면 그 값, 없으면 <strong>솔패스·챌린지·솔루틴 목표 합</strong>, 그것도 없으면 <strong>전년 동월</strong> 대비입니다.</p>
                 <div class="sp-an-filters sp-an-filters--period" id="sp-an-filters">
                   <label class="sp-an-filters__f"><span class="sp-pm-filters__lbl">연도</span>
                     <select class="sp-confirm" id="sp-an-filterY" title="실적 요약·일별 매출 표·목표 표에 쓰는 연도"></select>
@@ -155,7 +155,7 @@ export const SYNC_PAGE_SHELL_HTML = `<div class="app-shell app-shell--v9">
                 <div class="sp-an-actuals__cards sp-an-actuals__cards--tworow" id="sp-an-actualsCards" aria-label="선택 기간 실적·비교">
                   <div class="sp-an-metric-row">
                     <div class="sp-an-card sp-an-card--meter" id="sp-an-cardSales">
-                      <span class="sp-an-card__lbl">실제 매출(원)<span class="sp-an-card__lbl-note">(상품군 미정·자소서 제외)</span></span>
+                      <span class="sp-an-card__lbl">실제 매출(원)<span class="sp-an-card__lbl-note">(상품군 미정 제외)</span></span>
                       <div class="sp-an-card__value-row">
                         <span class="sp-an-card__val" id="sp-an-valSales">—</span>
                         <span class="sp-an-card__pct" id="sp-an-pctSales"></span>
@@ -163,7 +163,7 @@ export const SYNC_PAGE_SHELL_HTML = `<div class="app-shell app-shell--v9">
                       <div class="sp-an-meter" aria-hidden="true"><div class="sp-an-meter__fill" id="sp-an-meterSales"></div></div>
                     </div>
                     <div class="sp-an-card sp-an-card--meter" id="sp-an-cardOrders">
-                      <span class="sp-an-card__lbl">주문 건수<span class="sp-an-card__lbl-note">(상품군 미정·자소서 제외)</span></span>
+                      <span class="sp-an-card__lbl">주문 건수<span class="sp-an-card__lbl-note">(상품군 미정 제외)</span></span>
                       <div class="sp-an-card__value-row">
                         <span class="sp-an-card__val" id="sp-an-valOrders">—</span>
                         <span class="sp-an-card__pct" id="sp-an-pctOrders"></span>

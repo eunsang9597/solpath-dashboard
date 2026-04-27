@@ -34,8 +34,8 @@ const AN_CATEGORY_KEY_LABEL = {
 /** 보기 범위 셀렉트에 넣는 대분류(전체 제외) — 상품군 미정·교재·자소서 제외 */
 const VIZ_SCOPE_DROPDOWN_KEYS = { solpass: true, solutine: true, challenge: true };
 
-/** 상단 실적·전년·목표 비교 축 — 주문 실적 집계 기준, 상품군 미정·자소서 제외(교재 포함) */
-const AN_ACTUAL_EXCL_NOTE = ' (상품군 미정·자소서 제외)';
+/** 상단 실적·전년·목표 비교 축 — 주문 실적 집계 기준, 상품군 미정만 제외 */
+const AN_ACTUAL_EXCL_NOTE = ' (상품군 미정 제외)';
 
 /**
  * `monthTotals` 전 카테고리 순매출 합(사이트 전체 합계용).
@@ -547,6 +547,7 @@ export function initAnalytics(mount) {
     subLede: /** @type {HTMLElement | null} */ (mount.querySelector('#sp-an-subLede')),
     table: /** @type {HTMLElement | null} */ (mount.querySelector('#sp-an-table')),
     tableWrap: /** @type {HTMLElement | null} */ (mount.querySelector('#sp-an-tableWrap')),
+    kpiBlock: /** @type {HTMLElement | null} */ (mount.querySelector('#sp-an-kpi')),
     filterY: /** @type {HTMLSelectElement | null} */ (mount.querySelector('#sp-an-filterY')),
     filterM: /** @type {HTMLSelectElement | null} */ (mount.querySelector('#sp-an-filterM')),
     btnKpiAnnual: /** @type {HTMLButtonElement | null} */ (mount.querySelector('#sp-an-btnKpiAnnual')),
@@ -807,21 +808,66 @@ export function initAnalytics(mount) {
   }
 
   /**
+   * 상단 카드 막대·둘째 줄: `entire` 한 줄이 있으면 그것만, 없으면 솔패스·챌린지·솔루틴 목표 합.
    * @param {number} y
    * @param {number} m
-   * @return {object|null}
+   * @return {{ kind: 'entire'|'sum'|'none', row?: object, sumSales: number|null, sumOrders: number|null }}
    */
-  function findEntireTargetRowForYm_(y, m) {
-    for (let i = 0; i < localRows.length; i++) {
+  function resolveCardTargetBaseline_(y, m) {
+    /** @type {object[]} */
+    const rows = [];
+    let i;
+    for (i = 0; i < localRows.length; i++) {
       const row = localRows[i];
       if (Math.floor(Number(row.year)) !== y || Math.floor(Number(row.month)) !== m) {
         continue;
       }
-      if (goalKeyEntire_(row) === 'entire') {
-        return row;
+      rows.push(row);
+    }
+    let entireRow = null;
+    let j;
+    for (j = 0; j < rows.length; j++) {
+      if (goalKeyEntire_(rows[j]) === 'entire') {
+        entireRow = rows[j];
+        break;
       }
     }
-    return null;
+    if (entireRow) {
+      return {
+        kind: 'entire',
+        row: entireRow,
+        sumSales: parseTargetNum_(entireRow.targetAmount),
+        sumOrders: parseTargetNum_(entireRow.targetCount)
+      };
+    }
+    let sSum = 0;
+    let oSum = 0;
+    let hasS = false;
+    let hasO = false;
+    for (j = 0; j < rows.length; j++) {
+      const g = goalKeyEntire_(rows[j]);
+      if (!KPI_GOAL_TARGET_SET[g] || g === 'entire') {
+        continue;
+      }
+      const ts = parseTargetNum_(rows[j].targetAmount);
+      const to = parseTargetNum_(rows[j].targetCount);
+      if (ts != null && ts > 0) {
+        sSum += ts;
+        hasS = true;
+      }
+      if (to != null && to > 0) {
+        oSum += to;
+        hasO = true;
+      }
+    }
+    if (!hasS && !hasO) {
+      return { kind: 'none', sumSales: null, sumOrders: null };
+    }
+    return {
+      kind: 'sum',
+      sumSales: hasS ? sSum : null,
+      sumOrders: hasO ? oSum : null
+    };
   }
 
   function fmtKrwDash0_(n) {
@@ -919,14 +965,12 @@ export function initAnalytics(mount) {
       d.prevYear && typeof d.prevYear === 'object' ? /** @type {Record<string, unknown>} */ (d.prevYear) : {};
     const actS = Number(d.actualSales);
     const actO = Number(d.orderCount);
-    const tgtRow = findEntireTargetRowForYm_(yv, mv);
+    const bl = resolveCardTargetBaseline_(yv, mv);
     let baseS = NaN;
     let baseO = NaN;
-    if (tgtRow) {
-      const ts0 = parseTargetNum_(tgtRow.targetAmount);
-      const to0 = parseTargetNum_(tgtRow.targetCount);
-      baseS = ts0 != null ? ts0 : NaN;
-      baseO = to0 != null ? to0 : NaN;
+    if (bl.kind !== 'none') {
+      baseS = bl.sumSales != null ? bl.sumSales : NaN;
+      baseO = bl.sumOrders != null ? bl.sumOrders : NaN;
     } else {
       baseS = Number(pv.actualSales);
       baseO = Number(pv.orderCount);
@@ -951,14 +995,20 @@ export function initAnalytics(mount) {
       applyMeterPct_(el.pctOrders, el.meterOrders, actO, baseO);
     }
 
-    if (tgtRow) {
+    if (bl.kind !== 'none') {
       el.actRow2Title.textContent = '이번 기간 목표';
-      el.actRow2Sub.textContent = '';
-      el.actRow2Sub.setAttribute('hidden', '');
+      if (bl.kind === 'sum') {
+        el.actRow2Sub.textContent =
+          '「전체」목표 한 줄이 없을 때 — 솔패스·챌린지·솔루틴에 넣은 목표를 합산해 비교합니다.';
+        el.actRow2Sub.removeAttribute('hidden');
+      } else {
+        el.actRow2Sub.textContent = '';
+        el.actRow2Sub.setAttribute('hidden', '');
+      }
       el.actRow2LblA.textContent = '매출 목표(원)' + AN_ACTUAL_EXCL_NOTE;
       el.actRow2LblB.textContent = '주문 목표(건)' + AN_ACTUAL_EXCL_NOTE;
-      const ts = parseTargetNum_(tgtRow.targetAmount);
-      const to = parseTargetNum_(tgtRow.targetCount);
+      const ts = bl.sumSales;
+      const to = bl.sumOrders;
       el.actRow2ValA.textContent = ts != null && ts > 0 ? fmtKrw_(ts) : '—';
       el.actRow2ValB.textContent = to != null && to > 0 ? fmtInt_(to) : '—';
     } else {
@@ -2390,6 +2440,18 @@ export function initAnalytics(mount) {
       _kpiAnnualRows = !_kpiAnnualRows;
       syncKpiAnnualBtn_();
       render();
+      setHint(
+        _kpiAnnualRows
+          ? '아래 실적 목표 표만 「연간」행으로 좁혔습니다. 표 위치로 스크롤합니다.'
+          : '목표 표를 다시 이 연도·월 기준으로 보여 줍니다.',
+        true
+      );
+      window.requestAnimationFrame(function () {
+        const scrollEl = el.tableWrap || el.kpiBlock;
+        if (scrollEl) {
+          scrollEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+      });
     });
   }
 

@@ -962,12 +962,12 @@ function dbAnAggregateOrdersForYm_(ss, y, m) {
   return { totalSales: totalSales, orderCount: orderCount, uniqueMemberCount: u };
 }
 
-/** 가상 fact·상단 실적 카드에서 빼는 대분류(미분류·자소서). 교재는 일별 순매출·구매 건수에 포함 — `lifecycle test`·관리자/테스트 그룹은 02 재구축 시 제외 */
-var DB_AN_AGG_EXCLUDE_CATEGORY = { unmapped: true, jasoseo: true };
+/** 가상 fact·상단 실적 카드에서 빼는 대분류(미분류만). 교재·자소서 포함 — `lifecycle test`·관리자/테스트 그룹은 02 재구축 시 제외 */
+var DB_AN_AGG_EXCLUDE_CATEGORY = { unmapped: true };
 
 /**
  * `02_주문라인_실적` — `dbAnVirtualFactRowsFromOrderLines_`와 동일한 행 선별 후,
- * `DB_AN_AGG_EXCLUDE_CATEGORY` 대분류 줄 제외 후 순매출(매출−환불)·주문 건수(고유 order_no). (교재 포함)
+ * `DB_AN_AGG_EXCLUDE_CATEGORY` 대분류 줄 제외 후 순매출(매출−환불)·주문 건수(고유 order_no). (교재·자소서 포함)
  * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} ssA 집계 스프레드시트
  * @param {number} y
  * @param {number} m 0 = 해당 연도 1–12월 전부, 1–12 = 해당 월만
