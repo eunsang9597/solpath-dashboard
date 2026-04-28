@@ -2114,6 +2114,43 @@ export function initAnalytics(mount) {
       } catch (_pmE) {
         /* 품목 분류 목록 없으면 표시 행 없음(집계는 위 fact만 사용) */
       }
+      if (!Object.keys(pKeys).length) {
+        /* 운영 분류 목록 상태와 무관하게, 실제 fact(line_count)에 있는 상품 키로 표 행을 복원 */
+        const tbSeenFact = /** @type {Record<string, boolean>} */ ({});
+        let ymdK;
+        for (ymdK in bdpG) {
+          if (!Object.prototype.hasOwnProperty.call(bdpG, ymdK)) {
+            continue;
+          }
+          const dayMap = bdpG[ymdK] || {};
+          let kFact;
+          for (kFact in dayMap) {
+            if (!Object.prototype.hasOwnProperty.call(dayMap, kFact)) {
+              continue;
+            }
+            if (String(kFact).indexOf('\t') < 0) {
+              continue;
+            }
+            const seg = String(kFact).split('\t');
+            const catF = String(seg[0] || '').trim();
+            const pnoF = String(seg.slice(1).join('\t') || '').trim();
+            if (!catF.length || !pnoF.length || catF === 'unmapped') {
+              continue;
+            }
+            if (catF === 'textbook') {
+              if (!tbSeenFact[pnoF]) {
+                tbSeenFact[pnoF] = true;
+                peopleTextbookPnos.push(pnoF);
+              }
+            } else {
+              pKeys[catF + '\t' + pnoF] = true;
+            }
+          }
+        }
+        if (peopleTextbookPnos.length) {
+          pKeys['textbook\t' + PEOPLE_TB_AGG_PNO] = true;
+        }
+      }
       const daysN2 = daysInMonth(useY, useM);
       const pKeysAll = Object.keys(pKeys);
       const catSeen = /** @type {Record<string, boolean>} */ ({});
