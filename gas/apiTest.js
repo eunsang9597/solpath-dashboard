@@ -381,6 +381,23 @@ function imwebTGet_(path, query, bearer) {
 }
 
 /**
+ * OpenSync 전용: refresh 없이 access 토큰만 사용해 GET
+ * - 실패 원인을 숨기지 않기 위해 자동 refresh/retry를 하지 않는다.
+ * @param {string} path
+ * @param {Object|null|undefined} query
+ * @return {{_http:number,_text:string}}
+ */
+function imwebTGetOpenSyncStrict_(path, query) {
+  var p = PropertiesService.getScriptProperties();
+  var access = p.getProperty('IMWEB_OAUTH_ACCESS_TOKEN') != null ? String(p.getProperty('IMWEB_OAUTH_ACCESS_TOKEN')).trim() : '';
+  if (!access.length) {
+    throw new Error('IMWEB_OAUTH_ACCESS_TOKEN 없음');
+  }
+  Logger.log('[imwebTGetOpenSyncStrict_] ACCESS_TOKEN key used for path=' + String(path));
+  return imwebTGet_(path, query, access);
+}
+
+/**
  * Open API GET with auth retry:
  * 1) 현재 access로 1회 요청
  * 2) 401/30101이면 refresh 후 access 재조회

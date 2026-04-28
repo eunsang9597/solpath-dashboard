@@ -40,7 +40,7 @@ function dbSyncOrdersOpen() {
         Utilities.sleep(200);
       }
       var q = imwebTBuildOpenOrdersListQueryForPage_(uc, page, pageSize);
-      var g = imwebTGetWithOpenSyncRetry_('/orders', q);
+      var g = imwebTGetOpenSyncStrict_('/orders', q);
       if (g._http !== 200) {
         throw new Error('GET /orders http=' + g._http + ' ' + String(g._text).slice(0, 400));
       }
@@ -108,7 +108,7 @@ function dbSyncOrdersOpen() {
  * @return {{ members: Object, products: Object, orders: Object }}
  */
 function dbSyncOpenAll() {
-  Logger.log('[dbSyncOpenAll] start: 선 refresh 없음, 각 API 요청에서 401/30101일 때만 refresh 후 1회 재시도');
+  Logger.log('[dbSyncOpenAll] start: 선 refresh/자동 재시도 없음 (access 토큰으로만 호출, 실패 원문 그대로 반환)');
   return {
     members: dbSyncMembersOpen(),
     products: dbSyncProductsOnePage(),
