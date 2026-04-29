@@ -2507,7 +2507,11 @@ export function initAnalytics(mount) {
         return;
       }
       const base0 = String(GAS_BASE_URL).trim();
-      void loadPeopleViz_(base0, _vizY, _vizM, _vizRows, false, false);
+      // 하단(구매건수) 선택값만 바꿨을 때도 로딩이 걸려야 하므로,
+      // loadPeopleViz_의 m 인자는 반드시 peopleM에서 직접 가져옵니다.
+      const py0 = el.peopleY && el.peopleY.value ? parseInt(String(el.peopleY.value), 10) : _vizY;
+      const pm0 = el.peopleM && el.peopleM.value ? parseInt(String(el.peopleM.value), 10) : _vizM;
+      void loadPeopleViz_(base0, py0, pm0, null, false, false);
     }
     el.peopleM.addEventListener('change', onPeopleCh_);
     el.peopleY.addEventListener('change', onPeopleCh_);
