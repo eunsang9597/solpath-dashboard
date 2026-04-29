@@ -373,9 +373,12 @@ function dbAnalyticsOrderLinesRebuildFromMaster_() {
   var shO = master.getSheetByName(DB_SHEET_ORDERS);
   var orderMap = {};
   var orderToMember = {};
+  var ordererNameMap = {};
   if (shO && shO.getLastRow() >= 2) {
     var oLr = shO.getLastRow();
-    var ov = shO.getRange(2, 1, oLr - 1, 3).getValues();
+    // orderer_name까지 같이 읽어서 (trim/정규화 없이) 이름이 정확히 일치할 때만 skip 처리용
+    // orders headers: [order_no, order_time, orderer_member_code, orderer_name, ...]
+    var ov = shO.getRange(2, 1, oLr - 1, 4).getValues();
     var oi;
     for (oi = 0; oi < ov.length; oi++) {
       var ol = ov[oi] || [];
@@ -383,6 +386,7 @@ function dbAnalyticsOrderLinesRebuildFromMaster_() {
       if (on0) {
         orderMap[on0] = ol[1];
         orderToMember[on0] = String(ol[2] != null ? ol[2] : '').trim();
+        ordererNameMap[on0] = ol[3];
       }
     }
   }
@@ -441,6 +445,13 @@ function dbAnalyticsOrderLinesRebuildFromMaster_() {
     }
     var memCode = ordNo && orderToMember[ordNo] != null ? String(orderToMember[ordNo]).trim() : '';
     var gTitles = memCode.length && memberToGroupTitles[memCode] ? memberToGroupTitles[memCode] : [];
+
+    // 구매자 이름이 '솔루션편입'으로 *정확히* 일치하는 경우만 하드 제외
+    // (trim/case 변환 없이 strict equality로만 판정)
+    if (ordNo && ordererNameMap[ordNo] === '솔루션편입') {
+      skipped++;
+      continue;
+    }
     if (cat === 'unmapped') {
       skipped++;
       continue;
