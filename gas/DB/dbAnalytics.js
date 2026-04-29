@@ -434,6 +434,10 @@ function dbAnalyticsOrderLinesRebuildFromMaster_() {
   var iVals = shI.getRange(2, 1, iLr - 1, nCol).getValues();
   var out = [];
   var skipped = 0;
+  // 특정 order_no에 대해 “왜 skip이 안 걸렸는지”를 원인 단서로 남기기 위한 디버그
+  var DEBUG_ORDER_NO = '202601282382602';
+  /** @type {null|object} */
+  var debugHit = null;
   var j;
   for (j = 0; j < iVals.length; j++) {
     var L = iVals[j] || [];
@@ -448,12 +452,31 @@ function dbAnalyticsOrderLinesRebuildFromMaster_() {
     var memCode = ordNo && orderToMember[ordNo] != null ? String(orderToMember[ordNo]).trim() : '';
     var gTitles = memCode.length && memberToGroupTitles[memCode] ? memberToGroupTitles[memCode] : [];
 
-    // 구매자 이름이 '솔루션편입'으로 *정확히* 일치하는 경우만 하드 제외
+    // 구매자 이름/전화번호가 “정확히” 일치하는 경우만 하드 제외
     // (trim/case 변환 없이 strict equality로만 판정)
-    if (
-      ordNo &&
-      (ordererNameMap[ordNo] === '솔루션편입' || ordererCallMap[ordNo] === '010-5563-6876')
-    ) {
+    var skipByPurchaserName = ordNo && ordererNameMap[ordNo] === '솔루션편입';
+    var skipByPurchaserCall = ordNo && ordererCallMap[ordNo] === '010-5563-6876';
+    var skipByPurchaser = skipByPurchaserName || skipByPurchaserCall;
+    var skipByAnalytics = dbAnOrderLineSkipForAnalytics_(life, gTitles);
+
+    if (ordNo === DEBUG_ORDER_NO) {
+      debugHit = {
+        ordNo: ordNo,
+        ordererNameRaw: ordererNameMap[ordNo],
+        ordererNameType: ordererNameMap[ordNo] === null ? 'null' : typeof ordererNameMap[ordNo],
+        ordererCallRaw: ordererCallMap[ordNo],
+        ordererCallType: ordererCallMap[ordNo] === null ? 'null' : typeof ordererCallMap[ordNo],
+        skipByPurchaserName: skipByPurchaserName,
+        skipByPurchaserCall: skipByPurchaserCall,
+        cat: cat,
+        life: life,
+        memCode: memCode,
+        gTitles: gTitles,
+        skipByAnalytics: skipByAnalytics
+      };
+    }
+
+    if (skipByPurchaser) {
       skipped++;
       continue;
     }
@@ -461,7 +484,7 @@ function dbAnalyticsOrderLinesRebuildFromMaster_() {
       skipped++;
       continue;
     }
-    if (dbAnOrderLineSkipForAnalytics_(life, gTitles)) {
+    if (skipByAnalytics) {
       skipped++;
       continue;
     }
@@ -510,7 +533,7 @@ function dbAnalyticsOrderLinesRebuildFromMaster_() {
     shOut.getRange(2, 1, out.length, w0).setValues(out);
   }
   var batchId = 'ol-' + new Date().getTime();
-  return { ok: true, data: { written: out.length, excluded: skipped, batchId: batchId } };
+  return { ok: true, data: { written: out.length, excluded: skipped, batchId: batchId, debug: debugHit } };
 }
 
 /**
