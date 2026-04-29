@@ -2227,6 +2227,7 @@ export function initAnalytics(mount) {
       for (let d2 = 1; d2 <= daysN2; d2++) {
         theg += '<th class="sp-an-people__d" scope="col">' + d2 + '일</th>';
       }
+      theg += '<th class="sp-an-viz__sum-col sp-an-people__col--tot" scope="col">구매 합(건)</th>';
       for (let ci0 = 0; ci0 < uniqueCats.length; ci0++) {
         const cH = String(uniqueCats[ci0]);
         const labH = AN_CATEGORY_KEY_LABEL[cH] != null ? AN_CATEGORY_KEY_LABEL[cH] : cH;
@@ -2238,7 +2239,7 @@ export function initAnalytics(mount) {
           esc(labH) +
           '</th>';
       }
-      theg += '<th class="sp-an-viz__sum-col sp-an-people__col--tot" scope="col">구매 합(건)</th></tr>';
+      theg += '</tr>';
       /** @type {{ catRow: string, lab1: string, rs: number, tdDays: string }[]} */
       const rowItems = [];
       for (let pi0 = 0; pi0 < pSorted.length; pi0++) {
@@ -2279,6 +2280,12 @@ export function initAnalytics(mount) {
         const R = rowItems[ri];
         let tdG = R.tdDays;
         const catR = String(R.catRow || '').trim();
+        tdG +=
+          '<td class="sp-an-viz__sum-col sp-an-people__col--tot' +
+          (R.rs < 0 ? ' sp-an-viz__cell-num-neg' : '') +
+          '">' +
+          fmtInt_(R.rs) +
+          '</td>';
         for (let cj0 = 0; cj0 < uniqueCats.length; cj0++) {
           const ccol = String(uniqueCats[cj0]);
           const cmod2 = cj0 % 3;
@@ -2307,12 +2314,6 @@ export function initAnalytics(mount) {
               '</td>';
           }
         }
-        tdG +=
-          '<td class="sp-an-viz__sum-col sp-an-people__col--tot' +
-          (R.rs < 0 ? ' sp-an-viz__cell-num-neg' : '') +
-          '">' +
-          fmtInt_(R.rs) +
-          '</td>';
         tbG += '<tr><th scope="row" class="sp-an-viz__row-lbl">' + esc(R.lab1) + '</th>' + tdG + '</tr>';
       }
       if (!pSorted.length) {
@@ -2339,6 +2340,12 @@ export function initAnalytics(mount) {
         ssum += dsum;
         sumB += peopleCountTdHtml_(dsum);
       }
+      sumB +=
+        '<td class="sp-an-viz__sum-col sp-an-people__col--tot' +
+        (ssum < 0 ? ' sp-an-viz__cell-num-neg' : '') +
+        '">' +
+        fmtInt_(ssum) +
+        '</td>';
       for (let ck0 = 0; ck0 < uniqueCats.length; ck0++) {
         const cmod3 = ck0 % 3;
         sumB +=
@@ -2348,12 +2355,7 @@ export function initAnalytics(mount) {
           '—' +
           '</td>';
       }
-      sumB +=
-        '<td class="sp-an-viz__sum-col sp-an-people__col--tot' +
-        (ssum < 0 ? ' sp-an-viz__cell-num-neg' : '') +
-        '">' +
-        fmtInt_(ssum) +
-        '</td></tr>';
+      sumB += '</tr>';
       let refundSumB =
         '<tr class="sp-an-people__sumrow"><th scope="row" title="상품 구분 없이 그날 발생한 환불 건수 합계">환불 건수 총합</th>';
       let refundMonthTotal = 0;
