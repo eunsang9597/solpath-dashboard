@@ -1118,6 +1118,6 @@ action=initOperationsSheets
 | 2026-04-25 | **§2.3** — `productMappingState` / `productMappingList` (GET JSONP), `initOperationsSheets` / `productMappingApply` (POST). [SCHEMA_PRODUCT_MAPPING.md](./SCHEMA_PRODUCT_MAPPING.md), [front/docs/PRODUCT_CLASSIFICATION_UI.md](../front/docs/PRODUCT_CLASSIFICATION_UI.md) |
 | 2026-04-25 | **§2.4** — `SHEETS_ANALYTICS_ID`, `initAnalyticsSheets` / `analyticsTargetsGet` / `analyticsTargetsApply` / `analyticsResetAll`, `productMappingState`에 analytics 필드 병합. [ANALYTICS_REPORTS.md](./ANALYTICS_REPORTS.md) |
 | 2026-04-29 | **Order (Ground)** — `GET /orders`·`GET /orders/{orderNo}` 를 Member-Info·Product와 동일 절차(헤더 표·Query·cURL·응답 골격·`data` 설명·실측 `cancelInfo` 예). 동기/단건·`imwebDebugLogOrderToLogger` 구분 명시 |
-| 2026-04-29 | **Order `GET /orders`** — Query는 Reference 위임·동기 5키만 명시. 반품·교환 미매핑·`ledger_ymd`=주문일·`claim_*`=취소만 문서·코드 정합 |
+| 2026-04-29 | **Order `GET /orders`** — Query는 Reference 위임·동기 5키만 명시. 반품·교환 미매핑·`claim_*`=취소만 문서·코드 정합. 집계 날짜는 저장 컬럼이 아닌 계산 시점(`order_time`/`claim_event_time`) 변환으로 통일 |
 
 이후부터는 **날짜당 한 줄** 위주로 쌓고, 상세는 [process.md](../process.md) 변경 이력·[GAS_WEBAPP_SHEETS.md](./GAS_WEBAPP_SHEETS.md)에 남긴다.

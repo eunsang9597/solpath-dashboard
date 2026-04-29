@@ -424,7 +424,7 @@ function dbAnalyticsOrderLinesRebuildFromMaster_() {
   }
   var pmMap = dbPmReadMappingMap_();
   var iLr = shI.getLastRow();
-  var nCol = 13;
+  var nCol = 18;
   var iVals = shI.getRange(2, 1, iLr - 1, nCol).getValues();
   var out = [];
   var skipped = 0;
@@ -451,14 +451,30 @@ function dbAnalyticsOrderLinesRebuildFromMaster_() {
     }
     var lineNet = dbNumO_(L[10]) - dbNumO_(L[11]) - dbNumO_(L[12]);
     var sec = String(L[4] != null ? L[4] : '');
-    var ledgerYmd = dbAnAnyToSeoulYmd_(orderMap[ordNo] != null ? orderMap[ordNo] : '');
     var claimIso = L[7] != null ? String(L[7]).trim() : '';
+    if (!claimIso.length) {
+      var secLo = sec.toLowerCase();
+      if (secLo.indexOf('cancel') >= 0 || secLo.indexOf('refund') >= 0) {
+        var rawJson = L[17] != null ? String(L[17]) : '';
+        if (rawJson.length) {
+          try {
+            var rowObj = JSON.parse(rawJson);
+            var cInfo = rowObj && rowObj.orderSection ? rowObj.orderSection.cancelInfo : null;
+            var cReq = cInfo && cInfo.cancelRequestTime != null ? String(cInfo.cancelRequestTime).trim() : '';
+            if (cReq.length) {
+              claimIso = cReq;
+            }
+          } catch (_eClaim) {
+            /* 무시: fallback 실패 시 빈칸 유지 */
+          }
+        }
+      }
+    }
     out.push([
       L[0],
       L[1],
       ordNo,
       orderMap[ordNo] != null ? orderMap[ordNo] : '',
-      ledgerYmd,
       L[8],
       String(L[9] != null ? L[9] : ''),
       lineNet,
@@ -472,12 +488,30 @@ function dbAnalyticsOrderLinesRebuildFromMaster_() {
   var shOut = dbAnGetOrderLinesSheet_(ssA);
   var w0 = DB_ANALYTICS_ORDER_LINE_HEADERS.length;
   dbClearDataRows2Plus_(shOut, w0);
+  dbAnOrderLinesFixColumnFormats_(shOut);
   if (out.length) {
     /** `getRange` 3번째=행 **개수** — `1+out.length`면 261행 데이터에 262행 범위가 되어 setValues 실패 */
     shOut.getRange(2, 1, out.length, w0).setValues(out);
   }
   var batchId = 'ol-' + new Date().getTime();
   return { ok: true, data: { written: out.length, excluded: skipped, batchId: batchId } };
+}
+
+/**
+ * `02_주문라인_실적` 열 포맷 고정.
+ * 과거 `ledger_ymd` 날짜 포맷 잔존으로 `prod_no`(5열)가 1900-..로 보이는 문제를 방지한다.
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} sh
+ */
+function dbAnOrderLinesFixColumnFormats_(sh) {
+  if (!sh) {
+    return;
+  }
+  var rows = Math.max(1, sh.getMaxRows() - 1);
+  /** D(order_time), E(prod_no), K(add_time), L(claim_event_time) — 모두 ISO/ID 원본 보존용 텍스트 */
+  sh.getRange(2, 4, rows, 1).setNumberFormat('@');
+  sh.getRange(2, 5, rows, 1).setNumberFormat('@');
+  sh.getRange(2, 11, rows, 1).setNumberFormat('@');
+  sh.getRange(2, 12, rows, 1).setNumberFormat('@');
 }
 
 /**
@@ -1150,18 +1184,18 @@ function dbAnSalesCardsMetricsFrom02_(ssA, y, m, scopeCat) {
       continue;
     }
     var ymdRefund = '';
-    if (L2.length > 12 && L2[12] != null && String(L2[12]).trim() !== '') {
-      ymdRefund = dbAnAnyToSeoulYmd_(L2[12]);
+    if (L2.length > 11 && L2[11] != null && String(L2[11]).trim() !== '') {
+      ymdRefund = dbAnAnyToSeoulYmd_(L2[11]);
     }
     var inO = dbAn02RowYmdInYearMonth_(ymdOrder, y, m);
     var inR = ymdRefund.length >= 10 && dbAn02RowYmdInYearMonth_(ymdRefund, y, m);
     if (!inO && !inR) {
       continue;
     }
-    var pRaw2 = L2[5];
+    var pRaw2 = L2[4];
     var pkey2 = dbPmRowKey_(pRaw2);
-    var cat2 = String(L2[9] != null ? L2[9] : 'unmapped').trim() || 'unmapped';
-    var life2 = String(L2[10] != null ? L2[10] : '').trim();
+    var cat2 = String(L2[8] != null ? L2[8] : 'unmapped').trim() || 'unmapped';
+    var life2 = String(L2[9] != null ? L2[9] : '').trim();
     if (life2 === 'test') {
       continue;
     }
@@ -1186,7 +1220,7 @@ function dbAnSalesCardsMetricsFrom02_(ssA, y, m, scopeCat) {
     if (seY2.length >= 8 && dbAnOrderYmdAfterSalesEndExclusive_(ymdOrder, seY2)) {
       continue;
     }
-    var rawAmt2 = dbNumO_(L2[7]);
+    var rawAmt2 = dbNumO_(L2[6]);
     var pnum2 = parseInt(pRaw2, 10);
     var pnoS2 = isNaN(pnum2) ? '' : String(pnum2);
     if (inO) {
@@ -1324,7 +1358,7 @@ function dbAnAnyToSeoulYmd_(v) {
 }
 
 /**
- * `02_주문라인_실적` 행 — 집계·일별 fact 기준일. **항상 주문 시각** `order_time` 열만 사용 (`ledger_ymd` 열은 동일 값으로 채우지만 집계는 본 열 정본).
+ * `02_주문라인_실적` 행 — 집계·일별 fact 기준일. **항상 주문 시각** `order_time` 열만 사용.
  * @param {*[]} L2 한 행
  * @return {string}
  */
@@ -1547,20 +1581,20 @@ function dbAnVirtualFactRowsFromOrderLines_(y, m) {
       continue;
     }
     var ymdRefund = '';
-    if (L2.length > 12 && L2[12] != null && String(L2[12]).trim() !== '') {
-      ymdRefund = dbAnAnyToSeoulYmd_(L2[12]);
+    if (L2.length > 11 && L2[11] != null && String(L2[11]).trim() !== '') {
+      ymdRefund = dbAnAnyToSeoulYmd_(L2[11]);
     }
     var inO = dbAn02RowYmdInYearMonth_(ymdOrder, y, m);
     var inR = ymdRefund.length >= 10 && dbAn02RowYmdInYearMonth_(ymdRefund, y, m);
     if (!inO && !inR) {
       continue;
     }
-    var pRaw2 = L2[5];
+    var pRaw2 = L2[4];
     var pkey2 = dbPmRowKey_(pRaw2);
-    var cat2 = String(L2[9] != null ? L2[9] : 'unmapped').trim() || 'unmapped';
+    var cat2 = String(L2[8] != null ? L2[8] : 'unmapped').trim() || 'unmapped';
     var pnum2 = parseInt(pRaw2, 10);
     var pnoS2 = isNaN(pnum2) ? '' : String(pnum2);
-    var life2 = String(L2[10] != null ? L2[10] : '').trim();
+    var life2 = String(L2[9] != null ? L2[9] : '').trim();
     if (life2 === 'test') {
       continue;
     }
@@ -1582,7 +1616,7 @@ function dbAnVirtualFactRowsFromOrderLines_(y, m) {
     if (seYv.length >= 8 && dbAnOrderYmdAfterSalesEndExclusive_(ymdOrder, seYv)) {
       continue;
     }
-    var rawAmt2 = dbNumO_(L2[7]);
+    var rawAmt2 = dbNumO_(L2[6]);
     if (inO) {
       if (rawAmt2 > 0) {
         dbAnRevBucketTouch_(factBuckets, ymdOrder, cat2, pnoS2, rawAmt2, 0, 1, 0, true);
@@ -1831,17 +1865,17 @@ function dbAnalytics02ProdNameMap_() {
   }
   var lr = sh.getLastRow();
   var nR = Math.max(0, lr - 1);
-  /** 열 D~G: order_time, ledger_ymd, prod_no, prod_name */
-  var v = nR > 0 ? sh.getRange(2, 4, nR, 4).getValues() : [];
+  /** 열 D~F: order_time, prod_no, prod_name */
+  var v = nR > 0 ? sh.getRange(2, 4, nR, 3).getValues() : [];
   var j;
   for (j = 0; j < v.length; j++) {
     var row = v[j] || [];
-    var pk = dbPmRowKey_(row[2]);
+    var pk = dbPmRowKey_(row[1]);
     if (!pk.length) {
       continue;
     }
     var tMs = dbAnOrderTimeToMs_(row[0]);
-    var nm = String(row[3] != null ? row[3] : '').trim() || '상품 ' + pk;
+    var nm = String(row[2] != null ? row[2] : '').trim() || '상품 ' + pk;
     var cur = bestMs[pk];
     if (cur === undefined || tMs >= cur) {
       bestMs[pk] = tMs;

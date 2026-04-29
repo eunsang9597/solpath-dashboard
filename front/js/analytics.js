@@ -541,7 +541,7 @@ export function applyAnalyticsHeaderUrls(mount, d) {
   }
   const u =
     d && d.analyticsSpreadsheetUrl != null ? String(d.analyticsSpreadsheetUrl).trim() : '';
-  const hasUrl = Boolean(d && d.analyticsReady === true && u && /^https?:\/\//i.test(u));
+  const hasUrl = Boolean(u && /^https?:\/\//i.test(u));
   if (lo) {
     if (hasUrl) {
       lo.href = u;
@@ -1670,13 +1670,11 @@ export function initAnalytics(mount) {
         const ymd = ymdSeq[cx];
         const slice = byDay[ymd] && byDay[ymd][c] ? byDay[ymd][c] : null;
         const sales0 = slice && slice.sales != null ? Number(slice.sales) : 0;
-        const ref0 = slice && slice.refund != null ? Number(slice.refund) : 0;
-        const net0 = sales0 - ref0;
         if (colExcluded[cx]) {
           tds += '<td class="sp-an-viz__cell-na">—</td>';
         } else {
-          rowSum += net0;
-          tds += '<td>' + (net0 !== 0 ? fmtKrw_(net0) : '0') + '</td>';
+          rowSum += sales0;
+          tds += '<td>' + (sales0 !== 0 ? fmtKrw_(sales0) : '0') + '</td>';
         }
       }
       tds += '<td class="sp-an-viz__sum-col">' + fmtKrw_(rowSum) + '</td>';
@@ -1715,13 +1713,11 @@ export function initAnalytics(mount) {
           const ymdP = ymdSeq[ci];
           const slP = bdp[ymdP] && bdp[ymdP][kpk] ? bdp[ymdP][kpk] : null;
           const sP = slP && slP.sales != null ? Number(slP.sales) : 0;
-          const rP = slP && slP.refund != null ? Number(slP.refund) : 0;
-          const nP = sP - rP;
           if (colExcluded[ci]) {
             tdsP += '<td class="sp-an-viz__cell-na">—</td>';
           } else {
-            rowSumP += nP;
-            tdsP += '<td>' + (nP !== 0 ? fmtKrw_(nP) : '0') + '</td>';
+            rowSumP += sP;
+            tdsP += '<td>' + (sP !== 0 ? fmtKrw_(sP) : '0') + '</td>';
           }
         }
         tdsP += '<td class="sp-an-viz__sum-col">' + fmtKrw_(rowSumP) + '</td>';

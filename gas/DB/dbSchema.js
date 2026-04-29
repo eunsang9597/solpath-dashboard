@@ -78,7 +78,7 @@ var DB_ANALYTICS_GOALS_HEADERS = ['year', 'month', 'goal_target', 'sales_target'
 /**
  * @type {string[]}
  * line_net_amount = order_items line_price - line_price_sale - line_point.
- * ledger_ymd = 집계·일별 fact 기준일(yyyy-MM-dd, 서울) — **항상 주문일**(`order_time`과 동일).
+ * `02_주문라인_실적`에는 ISO 원본(`order_time`, `claim_event_time`)만 저장하고, 서울 날짜(`yyyy-MM-dd`) 변환은 집계 계산 시점에만 수행.
  * claim_event_time = 취소 접수 ISO — 원천 `order_items.claim_event_time` (= API `cancelInfo.cancelRequestTime`). 일별 fact·카드에서 **환불액·환불 건수는 이 시각의 서울 일자**에만 반영.
  */
 var DB_ANALYTICS_ORDER_LINE_HEADERS = [
@@ -86,7 +86,6 @@ var DB_ANALYTICS_ORDER_LINE_HEADERS = [
   'order_item_code',
   'order_no',
   'order_time',
-  'ledger_ymd',
   'prod_no',
   'prod_name',
   'line_net_amount',
