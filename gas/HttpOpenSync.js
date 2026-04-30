@@ -231,7 +231,8 @@ function openSyncRouteAction_(action, e) {
   }
   if (action === 'analyticsExportStagingPut') {
     var pSt = e.parameter || {};
-    var sid0 = pSt.sid != null ? String(pSt.sid).trim() : '';
+    /** GAS 웹앱 예약 쿼리 키 `sid` 사용 금지(405) — https://developers.google.com/apps-script/guides/web */
+    var sid0 = pSt.exSid != null ? String(pSt.exSid).trim() : '';
     var seq0 = parseInt(String(pSt.seq != null ? pSt.seq : ''), 10);
     var tot0 = parseInt(String(pSt.total != null ? pSt.total : ''), 10);
     var bod0 = pSt.body != null ? String(pSt.body) : '';
@@ -239,7 +240,7 @@ function openSyncRouteAction_(action, e) {
   }
   if (action === 'analyticsTableExportFromStaging') {
     var pSc = e.parameter || {};
-    var sid1 = pSc.sid != null ? String(pSc.sid).trim() : '';
+    var sid1 = pSc.exSid != null ? String(pSc.exSid).trim() : '';
     return dbAnalyticsExportStagingCommit_(sid1);
   }
   if (action === 'analyticsResetAll') {

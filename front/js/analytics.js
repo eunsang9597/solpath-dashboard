@@ -180,7 +180,7 @@ function solpathLastJsonpHintLine_() {
       ' urlChars=' +
       (j.urlChars != null ? j.urlChars : '') +
       (j.bodyEnc ? ' bodyEnc=' + j.bodyEnc : '') +
-      (j.sid != null ? ' sid=' + j.sid : '') +
+      (j.exSid != null ? ' exSid=' + j.exSid : '') +
       (j.seq != null ? ' seq=' + j.seq + '/' + (j.total != null ? j.total : '') : '') +
       (j.phase ? ' phase=' + j.phase : '');
     return ' [디버그] ' + bits + ' · 전체 객체는 콘솔 __SOLPATH_LAST_JSONP__';
@@ -261,10 +261,11 @@ function gasJsonpWithParams(baseUrl, action, extraParams, timeoutMs) {
       bodyEncLen = encodeURIComponent(String(extraParams.body)).length;
     }
     var stagingBits = '';
-    if (extraParams && extraParams.sid != null) {
+    /** GAS 웹앱 예약 쿼리 키 `sid` — 스테이징 세션은 `exSid`만 씀 */
+    if (extraParams && extraParams.exSid != null) {
       stagingBits =
-        ' sid=' +
-        String(extraParams.sid).slice(0, 24) +
+        ' exSid=' +
+        String(extraParams.exSid).slice(0, 24) +
         ' seq=' +
         String(extraParams.seq != null ? extraParams.seq : '') +
         '/' +
@@ -275,9 +276,9 @@ function gasJsonpWithParams(baseUrl, action, extraParams, timeoutMs) {
         action: action,
         urlChars: urlChars,
         bodyEnc: bodyEncLen || undefined,
-        sid:
-          extraParams && extraParams.sid != null
-            ? String(extraParams.sid).slice(0, 24)
+        exSid:
+          extraParams && extraParams.exSid != null
+            ? String(extraParams.exSid).slice(0, 24)
             : undefined,
         seq: extraParams && extraParams.seq != null ? extraParams.seq : undefined,
         total: extraParams && extraParams.total != null ? extraParams.total : undefined,
@@ -391,7 +392,7 @@ async function analyticsTableExportSend_(baseUrl, payload, timeoutMs) {
       }
     };
   }
-  const sid = 'ex' + String(Date.now()) + '_' + String(Math.floor(Math.random() * 1e9));
+  const exSid = 'ex' + String(Date.now()) + '_' + String(Math.floor(Math.random() * 1e9));
   const total = chunks.length;
   const putTimeout = 90000;
   const commitTimeout = Math.max(lim, 180000);
@@ -403,8 +404,8 @@ async function analyticsTableExportSend_(baseUrl, payload, timeoutMs) {
       total,
       'maxBodyEnc=',
       maxBodyEnc,
-      'sid=',
-      sid
+      'exSid=',
+      exSid
     );
   }
   try {
@@ -414,7 +415,7 @@ async function analyticsTableExportSend_(baseUrl, payload, timeoutMs) {
         console.info('[analyticsTableExport] staging put', si + 1, '/', total);
       }
       const rPut = await gasJsonpWithParams(baseUrl, 'analyticsExportStagingPut', {
-        sid: sid,
+        exSid: exSid,
         seq: String(si),
         total: String(total),
         body: chunks[si]
@@ -427,12 +428,12 @@ async function analyticsTableExportSend_(baseUrl, payload, timeoutMs) {
       }
     }
     if (typeof console !== 'undefined' && console.info) {
-      console.info('[analyticsTableExport] staging commit', sid);
+      console.info('[analyticsTableExport] staging commit', exSid);
     }
     return await gasJsonpWithParams(
       baseUrl,
       'analyticsTableExportFromStaging',
-      { sid: sid },
+      { exSid: exSid },
       commitTimeout
     );
   } catch (e) {
