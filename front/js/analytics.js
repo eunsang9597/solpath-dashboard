@@ -165,6 +165,31 @@ function kpiGoalTargetLabel_(gt) {
 }
 
 /**
+ * 통합 시트·JSONP 오류 시 힌트에 붙임(임베드 iframe은 부모 창 콘솔이 비어 보일 수 있음).
+ * @return {string}
+ */
+function solpathLastJsonpHintLine_() {
+  try {
+    var j = globalThis.__SOLPATH_LAST_JSONP__;
+    if (!j || !j.action) {
+      return ' [디버그] 개발자도구(F12) 상단에서 실행 컨텍스트를 대시보드 iframe으로 바꾼 뒤, 콘솔에 __SOLPATH_LAST_JSONP__ 를 입력해 보세요.';
+    }
+    var bits =
+      'action=' +
+      j.action +
+      ' urlChars=' +
+      (j.urlChars != null ? j.urlChars : '') +
+      (j.bodyEnc ? ' bodyEnc=' + j.bodyEnc : '') +
+      (j.sid != null ? ' sid=' + j.sid : '') +
+      (j.seq != null ? ' seq=' + j.seq + '/' + (j.total != null ? j.total : '') : '') +
+      (j.phase ? ' phase=' + j.phase : '');
+    return ' [디버그] ' + bits + ' · 전체 객체는 콘솔 __SOLPATH_LAST_JSONP__';
+  } catch (_e) {
+    return ' [디버그] 콘솔(iframe 선택)에서 __SOLPATH_LAST_JSONP__';
+  }
+}
+
+/**
  * GAS JSONP (쿼리 파라미터)
  * @param {string} baseUrl
  * @param {string} action
@@ -178,7 +203,15 @@ function gasJsonpWithParams(baseUrl, action, extraParams, timeoutMs) {
     const lim = timeoutMs != null ? timeoutMs : 120000;
     const t = window.setTimeout(function () {
       cleanup();
-      reject(new Error('timeout'));
+      try {
+        var ljT = globalThis.__SOLPATH_LAST_JSONP__;
+        if (ljT) {
+          ljT.phase = 'timeout';
+        }
+      } catch (_eT) {
+        /* ignore */
+      }
+      reject(new Error('timeout action=' + action + ' (see __SOLPATH_LAST_JSONP__)'));
     }, lim);
     const s = document.createElement('script');
     const g = globalThis;
@@ -195,6 +228,14 @@ function gasJsonpWithParams(baseUrl, action, extraParams, timeoutMs) {
     }
     g[cb] = function (/** @type {object} */ data) {
       cleanup();
+      try {
+        var ljOk = globalThis.__SOLPATH_LAST_JSONP__;
+        if (ljOk) {
+          ljOk.phase = 'responded';
+        }
+      } catch (_eOk) {
+        /* ignore */
+      }
       resolve(data);
     };
     let u;
@@ -213,11 +254,61 @@ function gasJsonpWithParams(baseUrl, action, extraParams, timeoutMs) {
         u.searchParams.set(k, extraParams[k]);
       });
     }
+    const urlStr = u.toString();
+    const urlChars = urlStr.length;
+    var bodyEncLen = 0;
+    if (extraParams && extraParams.body != null) {
+      bodyEncLen = encodeURIComponent(String(extraParams.body)).length;
+    }
+    var stagingBits = '';
+    if (extraParams && extraParams.sid != null) {
+      stagingBits =
+        ' sid=' +
+        String(extraParams.sid).slice(0, 24) +
+        ' seq=' +
+        String(extraParams.seq != null ? extraParams.seq : '') +
+        '/' +
+        String(extraParams.total != null ? extraParams.total : '');
+    }
+    try {
+      globalThis.__SOLPATH_LAST_JSONP__ = {
+        action: action,
+        urlChars: urlChars,
+        bodyEnc: bodyEncLen || undefined,
+        sid:
+          extraParams && extraParams.sid != null
+            ? String(extraParams.sid).slice(0, 24)
+            : undefined,
+        seq: extraParams && extraParams.seq != null ? extraParams.seq : undefined,
+        total: extraParams && extraParams.total != null ? extraParams.total : undefined,
+        phase: 'request',
+        t: Date.now()
+      };
+    } catch (_eDbg) {
+      /* ignore */
+    }
     s.async = true;
-    s.src = u.toString();
+    s.src = urlStr;
     s.onerror = function () {
       cleanup();
-      reject(new Error('script error'));
+      try {
+        var ljEr = globalThis.__SOLPATH_LAST_JSONP__;
+        if (ljEr) {
+          ljEr.phase = 'script_onerror';
+        }
+      } catch (_eEr) {
+        /* ignore */
+      }
+      reject(
+        new Error(
+          'script error action=' +
+            action +
+            ' urlChars=' +
+            urlChars +
+            (bodyEncLen ? ' bodyEnc=' + bodyEncLen : '') +
+            stagingBits
+        )
+      );
     };
     document.head.appendChild(s);
   });
@@ -282,10 +373,13 @@ async function analyticsTableExportSend_(baseUrl, payload, timeoutMs) {
   const safeEnc = 5200;
   const lim = timeoutMs != null ? timeoutMs : 120000;
   if (encLen + encOverhead <= safeEnc) {
+    if (typeof console !== 'undefined' && console.info) {
+      console.info('[analyticsTableExport] single request jsonEncLen=', encLen);
+    }
     return gasJsonpWithParams(baseUrl, 'analyticsTableExport', { payload: jsonStr }, lim);
   }
   /** 조각당 인코딩 길이 — 임베드·프록시에서도 안전하게(전체 URL ~2k 전후 유지 목표) */
-  const maxBodyEnc = 1100;
+  const maxBodyEnc = 750;
   const maxChunks = 2800;
   const chunks = chunkJsonStringForJsonpBody_(jsonStr, maxBodyEnc);
   if (chunks.length > maxChunks) {
@@ -301,9 +395,24 @@ async function analyticsTableExportSend_(baseUrl, payload, timeoutMs) {
   const total = chunks.length;
   const putTimeout = 90000;
   const commitTimeout = Math.max(lim, 180000);
+  if (typeof console !== 'undefined' && console.info) {
+    console.info(
+      '[analyticsTableExport] staging jsonEncLen=',
+      encLen,
+      'chunks=',
+      total,
+      'maxBodyEnc=',
+      maxBodyEnc,
+      'sid=',
+      sid
+    );
+  }
   try {
     let si;
     for (si = 0; si < chunks.length; si++) {
+      if (typeof console !== 'undefined' && console.info && (si === 0 || si === chunks.length - 1 || si % 50 === 0)) {
+        console.info('[analyticsTableExport] staging put', si + 1, '/', total);
+      }
       const rPut = await gasJsonpWithParams(baseUrl, 'analyticsExportStagingPut', {
         sid: sid,
         seq: String(si),
@@ -311,8 +420,14 @@ async function analyticsTableExportSend_(baseUrl, payload, timeoutMs) {
         body: chunks[si]
       }, putTimeout);
       if (!rPut || !rPut.ok) {
+        if (typeof console !== 'undefined' && console.error) {
+          console.error('[analyticsTableExport] staging put failed at seq', si, rPut);
+        }
         return rPut || { ok: false, error: { message: '스테이징에 실패했습니다.' } };
       }
+    }
+    if (typeof console !== 'undefined' && console.info) {
+      console.info('[analyticsTableExport] staging commit', sid);
     }
     return await gasJsonpWithParams(
       baseUrl,
@@ -321,6 +436,9 @@ async function analyticsTableExportSend_(baseUrl, payload, timeoutMs) {
       commitTimeout
     );
   } catch (e) {
+    if (typeof console !== 'undefined' && console.error) {
+      console.error('[analyticsTableExport] staging exception', e);
+    }
     return {
       ok: false,
       error: { message: e && e.message != null ? String(e.message) : String(e) }
@@ -956,7 +1074,7 @@ export function initAnalytics(mount) {
     try {
       const r = await analyticsTableExportSend_(url, payload, 120000);
       if (!r || !r.ok) {
-        setHint(errMsg_(r) || '시트 저장에 실패했습니다.', true);
+        setHint((errMsg_(r) || '시트 저장에 실패했습니다.') + solpathLastJsonpHintLine_(), true);
         return;
       }
       const d = (r.data && r.data) || {};
@@ -969,7 +1087,15 @@ export function initAnalytics(mount) {
         true
       );
     } catch (e) {
-      setHint('시트 저장 요청이 끝나지 않았습니다. 잠시 뒤 다시 시도해 주세요.', true);
+      const msg = e && e.message != null ? String(e.message) : String(e);
+      if (typeof console !== 'undefined' && console.error) {
+        console.error('[exportTableToDriveSheet]', e);
+      }
+      const short = msg.length > 320 ? msg.slice(0, 317) + '…' : msg;
+      setHint(
+        '시트 저장 중 오류: ' + short + ' (전체는 브라우저 개발자도구 콘솔)' + solpathLastJsonpHintLine_(),
+        true
+      );
     } finally {
       hideAnBusyOverlay_();
     }
@@ -1028,7 +1154,10 @@ export function initAnalytics(mount) {
     try {
       const r = await analyticsTableExportSend_(url, payload, 180000);
       if (!r || !r.ok) {
-        setHint(errMsg_(r) || '통합 시트 저장에 실패했습니다.', true);
+        setHint(
+          (errMsg_(r) || '통합 시트 저장에 실패했습니다.') + solpathLastJsonpHintLine_(),
+          true
+        );
         return;
       }
       const d = (r.data && r.data) || {};
@@ -1041,7 +1170,18 @@ export function initAnalytics(mount) {
         true
       );
     } catch (e) {
-      setHint('통합 시트 저장 요청이 끝나지 않았습니다. 잠시 뒤 다시 시도해 주세요.', true);
+      const msg = e && e.message != null ? String(e.message) : String(e);
+      if (typeof console !== 'undefined' && console.error) {
+        console.error('[exportAnalyticsBundleSheet]', e);
+      }
+      const short = msg.length > 320 ? msg.slice(0, 317) + '…' : msg;
+      setHint(
+        '통합 시트 저장 중 오류: ' +
+          short +
+          ' (전체는 브라우저 개발자도구 콘솔)' +
+          solpathLastJsonpHintLine_(),
+        true
+      );
     } finally {
       hideAnBusyOverlay_();
     }

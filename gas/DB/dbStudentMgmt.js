@@ -532,7 +532,8 @@ function dbStudentMgmtRebuildFromMaster_() {
       var nmGuest =
         ordererNameByMemberCode[code] != null ? String(ordererNameByMemberCode[code]).trim() : '';
       var nameGuest = nmGuest.length ? nmGuest + '(비회원)' : '';
-      outMem.push([code, '', nameGuest, '', '', '', nowIso, batchId]);
+      var groupTitlesGuest = JSON.stringify(['비회원']);
+      outMem.push([code, '', nameGuest, '', '', groupTitlesGuest, nowIso, batchId]);
     } else {
       outMem.push([
         code,
