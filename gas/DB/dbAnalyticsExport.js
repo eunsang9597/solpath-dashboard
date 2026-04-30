@@ -299,10 +299,10 @@ function dbAnalyticsExportStagingPut_(sid, seq, total, bodyFragment) {
   if (!sid.length || sid.length > 96) {
     return { ok: false, error: { code: 'BAD_REQUEST', message: 'sid가 올바르지 않습니다.' } };
   }
-  if (!isFinite(seq) || seq < 0 || seq >= 2000) {
+  if (!isFinite(seq) || seq < 0 || seq >= 4000) {
     return { ok: false, error: { code: 'BAD_REQUEST', message: 'seq 범위 오류' } };
   }
-  if (!isFinite(total) || total < 1 || total > 2000) {
+  if (!isFinite(total) || total < 1 || total > 4000) {
     return { ok: false, error: { code: 'BAD_REQUEST', message: 'total 범위 오류' } };
   }
   var frag = bodyFragment != null ? String(bodyFragment) : '';
@@ -330,7 +330,7 @@ function dbAnalyticsExportStagingCommit_(sid) {
   var metaKey = DB_ANALYTICS_EXPORT_STAGING_PREFIX + sid + '_meta';
   var totalStr = cache.get(metaKey);
   var total = parseInt(String(totalStr != null ? totalStr : ''), 10);
-  if (!isFinite(total) || total < 1 || total > 2000) {
+  if (!isFinite(total) || total < 1 || total > 4000) {
     return { ok: false, error: { code: 'BAD_STAGING', message: '스테이징이 없거나 만료되었습니다. 다시 내보내기를 눌러 주세요.' } };
   }
   var parts = [];

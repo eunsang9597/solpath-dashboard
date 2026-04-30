@@ -224,6 +224,50 @@ function gasJsonpWithParams(baseUrl, action, extraParams, timeoutMs) {
 }
 
 /**
+ * JSONP 한 요청에 실을 `body` 조각 — `encodeURIComponent` 길이 기준(프록시·GAS URL 한도).
+ * @param {string} s
+ * @param {number} maxEncLen
+ * @return {string[]}
+ */
+function chunkJsonStringForJsonpBody_(s, maxEncLen) {
+  const out = [];
+  let i = 0;
+  while (i < s.length) {
+    let lo = i + 1;
+    let hi = s.length;
+    let best = i + 1;
+    while (lo <= hi) {
+      const mid = Math.floor((lo + hi) / 2);
+      const end = Math.max(i + 1, mid);
+      const piece = s.slice(i, end);
+      if (encodeURIComponent(piece).length <= maxEncLen) {
+        best = end;
+        lo = mid + 1;
+      } else {
+        hi = mid - 1;
+      }
+    }
+    if (best <= i) {
+      best = i + 1;
+    }
+    while (
+      best > i &&
+      best <= s.length &&
+      s.charCodeAt(best - 1) >= 0xd800 &&
+      s.charCodeAt(best - 1) <= 0xdbff
+    ) {
+      best--;
+    }
+    if (best <= i) {
+      best = i + 1;
+    }
+    out.push(s.slice(i, best));
+    i = best;
+  }
+  return out;
+}
+
+/**
  * `analyticsTableExport` — JSONP는 GET만 가능해 payload가 길면 URL 한도로 실패한다.
  * 인코딩 길이가 임계값 이하면 1회 전송, 아니면 캐시 스테이징(조각 PUT → 커밋).
  * @param {string} baseUrl
@@ -240,25 +284,10 @@ async function analyticsTableExportSend_(baseUrl, payload, timeoutMs) {
   if (encLen + encOverhead <= safeEnc) {
     return gasJsonpWithParams(baseUrl, 'analyticsTableExport', { payload: jsonStr }, lim);
   }
-  const chunkUnits = 400;
-  const maxChunks = 900;
-  const chunks = [];
-  let ci = 0;
-  while (ci < jsonStr.length) {
-    let end = Math.min(ci + chunkUnits, jsonStr.length);
-    if (
-      end < jsonStr.length &&
-      jsonStr.charCodeAt(end - 1) >= 0xd800 &&
-      jsonStr.charCodeAt(end - 1) <= 0xdbff
-    ) {
-      end--;
-    }
-    if (end <= ci) {
-      end = ci + 1;
-    }
-    chunks.push(jsonStr.slice(ci, end));
-    ci = end;
-  }
+  /** 조각당 인코딩 길이 — 임베드·프록시에서도 안전하게(전체 URL ~2k 전후 유지 목표) */
+  const maxBodyEnc = 1100;
+  const maxChunks = 2800;
+  const chunks = chunkJsonStringForJsonpBody_(jsonStr, maxBodyEnc);
   if (chunks.length > maxChunks) {
     return {
       ok: false,
@@ -270,28 +299,19 @@ async function analyticsTableExportSend_(baseUrl, payload, timeoutMs) {
   }
   const sid = 'ex' + String(Date.now()) + '_' + String(Math.floor(Math.random() * 1e9));
   const total = chunks.length;
-  const BATCH = 6;
   const putTimeout = 90000;
   const commitTimeout = Math.max(lim, 180000);
   try {
-    for (let i = 0; i < chunks.length; i += BATCH) {
-      const slice = chunks.slice(i, i + BATCH);
-      const results = await Promise.all(
-        slice.map((body, j) =>
-          gasJsonpWithParams(baseUrl, 'analyticsExportStagingPut', {
-            sid: sid,
-            seq: String(i + j),
-            total: String(total),
-            body: body
-          }, putTimeout)
-        )
-      );
-      let rk;
-      for (rk = 0; rk < results.length; rk++) {
-        const r = results[rk];
-        if (!r || !r.ok) {
-          return r || { ok: false, error: { message: '스테이징에 실패했습니다.' } };
-        }
+    let si;
+    for (si = 0; si < chunks.length; si++) {
+      const rPut = await gasJsonpWithParams(baseUrl, 'analyticsExportStagingPut', {
+        sid: sid,
+        seq: String(si),
+        total: String(total),
+        body: chunks[si]
+      }, putTimeout);
+      if (!rPut || !rPut.ok) {
+        return rPut || { ok: false, error: { message: '스테이징에 실패했습니다.' } };
       }
     }
     return await gasJsonpWithParams(
