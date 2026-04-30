@@ -356,6 +356,8 @@ function dbStudentMgmtRebuildFromMaster_() {
   var orderMap = {};
   var orderToMember = {};
   var ordererNameMap = {};
+  /** 회원 코드별 주문자 표시 이름 — `members`에 없는 비회원·게스트 마스터 `name` 보강용 (같은 코드 여러 주문이면 마지막 값) */
+  var ordererNameByMemberCode = {};
   if (shO && shO.getLastRow() >= 2) {
     var oLr = shO.getLastRow();
     var ov = shO.getRange(2, 1, oLr - 1, 5).getValues();
@@ -365,8 +367,12 @@ function dbStudentMgmtRebuildFromMaster_() {
       var on0 = String(ol[0] != null ? ol[0] : '').trim();
       if (on0) {
         orderMap[on0] = ol[1];
-        orderToMember[on0] = String(ol[2] != null ? ol[2] : '').trim();
+        var mcOrd = String(ol[2] != null ? ol[2] : '').trim();
+        orderToMember[on0] = mcOrd;
         ordererNameMap[on0] = ol[3];
+        if (mcOrd.length && ol[3] != null && String(ol[3]).trim().length) {
+          ordererNameByMemberCode[mcOrd] = String(ol[3]).trim();
+        }
       }
     }
   }
@@ -523,7 +529,10 @@ function dbStudentMgmtRebuildFromMaster_() {
     var code = mcList[mi];
     var mr = memberRowByCode[code];
     if (!mr) {
-      outMem.push([code, '', '', '', '', '', nowIso, batchId]);
+      var nmGuest =
+        ordererNameByMemberCode[code] != null ? String(ordererNameByMemberCode[code]).trim() : '';
+      var nameGuest = nmGuest.length ? nmGuest + '(비회원)' : '';
+      outMem.push([code, '', nameGuest, '', '', '', nowIso, batchId]);
     } else {
       outMem.push([
         code,
