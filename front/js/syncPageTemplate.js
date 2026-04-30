@@ -15,7 +15,7 @@ export const SYNC_PAGE_SHELL_HTML = `<div class="app-shell app-shell--v9">
             type="button"
             class="btn btn--secondary"
             id="sp-btnManualSync"
-            title="원천 DB → 운영 DB(누락만 추가) → 집계 DB(02 재구축) 순서로 최신화합니다. (없으면 생성하지 않습니다)"
+            title="원천 DB → 운영 DB(누락만 추가) → 집계 DB(02 재구축) → 수강생 DB 순서로 최신화합니다. (없으면 생성하지 않습니다)"
           >수동 동기화</button>
         </div>
         <div class="sp-intro-wrap">
@@ -50,6 +50,13 @@ export const SYNC_PAGE_SHELL_HTML = `<div class="app-shell app-shell--v9">
               <li><strong>데이터 초기화</strong>는 <strong>품목 분류 시트</strong>에 적어 둔 것을 비우고, <strong>동기화</strong>에 올라와 있는 <strong>상품 목록</strong>을 기준으로 <strong>처음부터</strong> 다시 채웁니다. 팀에 공지한 뒤에만(돌이킬 수 없습니다).</li>
               <li><strong>상태</strong>를 <strong>테스트</strong>로 둔 품목은, 위쪽 상품군 박스가 아니라 <strong>아래 붉은「상태·시험용」</strong> 구역에만 모여 보입니다(같은 품목이 두 번 나오지 않게 한 규칙입니다).</li>
               <li><strong>상품군 미정만</strong>을 켜면 <strong>아직 상품군을 고르지 않은</strong> 품목만 볼 수 있습니다. 검색은 <strong>상품 이름·상품 번호</strong>에 맞습니다.</li>
+            </ul>
+          </div>
+          <div class="sp-intro-card sp-intro-card--stu" id="sp-introStu" hidden aria-hidden="true">
+            <p class="sp-intro-title">수강생 관리 · 사용 안내</p>
+            <ul class="sp-intro-list">
+              <li><strong>데이터 초기화</strong>는 팀 드라이브에 <strong>솔루션편입_수강생_마스터</strong> 파일을 만들고 시트 헤더를 맞춘 뒤, 원천 주문으로 <strong>한 번 채웁니다</strong>. 처음 한 번 필요합니다.</li>
+              <li><strong>구글 드라이브에서 보기</strong>로 같은 파일을 엽니다. 상단 <strong>수동 동기화</strong>를 끝까지 실행하면 집계 다음에 <strong>수강생 DB가 자동으로 갱신</strong>됩니다(수강생 파일이 없으면 그 단계에서 안내합니다).</li>
             </ul>
           </div>
         </div>
@@ -93,6 +100,15 @@ export const SYNC_PAGE_SHELL_HTML = `<div class="app-shell app-shell--v9">
             aria-controls="sp-panel-pm"
             tabindex="-1"
           >상품 항목 분류</button>
+          <button
+            type="button"
+            class="sp-tabs__btn"
+            id="sp-tab-stu"
+            role="tab"
+            aria-selected="false"
+            aria-controls="sp-panel-stu"
+            tabindex="-1"
+          >수강생 관리</button>
         </nav>
 
         <main class="app-main sp-app-main" id="sp-main">
@@ -437,6 +453,54 @@ export const SYNC_PAGE_SHELL_HTML = `<div class="app-shell app-shell--v9">
               <div class="sp-pm__loading" id="sp-pm-listLoading" hidden role="status" aria-live="polite">데이터를 불러오는 중…</div>
               <div class="sp-pm-sections" id="sp-pm-sections" hidden></div>
               <p class="actions-note sp-pm__footer-note" id="sp-pm-footerNote" hidden>편집한 뒤 <strong>수정하기</strong>로 <strong>구글 드라이브</strong>에 반영합니다. 드롭다운을 바꾸면 <strong>수정하기</strong>가 켜집니다.</p>
+            </div>
+          </div>
+        </section>
+
+        <section
+          class="sp-tab-panel"
+          id="sp-panel-stu"
+          role="tabpanel"
+          aria-labelledby="sp-tab-stu"
+          hidden
+        >
+          <div class="sp-overlay" id="sp-stu-overlay" hidden aria-hidden="true">
+            <div class="sp-overlay-box">
+              <div class="sp-spinner" role="status" aria-label="처리 중"></div>
+              <p class="sp-overlay-text" id="sp-stu-overlay-title">처리 중</p>
+              <p class="sp-overlay-sub" id="sp-stu-overlay-desc">잠시만 기다려 주세요.</p>
+            </div>
+          </div>
+          <div class="panel panel--hero">
+            <div class="panel__head sp-sync-head">
+              <div class="sp-panel-eyebrow" id="sp-stu-eyebrow" role="heading" aria-level="2">수강생 관리</div>
+              <div class="sp-sync-head__right">
+                <button
+                  type="button"
+                  class="btn btn--danger sp-sync-head__link"
+                  id="sp-stu-btnInit"
+                  title="드라이브에 수강생 DB 파일을 만들거나 연결한 뒤, 원천 주문으로 시트를 채웁니다."
+                >데이터 초기화</button>
+                <a
+                  class="btn btn--secondary sp-sync-head__link"
+                  id="sp-stu-linkDrive"
+                  href="#"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  hidden
+                >구글 드라이브에서 보기</a>
+              </div>
+            </div>
+            <div class="sp-confirm-block">
+              <p class="sp-confirm-instruct" id="sp-stu-lede">
+                수강생 전용 스프레드시트에서 회원·주문 이벤트를 봅니다. <strong>데이터 초기화</strong>는 처음 한 번 필요합니다.
+                상단 <strong>수동 동기화</strong>를 끝까지 실행하면 집계 다음에 이 DB도 갱신됩니다.
+              </p>
+              <div class="sp-confirm-row">
+                <button type="button" class="btn btn--secondary" id="sp-stu-btnRefresh">상태 새로고침</button>
+              </div>
+              <p class="sp-pm__hint" id="sp-stu-hint" hidden></p>
+              <p class="actions-note" id="sp-stu-status" role="status" aria-live="polite"></p>
             </div>
           </div>
         </section>

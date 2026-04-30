@@ -282,3 +282,77 @@ function dbGetOrCreateChildFolderByName_(parentFolderId, name) {
     return '';
   }
 }
+
+/** JSONP GET URL 길이 한도 대비 — 조각 저장 후 커밋 */
+var DB_ANALYTICS_EXPORT_STAGING_PREFIX = 'anexst_';
+var DB_ANALYTICS_EXPORT_STAGING_TTL_SEC = 600;
+
+/**
+ * @param {string} sid
+ * @param {number} seq
+ * @param {number} total
+ * @param {string} bodyFragment
+ * @return {{ ok: true, data: { seq: number } }|{ ok: false, error: { code: string, message: string } }}
+ */
+function dbAnalyticsExportStagingPut_(sid, seq, total, bodyFragment) {
+  sid = sid != null ? String(sid).trim() : '';
+  if (!sid.length || sid.length > 96) {
+    return { ok: false, error: { code: 'BAD_REQUEST', message: 'sid가 올바르지 않습니다.' } };
+  }
+  if (!isFinite(seq) || seq < 0 || seq >= 2000) {
+    return { ok: false, error: { code: 'BAD_REQUEST', message: 'seq 범위 오류' } };
+  }
+  if (!isFinite(total) || total < 1 || total > 2000) {
+    return { ok: false, error: { code: 'BAD_REQUEST', message: 'total 범위 오류' } };
+  }
+  var frag = bodyFragment != null ? String(bodyFragment) : '';
+  if (frag.length > 95000) {
+    return { ok: false, error: { code: 'BAD_REQUEST', message: '조각이 너무 깁니다.' } };
+  }
+  var cache = CacheService.getScriptCache();
+  var key = DB_ANALYTICS_EXPORT_STAGING_PREFIX + sid + '_' + seq;
+  cache.put(key, frag, DB_ANALYTICS_EXPORT_STAGING_TTL_SEC);
+  var metaKey = DB_ANALYTICS_EXPORT_STAGING_PREFIX + sid + '_meta';
+  cache.put(metaKey, String(total), DB_ANALYTICS_EXPORT_STAGING_TTL_SEC);
+  return { ok: true, data: { seq: seq } };
+}
+
+/**
+ * @param {string} sid
+ * @return {{ ok: true, data: Object }|{ ok: false, error: { code: string, message: string } }}
+ */
+function dbAnalyticsExportStagingCommit_(sid) {
+  sid = sid != null ? String(sid).trim() : '';
+  if (!sid.length) {
+    return { ok: false, error: { code: 'BAD_REQUEST', message: 'sid가 필요합니다.' } };
+  }
+  var cache = CacheService.getScriptCache();
+  var metaKey = DB_ANALYTICS_EXPORT_STAGING_PREFIX + sid + '_meta';
+  var totalStr = cache.get(metaKey);
+  var total = parseInt(String(totalStr != null ? totalStr : ''), 10);
+  if (!isFinite(total) || total < 1 || total > 2000) {
+    return { ok: false, error: { code: 'BAD_STAGING', message: '스테이징이 없거나 만료되었습니다. 다시 내보내기를 눌러 주세요.' } };
+  }
+  var parts = [];
+  var i;
+  for (i = 0; i < total; i++) {
+    var k = DB_ANALYTICS_EXPORT_STAGING_PREFIX + sid + '_' + i;
+    var part = cache.get(k);
+    if (part == null) {
+      return { ok: false, error: { code: 'BAD_STAGING', message: '일부 조각이 없습니다: ' + i } };
+    }
+    parts.push(part);
+  }
+  var jsonStr = parts.join('');
+  var payload;
+  try {
+    payload = JSON.parse(jsonStr);
+  } catch (e0) {
+    return { ok: false, error: { code: 'BAD_STAGING', message: '조합 JSON 파싱 실패' } };
+  }
+  cache.remove(metaKey);
+  for (i = 0; i < total; i++) {
+    cache.remove(DB_ANALYTICS_EXPORT_STAGING_PREFIX + sid + '_' + i);
+  }
+  return dbAnalyticsExportTableToSheet_(payload);
+}

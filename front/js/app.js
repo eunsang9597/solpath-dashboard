@@ -2,6 +2,11 @@ import { GAS_MODE, GAS_BASE_URL } from './config.js';
 import { SYNC_PAGE_SHELL_HTML } from './syncPageTemplate.js';
 import { applyProductMappingHeaderUrls, initProductMapping } from './productMapping.js';
 import { initAnalytics } from './analytics.js';
+import {
+  applyStudentMgmtStateFromData,
+  initStudentMgmt,
+  studentMgmtOnTabActivate
+} from './studentMgmt.js';
 
 const MOUNT_ID = 'solpath-root';
 const syncAction = 'syncOpenFull';
@@ -114,16 +119,19 @@ function wireTabs_() {
   const tSync = mount.querySelector('#sp-tab-sync');
   const tPm = mount.querySelector('#sp-tab-pm');
   const tAn = mount.querySelector('#sp-tab-an');
+  const tStu = mount.querySelector('#sp-tab-stu');
   const pHome = mount.querySelector('#sp-panel-home');
   const pSync = mount.querySelector('#sp-panel-sync');
   const pPm = mount.querySelector('#sp-panel-pm');
   const pAn = mount.querySelector('#sp-panel-an');
-  if (!tHome || !tSync || !tPm || !tAn || !pHome || !pSync || !pPm || !pAn) {
+  const pStu = mount.querySelector('#sp-panel-stu');
+  if (!tHome || !tSync || !tPm || !tAn || !tStu || !pHome || !pSync || !pPm || !pAn || !pStu) {
     return;
   }
   const introSync = /** @type {HTMLElement | null} */ (mount.querySelector('#sp-introSync'));
   const introPm = /** @type {HTMLElement | null} */ (mount.querySelector('#sp-introPm'));
   const introAn = /** @type {HTMLElement | null} */ (mount.querySelector('#sp-introAn'));
+  const introStu = /** @type {HTMLElement | null} */ (mount.querySelector('#sp-introStu'));
   function hideIntroAll_() {
     if (introSync) {
       introSync.setAttribute('hidden', '');
@@ -136,6 +144,10 @@ function wireTabs_() {
     if (introAn) {
       introAn.setAttribute('hidden', '');
       introAn.setAttribute('aria-hidden', 'true');
+    }
+    if (introStu) {
+      introStu.setAttribute('hidden', '');
+      introStu.setAttribute('aria-hidden', 'true');
     }
   }
   function setIntroTab_(which) {
@@ -151,6 +163,9 @@ function wireTabs_() {
     } else if (which === 'sync' && introSync) {
       introSync.removeAttribute('hidden');
       introSync.setAttribute('aria-hidden', 'false');
+    } else if (which === 'stu' && introStu) {
+      introStu.removeAttribute('hidden');
+      introStu.setAttribute('aria-hidden', 'false');
     }
   }
   function deactivateAllTabs_() {
@@ -166,6 +181,9 @@ function wireTabs_() {
     tAn.classList.remove('is-active');
     tAn.setAttribute('aria-selected', 'false');
     tAn.tabIndex = -1;
+    tStu.classList.remove('is-active');
+    tStu.setAttribute('aria-selected', 'false');
+    tStu.tabIndex = -1;
     pHome.classList.remove('is-active');
     pHome.setAttribute('hidden', '');
     pSync.classList.remove('is-active');
@@ -174,6 +192,8 @@ function wireTabs_() {
     pPm.setAttribute('hidden', '');
     pAn.classList.remove('is-active');
     pAn.setAttribute('hidden', '');
+    pStu.classList.remove('is-active');
+    pStu.setAttribute('hidden', '');
   }
   function activateHome() {
     deactivateAllTabs_();
@@ -211,10 +231,21 @@ function wireTabs_() {
     pAn.removeAttribute('hidden');
     setIntroTab_('an');
   }
+  function activateStu() {
+    deactivateAllTabs_();
+    tStu.classList.add('is-active');
+    tStu.setAttribute('aria-selected', 'true');
+    tStu.tabIndex = 0;
+    pStu.classList.add('is-active');
+    pStu.removeAttribute('hidden');
+    setIntroTab_('stu');
+    studentMgmtOnTabActivate(mount);
+  }
   tHome.addEventListener('click', activateHome);
   tSync.addEventListener('click', activateSync);
   tPm.addEventListener('click', activatePm);
   tAn.addEventListener('click', activateAn);
+  tStu.addEventListener('click', activateStu);
   activateHome();
 }
 
@@ -492,7 +523,7 @@ async function postManualSync_() {
     return;
   }
   const ok = window.confirm(
-    '원천 DB → 운영 DB(누락만 추가) → 집계 DB(02 재구축) 순서로 최신화합니다.\n\n' +
+    '원천 DB → 운영 DB(누락만 추가) → 집계 DB(02 재구축) → 수강생 DB 순서로 최신화합니다.\n\n' +
       '없으면 새로 만들지 않으며, 중간에 실패하면 그 단계에서 멈춥니다.\n진행할까요?'
   );
   if (!ok) {
@@ -534,10 +565,25 @@ async function postManualSync_() {
       setHint(r3 && (r3.message || (r3.error && r3.error.message) || r3.error) ? String(r3.message || (r3.error && r3.error.message) || r3.error) : '');
       return;
     }
+    setStatus('수강생 DB 동기화 중…');
+    const r4 = await gasJsonp_(url, 'studentMgmtRebuildFromMaster', 360000);
+    console.log('[manualSync] studentMgmtRebuildFromMaster response:', r4);
+    if (!r4 || !r4.ok) {
+      console.error('[manualSync] studentMgmtRebuildFromMaster failed:', r4);
+      setChip('실패', 'err');
+      setStatus('수강생 DB 갱신을 완료하지 못했습니다.');
+      setHint(
+        r4 && (r4.message || (r4.error && r4.error.message) || r4.error)
+          ? String(r4.message || (r4.error && r4.error.message) || r4.error)
+          : ''
+      );
+      return;
+    }
     setChip('완료', 'ok');
     const c1 = r1 && r1.data ? r1.data : {};
     const c2 = r2 && r2.data ? r2.data : {};
     const c3 = r3 && r3.data ? r3.data : {};
+    const c4 = r4 && r4.data ? r4.data : {};
     setStatus(
       '수동 동기화를 완료했습니다. (원천: 회원 ' +
         (c1.membersRows != null ? c1.membersRows : '—') +
@@ -551,6 +597,10 @@ async function postManualSync_() {
         (c2.inserted != null ? c2.inserted : '—') +
         ') (집계02: 기록 ' +
         (c3.written != null ? c3.written : '—') +
+        ') (수강생: 회원 ' +
+        (c4.writtenMembers != null ? c4.writtenMembers : '—') +
+        ' · 이벤트 ' +
+        (c4.writtenEvents != null ? c4.writtenEvents : '—') +
         ')'
     );
     setHint('');
@@ -618,6 +668,7 @@ async function main() {
   }
   wireTabs_();
   initProductMapping(mount);
+  initStudentMgmt(mount);
   const anApi = initAnalytics(mount);
   hideSheetsButton();
   setSyncAggregateHeadLink('');
@@ -642,6 +693,7 @@ async function main() {
       setSyncAggregateHeadLink(mu);
       if (mount) {
         applyProductMappingHeaderUrls(mount, d);
+        applyStudentMgmtStateFromData(mount, d);
         if (anApi && typeof anApi.applyStateFromData === 'function') {
           anApi.applyStateFromData(d);
         }

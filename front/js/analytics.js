@@ -224,6 +224,91 @@ function gasJsonpWithParams(baseUrl, action, extraParams, timeoutMs) {
 }
 
 /**
+ * `analyticsTableExport` — JSONP는 GET만 가능해 payload가 길면 URL 한도로 실패한다.
+ * 인코딩 길이가 임계값 이하면 1회 전송, 아니면 캐시 스테이징(조각 PUT → 커밋).
+ * @param {string} baseUrl
+ * @param {Object} payload
+ * @param {number} [timeoutMs]
+ * @returns {Promise<Object>}
+ */
+async function analyticsTableExportSend_(baseUrl, payload, timeoutMs) {
+  const jsonStr = JSON.stringify(payload);
+  const encOverhead = 380;
+  const encLen = encodeURIComponent(jsonStr).length;
+  const safeEnc = 5200;
+  const lim = timeoutMs != null ? timeoutMs : 120000;
+  if (encLen + encOverhead <= safeEnc) {
+    return gasJsonpWithParams(baseUrl, 'analyticsTableExport', { payload: jsonStr }, lim);
+  }
+  const chunkUnits = 400;
+  const maxChunks = 900;
+  const chunks = [];
+  let ci = 0;
+  while (ci < jsonStr.length) {
+    let end = Math.min(ci + chunkUnits, jsonStr.length);
+    if (
+      end < jsonStr.length &&
+      jsonStr.charCodeAt(end - 1) >= 0xd800 &&
+      jsonStr.charCodeAt(end - 1) <= 0xdbff
+    ) {
+      end--;
+    }
+    if (end <= ci) {
+      end = ci + 1;
+    }
+    chunks.push(jsonStr.slice(ci, end));
+    ci = end;
+  }
+  if (chunks.length > maxChunks) {
+    return {
+      ok: false,
+      error: {
+        code: 'PAYLOAD_TOO_LARGE',
+        message: '표가 너무 커서 내보낼 수 없습니다. 기간·범위를 줄여 주세요.'
+      }
+    };
+  }
+  const sid = 'ex' + String(Date.now()) + '_' + String(Math.floor(Math.random() * 1e9));
+  const total = chunks.length;
+  const BATCH = 6;
+  const putTimeout = 90000;
+  const commitTimeout = Math.max(lim, 180000);
+  try {
+    for (let i = 0; i < chunks.length; i += BATCH) {
+      const slice = chunks.slice(i, i + BATCH);
+      const results = await Promise.all(
+        slice.map((body, j) =>
+          gasJsonpWithParams(baseUrl, 'analyticsExportStagingPut', {
+            sid: sid,
+            seq: String(i + j),
+            total: String(total),
+            body: body
+          }, putTimeout)
+        )
+      );
+      let rk;
+      for (rk = 0; rk < results.length; rk++) {
+        const r = results[rk];
+        if (!r || !r.ok) {
+          return r || { ok: false, error: { message: '스테이징에 실패했습니다.' } };
+        }
+      }
+    }
+    return await gasJsonpWithParams(
+      baseUrl,
+      'analyticsTableExportFromStaging',
+      { sid: sid },
+      commitTimeout
+    );
+  } catch (e) {
+    return {
+      ok: false,
+      error: { message: e && e.message != null ? String(e.message) : String(e) }
+    };
+  }
+}
+
+/**
  * @param {string} baseUrl
  * @param {Object[]} rows
  * @param {number} maxEncLen
@@ -849,12 +934,7 @@ export function initAnalytics(mount) {
     }
     showAnBusyOverlay_('시트 저장 중', '표 데이터를 구글 시트로 저장합니다. 잠시만 기다려 주세요.');
     try {
-      const r = await gasJsonpWithParams(
-        url,
-        'analyticsTableExport',
-        { payload: JSON.stringify(payload) },
-        120000
-      );
+      const r = await analyticsTableExportSend_(url, payload, 120000);
       if (!r || !r.ok) {
         setHint(errMsg_(r) || '시트 저장에 실패했습니다.', true);
         return;
@@ -926,7 +1006,7 @@ export function initAnalytics(mount) {
     }
     showAnBusyOverlay_('시트 저장 중', '요약·일별 순매출·구매 건수 표를 한 파일로 저장합니다.');
     try {
-      const r = await gasJsonpWithParams(url, 'analyticsTableExport', { payload: JSON.stringify(payload) }, 120000);
+      const r = await analyticsTableExportSend_(url, payload, 180000);
       if (!r || !r.ok) {
         setHint(errMsg_(r) || '통합 시트 저장에 실패했습니다.', true);
         return;

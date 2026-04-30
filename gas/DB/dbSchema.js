@@ -67,6 +67,51 @@ var DB_PRODUCT_MAPPING_HEADERS = [
  */
 var DB_PROP_SHEETS_ANALYTICS_ID = 'SHEETS_ANALYTICS_ID';
 
+/**
+ * 수강생 관리 전용 스프레드시트. Script Property: `SHEETS_STUDENT_ID`
+ * (문서: `docs/SCHEMA_STUDENT_MANAGEMENT.md`)
+ */
+var DB_PROP_SHEETS_STUDENT_ID = 'SHEETS_STUDENT_ID';
+var DB_STUDENT_SPREADSHEET_TITLE = '솔루션편입_수강생_마스터';
+var DB_SHEET_STUDENT_MEMBER_MASTER = 'student_member_master';
+var DB_SHEET_STUDENT_ORDER_EVENTS = 'student_member_order_events';
+
+/** @type {string[]} */
+var DB_STUDENT_MEMBER_HEADERS = [
+  'member_code',
+  'uid',
+  'name',
+  'callnum',
+  'last_login_time',
+  'group_titles',
+  'fetched_at',
+  'source_sync_id'
+];
+
+/** @type {string[]} — 원천 order_items 에서 가격·order_section_item_no 제외 + 조인·기간 열 */
+var DB_STUDENT_ORDER_EVENT_HEADERS = [
+  'order_item_code',
+  'order_no',
+  'member_code',
+  'order_time',
+  'internal_category',
+  'lifecycle',
+  'product_start_date',
+  'product_end_date',
+  'order_status',
+  'section_status',
+  'claim_status',
+  'claim_type',
+  'claim_event_time',
+  'prod_no',
+  'prod_name',
+  'options_raw',
+  'options_count',
+  'row_json',
+  'fetched_at',
+  'source_sync_id'
+];
+
 /** 연·월 목표 — `goal_target` = `entire` | `solpass` | `challenge` | `solutine` (빈칸 금지) */
 var DB_SHEET_ANALYTICS_GOALS = '01_연월_목표';
 /** 마스터 `order_items` 1:1 + 실결제·스냅샷(종료일은 운영 product_mapping.sales_end) */

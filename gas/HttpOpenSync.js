@@ -108,7 +108,11 @@ function openSyncAllowedActions_() {
     'analyticsMasterActualsGet',
     'analyticsFactRebuild',
     'analyticsFactRowsGet',
-    'analyticsFactReport'
+    'analyticsFactReport',
+    'initStudentMgmtSheets',
+    'studentMgmtRebuildFromMaster',
+    'analyticsExportStagingPut',
+    'analyticsTableExportFromStaging'
   ];
 }
 
@@ -120,7 +124,7 @@ function openSyncAllowedActions_() {
 function openSyncRouteAction_(action, e) {
   e = e || { parameter: {} };
   if (action === 'ping') {
-    return { ok: true, data: { name: 'openSync', version: 11, actions: openSyncAllowedActions_() } };
+    return { ok: true, data: { name: 'openSync', version: 13, actions: openSyncAllowedActions_() } };
   }
   if (action === 'syncOpenFull') {
     try {
@@ -225,6 +229,19 @@ function openSyncRouteAction_(action, e) {
     }
     return dbAnalyticsExportTableToSheet_(pEx);
   }
+  if (action === 'analyticsExportStagingPut') {
+    var pSt = e.parameter || {};
+    var sid0 = pSt.sid != null ? String(pSt.sid).trim() : '';
+    var seq0 = parseInt(String(pSt.seq != null ? pSt.seq : ''), 10);
+    var tot0 = parseInt(String(pSt.total != null ? pSt.total : ''), 10);
+    var bod0 = pSt.body != null ? String(pSt.body) : '';
+    return dbAnalyticsExportStagingPut_(sid0, seq0, tot0, bod0);
+  }
+  if (action === 'analyticsTableExportFromStaging') {
+    var pSc = e.parameter || {};
+    var sid1 = pSc.sid != null ? String(pSc.sid).trim() : '';
+    return dbAnalyticsExportStagingCommit_(sid1);
+  }
   if (action === 'analyticsResetAll') {
     return dbAnalyticsResetAll_();
   }
@@ -281,6 +298,24 @@ function openSyncRouteAction_(action, e) {
       mRp = nowP.getMonth() + 1;
     }
     return { ok: true, data: dbAnalyticsFactReportComputed_(yRp, mRp) };
+  }
+  if (action === 'initStudentMgmtSheets') {
+    var rStu = dbInitStudentMgmtSheets_();
+    if (rStu && rStu.error) {
+      return { ok: false, error: { code: rStu.error.code, message: rStu.error.message } };
+    }
+    return {
+      ok: true,
+      data: {
+        studentSpreadsheetId: rStu.id,
+        studentSpreadsheetUrl: rStu.url,
+        alreadyConfigured: rStu.already,
+        createdNew: rStu.createdNew
+      }
+    };
+  }
+  if (action === 'studentMgmtRebuildFromMaster') {
+    return dbStudentMgmtRebuildFromMaster_();
   }
   return { ok: false, error: 'UNKNOWN_ACTION', allowed: openSyncAllowedActions_() };
 }

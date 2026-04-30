@@ -78,6 +78,12 @@ function dbMergeAnalyticsIntoPmData_(data) {
   data.analyticsKpiSheetName = a.analyticsKpiSheetName != null ? a.analyticsKpiSheetName : DB_SHEET_ANALYTICS_GOALS;
   data.analyticsFactSheetName = a.analyticsFactSheetName != null ? a.analyticsFactSheetName : DB_SHEET_ANALYTICS_ORDER_LINES;
   data.analyticsOrderLinesSheetName = a.analyticsOrderLinesSheetName != null ? a.analyticsOrderLinesSheetName : DB_SHEET_ANALYTICS_ORDER_LINES;
+  var stu = dbStudentStateFields_();
+  data.studentMgmtReady = stu.studentMgmtReady;
+  data.studentMgmtReason = stu.studentMgmtReason != null ? stu.studentMgmtReason : '';
+  data.studentMgmtSpreadsheetUrl = stu.studentMgmtSpreadsheetUrl != null ? stu.studentMgmtSpreadsheetUrl : '';
+  data.studentMemberRowCount = stu.studentMemberRowCount != null ? stu.studentMemberRowCount : 0;
+  data.studentEventRowCount = stu.studentEventRowCount != null ? stu.studentEventRowCount : 0;
   return data;
 }
 
