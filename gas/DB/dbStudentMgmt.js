@@ -1198,9 +1198,43 @@ function dbStudentMgmtDailyPeopleReport_(payload) {
   var eIdx = dbStuHeaderIndexMap_(shE, DB_STUDENT_ORDER_EVENT_HEADERS);
   var eVals = shE.getRange(2, 1, shE.getLastRow() - 1, wE).getValues();
 
+  /** prodKey별 이벤트 중 가장 이른 수강 시작일 — 보고일보다 늦게만 시작하는 상품은 표에 올리지 않음 */
+  var minStartByProdKey = {};
+  var i;
+  for (i = 0; i < eVals.length; i++) {
+    var rMin = eVals[i] || [];
+    var mcMin = String(rMin[eIdx.member_code] != null ? rMin[eIdx.member_code] : '').trim();
+    if (!mcMin.length) {
+      continue;
+    }
+    var catMin = String(rMin[eIdx.internal_category] != null ? rMin[eIdx.internal_category] : '').trim().toLowerCase();
+    if (!catMin.length || catMin === 'unmapped' || catMin === 'textbook' || catMin === 'jasoseo') {
+      continue;
+    }
+    if (dbStuOrderEventRowExcludedForDailyAttendance_(rMin, eIdx)) {
+      continue;
+    }
+    var pkeyMin = dbPmRowKey_(rMin[eIdx.prod_no]);
+    var pmMin = pkeyMin && pmMap[pkeyMin] ? pmMap[pkeyMin] : null;
+    if (!pmMin || !dbStuPmEligibleForDailyReportYmd_(pmMin, ymd)) {
+      continue;
+    }
+    var prodNameMin = String(pmMin.product_name != null ? pmMin.product_name : '').trim();
+    var prodKeyMin = dbStuNormalizeProdNameKey_(prodNameMin);
+    if (!prodKeyMin.length || !byProd[prodKeyMin]) {
+      continue;
+    }
+    var startYmdMin = dbStuNormalizeYmd_(rMin[eIdx.product_start_date] != null ? String(rMin[eIdx.product_start_date]) : '');
+    if (!startYmdMin.length) {
+      continue;
+    }
+    if (!minStartByProdKey[prodKeyMin] || startYmdMin < minStartByProdKey[prodKeyMin]) {
+      minStartByProdKey[prodKeyMin] = startYmdMin;
+    }
+  }
+
   /** (prodKey, member)별로 오늘 기준 활성인 이벤트 중 "가장 최신 시작일"만 남김 — prod_no→product_mapping으로만 집계 */
   var bestByMemberProd = {};
-  var i;
   for (i = 0; i < eVals.length; i++) {
     var r = eVals[i] || [];
     var mc = String(r[eIdx.member_code] != null ? r[eIdx.member_code] : '').trim();
@@ -1289,6 +1323,11 @@ function dbStudentMgmtDailyPeopleReport_(payload) {
   var tot = { total: 0, 신규: 0, 재등록: 0, 다시옴: 0 };
   for (i = 0; i < prodKeys.length; i++) {
     var pr = byProd[prodKeys[i]];
+    var ms0 = minStartByProdKey[pr.prodKey];
+    /** 이벤트가 없거나, 전 코호트 시작이 보고일보다 늦으면 행 제외 */
+    if (!ms0 || ms0 > ymd) {
+      continue;
+    }
     outRows.push({
       prodKey: pr.prodKey,
       prodName: pr.prodName,
