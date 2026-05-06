@@ -976,15 +976,16 @@ function dbStuApplyEnrollStatus_(rows, idx) {
 
 /**
  * 멤버 자동 상태(today 기준)
- * - 최신 수강 완료일(가장 늦은 종료일) +14일 < today: 이탈
- * - 수강 완료일 다음 날 ~ 완료+14일(이탈 기준일)까지: 주의 필요
- * - 그 외(완료일 당일까지): 수강중
+ * - 기준일(baseYmd): `rereg_reminder_date`(운영 재등록 기준일) 우선, 없으면 `product_end_date`, 그것도 없으면 `product_start_date`
+ * - baseYmd +14일 < today: 이탈
+ * - baseYmd 다음 날 ~ baseYmd+14일까지: 주의 필요
+ * - 그 외(baseYmd 당일까지): 수강중
  * @param {Array<Array<*>>} rows
- * @param {{ memberCode: number, category: number, end: number, start: number }} idx
+ * @param {{ memberCode: number, category: number, end: number, start: number, reregReminder: number }} idx
  * @return {Object<string, { statusAuto: string, lastEndYmd: string }>}
  */
 function dbStuBuildMemberStatusAutoMap_(rows, idx) {
-  var latestEndByMember = {};
+  var baseYmdByMember = {};
   var i;
   for (i = 0; i < rows.length; i++) {
     var r = rows[i] || [];
@@ -993,25 +994,29 @@ function dbStuBuildMemberStatusAutoMap_(rows, idx) {
     if (!mc.length || cat === 'jasoseo') {
       continue;
     }
+    var rmYmd =
+      idx.reregReminder != null && idx.reregReminder >= 0
+        ? dbStuNormalizeYmd_(r[idx.reregReminder] != null ? String(r[idx.reregReminder]) : '')
+        : '';
     var endYmd = dbStuNormalizeYmd_(r[idx.end] != null ? String(r[idx.end]) : '');
     var startYmd = dbStuNormalizeYmd_(r[idx.start] != null ? String(r[idx.start]) : '');
-    var key = endYmd || startYmd;
-    if (!key.length) {
+    var baseYmd = rmYmd || endYmd || startYmd;
+    if (!baseYmd.length) {
       continue;
     }
-    if (!latestEndByMember[mc] || key > latestEndByMember[mc]) {
-      latestEndByMember[mc] = key;
+    if (!baseYmdByMember[mc] || baseYmd > baseYmdByMember[mc]) {
+      baseYmdByMember[mc] = baseYmd;
     }
   }
   var out = {};
   var today = new Date();
   today.setHours(0, 0, 0, 0);
-  var codes = Object.keys(latestEndByMember);
+  var codes = Object.keys(baseYmdByMember);
   var ci;
   for (ci = 0; ci < codes.length; ci++) {
     var c = codes[ci];
-    var ymd = latestEndByMember[c];
-    var d = dbStuDateFromAny_(ymd);
+    var base = baseYmdByMember[c];
+    var d = dbStuDateFromAny_(base);
     if (!d) {
       out[c] = { statusAuto: '이탈', lastEndYmd: '' };
       continue;
@@ -1029,7 +1034,7 @@ function dbStuBuildMemberStatusAutoMap_(rows, idx) {
     } else {
       st = '수강중';
     }
-    out[c] = { statusAuto: st, lastEndYmd: ymd };
+    out[c] = { statusAuto: st, lastEndYmd: base };
   }
   return out;
 }
@@ -2034,7 +2039,8 @@ function dbStudentMgmtRebuildFromMaster_() {
     memberCode: 2,
     category: 4,
     start: ixEvStart,
-    end: ixEvEnd
+    end: ixEvEnd,
+    reregReminder: ixEvReminder
   });
   var ixEvClaim = evHeaders.indexOf('claim_status');
   var refundChurnByMember = dbStuMemberLatestOrderIsRefundChurn_(outEv, {
