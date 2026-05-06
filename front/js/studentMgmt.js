@@ -97,6 +97,66 @@ function todayYmdLocal_() {
   return `${y}-${m}-${d}`;
 }
 
+/**
+ * 시트·JSON에서 온 상태 문자열 (NBSP·제로폭 등) 정규화 — 배지 클래스·비교용
+ * @param {string} s
+ * @returns {string}
+ */
+function normalizeMemberStatus_(s) {
+  let t = String(s != null ? s : '');
+  t = t.replace(/[\u00a0\u1680\u2000-\u200b\u202f\u205f\u3000\ufeff]/g, ' ');
+  t = t.replace(/\s+/g, ' ').trim();
+  return t;
+}
+
+/**
+ * @param {unknown} a
+ * @param {unknown} b
+ * @returns {string}
+ */
+function pickMemberFieldStr_(a, b) {
+  const x = a != null ? String(a) : '';
+  if (x.trim().length) {
+    return x;
+  }
+  return b != null ? String(b) : '';
+}
+
+/**
+ * API 행 → 프론트 표준 필드 (snake_case 폴백)
+ * @param {Record<string, unknown>} r
+ * @returns {Record<string, unknown>}
+ */
+function mapMemberApiRow_(r) {
+  if (!r || typeof r !== 'object') {
+    return /** @type {Record<string, unknown>} */ ({});
+  }
+  return {
+    memberCode: pickMemberFieldStr_(r.memberCode, r.member_code),
+    name: pickMemberFieldStr_(r.name, r.member_name),
+    subjects: r.subjects != null ? String(r.subjects) : '',
+    statusAuto: pickMemberFieldStr_(r.statusAuto, r.status_auto),
+    statusOverride: pickMemberFieldStr_(r.statusOverride, r.status_override),
+    statusFinal: pickMemberFieldStr_(r.statusFinal, r.status_final),
+    remarksJson: r.remarksJson != null ? r.remarksJson : r.remarks_json
+  };
+}
+
+/**
+ * @param {Record<string, unknown>} w
+ * @returns {{ memberCode: string, name: string, subjects: string }}
+ */
+function mapWarnApiRow_(w) {
+  if (!w || typeof w !== 'object') {
+    return { memberCode: '', name: '', subjects: '' };
+  }
+  return {
+    memberCode: pickMemberFieldStr_(w.memberCode, w.member_code),
+    name: pickMemberFieldStr_(w.name, w.member_name),
+    subjects: pickMemberFieldStr_(w.subjects, w.subjects)
+  };
+}
+
 const STU_CAT_LABEL = {
   solpass: '솔패스',
   solutine: '솔루틴',
@@ -115,11 +175,23 @@ const STU_STATUS_LABEL = {
  * @returns {string}
  */
 function statusBadgeClass_(s) {
-  const t = String(s || '').trim();
+  const t = normalizeMemberStatus_(s);
   if (t === '주의 필요') return 'sp-stu-status-badge sp-stu-status-badge--warn';
   if (t === '이탈') return 'sp-stu-status-badge sp-stu-status-badge--out';
   if (t === '복귀 예정') return 'sp-stu-status-badge sp-stu-status-badge--plan';
   return 'sp-stu-status-badge sp-stu-status-badge--ok';
+}
+
+/**
+ * @param {string} s
+ * @returns {string}
+ */
+function memberStatusDisplayLabel_(s) {
+  const k = normalizeMemberStatus_(s);
+  if (STU_STATUS_LABEL[k]) {
+    return STU_STATUS_LABEL[k];
+  }
+  return k || '-';
 }
 
 /**
@@ -797,7 +869,7 @@ function getMemberViewRows_(mount) {
   const catFilter = catEl ? String(catEl.value || '').trim().toLowerCase() : '';
   let rows = _memberRows.slice();
   rows = rows.filter((r) => {
-    const st = String(r.statusFinal || '').trim();
+    const st = normalizeMemberStatus_(String(r.statusFinal || ''));
     if (_memberTab === 'churn') {
       return st === '이탈';
     }
@@ -834,7 +906,7 @@ function getMemberViewRows_(mount) {
  * @param {HTMLElement | null} mount
  */
 function updateMemberChurnCount_(mount) {
-  const n = _memberRows.filter((r) => String(r.statusFinal || '').trim() === '이탈').length;
+  const n = _memberRows.filter((r) => normalizeMemberStatus_(String(r.statusFinal || '')) === '이탈').length;
   const el = /** @type {HTMLElement | null} */ (mount && mount.querySelector('#sp-stu-memberChurnCount'));
   if (el) {
     el.textContent = String(n);
@@ -858,18 +930,18 @@ function renderMemberEditorRows_(mount) {
   rows.forEach(function (r) {
     const tr = document.createElement('tr');
     const mc = String(r.memberCode || '');
-    const stAuto = String(r.statusAuto || '');
-    const stOv = String(r.statusOverride || '');
-    const stFinal = String(r.statusFinal || '');
+    const stAuto = normalizeMemberStatus_(String(r.statusAuto || ''));
+    const stOv = normalizeMemberStatus_(String(r.statusOverride || ''));
+    const stFinal = normalizeMemberStatus_(String(r.statusFinal || ''));
     const remarks = parseRemarks_(r.remarksJson);
     const remarkList = remarks.slice(0, 3).map((x) => `<div class="sp-stu-remark__item">${String(x.title || '')}</div>`).join('');
     tr.setAttribute('data-member-code', mc);
     tr.innerHTML =
       `<td><strong>${String(r.name || '')}</strong><div class="sp-muted">#${mc}</div></td>` +
       `<td>${formatSubjectsCell_(String(r.subjects || ''))}</td>` +
-      `<td><span class="${statusBadgeClass_(stAuto)}">${STU_STATUS_LABEL[stAuto] || stAuto || '-'}</span></td>` +
+      `<td><span class="${statusBadgeClass_(stAuto)}">${memberStatusDisplayLabel_(stAuto)}</span></td>` +
       `<td>${renderOverrideSelectHtml_(mc, stOv)}</td>` +
-      `<td><span class="${statusBadgeClass_(stFinal)}">${STU_STATUS_LABEL[stFinal] || stFinal || '-'}</span></td>` +
+      `<td><span class="${statusBadgeClass_(stFinal)}">${memberStatusDisplayLabel_(stFinal)}</span></td>` +
       `<td>${renderRemarkBoxHtml_(mc, remarkList)}</td>`;
     tbody.appendChild(tr);
   });
@@ -882,7 +954,7 @@ function renderMemberEditorRows_(mount) {
  * @returns {string}
  */
 function renderOverrideSelectHtml_(memberCode, current) {
-  const cur = String(current || '').trim();
+  const cur = normalizeMemberStatus_(String(current || ''));
   const opts = ['', '수강중', '주의 필요', '이탈', '복귀 예정'];
   const o = opts
     .map((x) => {
@@ -964,8 +1036,10 @@ async function loadMemberEditorList_(mount) {
       renderMemberEditorRows_(mount);
       return;
     }
-    _memberRows = r.data && Array.isArray(r.data.rows) ? r.data.rows : [];
-    _warnRows = r.data && Array.isArray(r.data.warnRows) ? r.data.warnRows : [];
+    const rawRows = r.data && Array.isArray(r.data.rows) ? r.data.rows : [];
+    const rawWarn = r.data && Array.isArray(r.data.warnRows) ? r.data.warnRows : [];
+    _memberRows = rawRows.map((x) => mapMemberApiRow_(/** @type {Record<string, unknown>} */ (x)));
+    _warnRows = rawWarn.map((x) => mapWarnApiRow_(/** @type {Record<string, unknown>} */ (x)));
     _warnListOpen = false;
     renderWarnBox_(mount);
     updateMemberChurnCount_(mount);
@@ -1316,5 +1390,5 @@ export async function studentMgmtOnTabActivate(mount) {
     dailyDateEl.value = ymd;
   }
   void loadDailyPeopleReport_(mount, ymd);
-  void loadMemberEditorList_(mount);
+  await loadMemberEditorList_(mount);
 }

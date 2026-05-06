@@ -881,12 +881,24 @@ function dbStuMemberLatestOrderIsRefundChurn_(rows, idx) {
 }
 
 /**
+ * 시트 셀에서 읽은 상태 문자열 정규화 (NBSP·제로폭·연속 공백 제거)
+ * @param {string} s
+ * @return {string}
+ */
+function dbStuNormalizeMemberStatusCell_(s) {
+  var t = s != null ? String(s) : '';
+  t = t.replace(/[\u00a0\u1680\u2000-\u200b\u202f\u205f\u3000\ufeff]/g, ' ');
+  t = t.replace(/\s+/g, ' ').trim();
+  return t;
+}
+
+/**
  * 멤버 상태 override 유효값 검증. 빈 값은 허용(자동 사용).
  * @param {string} s
  * @return {string}
  */
 function dbStuNormalizeMemberStatusOverride_(s) {
-  var t = s != null ? String(s).trim() : '';
+  var t = dbStuNormalizeMemberStatusCell_(s != null ? String(s) : '');
   if (!t) {
     return '';
   }
@@ -1791,9 +1803,15 @@ function dbStudentMgmtMemberList_() {
       continue;
     }
     var name0 = mIdx.name >= 0 ? String(row[mIdx.name] != null ? row[mIdx.name] : '').trim() : '';
-    var stAuto = mIdx.member_status_auto >= 0 ? String(row[mIdx.member_status_auto] != null ? row[mIdx.member_status_auto] : '').trim() : '';
-    var stOv = mIdx.member_status_override >= 0 ? String(row[mIdx.member_status_override] != null ? row[mIdx.member_status_override] : '').trim() : '';
-    var stFinal = mIdx.member_status >= 0 ? String(row[mIdx.member_status] != null ? row[mIdx.member_status] : '').trim() : '';
+    var stAuto =
+      mIdx.member_status_auto >= 0
+        ? dbStuNormalizeMemberStatusCell_(String(row[mIdx.member_status_auto] != null ? row[mIdx.member_status_auto] : ''))
+        : '';
+    var stOv = mIdx.member_status_override >= 0 ? dbStuNormalizeMemberStatusOverride_(row[mIdx.member_status_override]) : '';
+    var stFinal =
+      mIdx.member_status >= 0
+        ? dbStuNormalizeMemberStatusCell_(String(row[mIdx.member_status] != null ? row[mIdx.member_status] : ''))
+        : '';
     var remarksRaw = mIdx.remarks_json >= 0 ? String(row[mIdx.remarks_json] != null ? row[mIdx.remarks_json] : '') : '';
 
     var subMap = subjectsByMember[mc0] || {};
