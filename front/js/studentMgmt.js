@@ -85,6 +85,18 @@ function ymdFromDateTime_(v) {
   return s.slice(0, 10).replace(/[./]/g, '-');
 }
 
+/**
+ * 브라우저 로컬 날짜 기준 yyyy-MM-dd (일자별 수강 인원 기본값)
+ * @returns {string}
+ */
+function todayYmdLocal_() {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  const d = String(now.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
 const STU_CAT_LABEL = {
   solpass: '솔패스',
   solutine: '솔루틴',
@@ -377,11 +389,7 @@ export function initStudentMgmt(mount) {
     });
   }
   if (dailyDate) {
-    const now = new Date();
-    const y = now.getFullYear();
-    const m = String(now.getMonth() + 1).padStart(2, '0');
-    const d = String(now.getDate()).padStart(2, '0');
-    dailyDate.value = `${y}-${m}-${d}`;
+    dailyDate.value = todayYmdLocal_();
   }
   if (btnDailyLoad) {
     btnDailyLoad.addEventListener('click', function () {
@@ -1294,8 +1302,19 @@ async function saveDateEditorAll_(mount) {
 }
 
 /**
+ * 수강생 관리 탭 진입 시: 상태 새로고침 후 당일 기준 일자별 표·특이사항 목록 자동 로드
  * @param {HTMLElement | null} mount
  */
-export function studentMgmtOnTabActivate(mount) {
-  void refreshStudentPanel_(mount);
+export async function studentMgmtOnTabActivate(mount) {
+  await refreshStudentPanel_(mount);
+  if (!mount || !GAS_MODE.canSync || GAS_MODE.useMock) {
+    return;
+  }
+  const ymd = todayYmdLocal_();
+  const dailyDateEl = /** @type {HTMLInputElement | null} */ (mount.querySelector('#sp-stu-dailyDate'));
+  if (dailyDateEl) {
+    dailyDateEl.value = ymd;
+  }
+  void loadDailyPeopleReport_(mount, ymd);
+  void loadMemberEditorList_(mount);
 }
