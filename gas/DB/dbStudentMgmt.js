@@ -775,8 +775,8 @@ function dbStuApplyEnrollStatus_(rows, idx) {
 /**
  * 멤버 자동 상태(today 기준)
  * - 최신 수강 완료일(가장 늦은 종료일) +14일 < today: 이탈
- * - 수강 완료일 다음 날·다다음 날(캘린더 2일): 주의 필요
- * - 그 외: 수강중
+ * - 수강 완료일 다음 날 ~ 완료+14일(이탈 기준일)까지: 주의 필요
+ * - 그 외(완료일 당일까지): 수강중
  * @param {Array<Array<*>>} rows
  * @param {{ memberCode: number, category: number, end: number, start: number }} idx
  * @return {Object<string, { statusAuto: string, lastEndYmd: string }>}
@@ -818,16 +818,11 @@ function dbStuBuildMemberStatusAutoMap_(rows, idx) {
     lastEnd.setHours(0, 0, 0, 0);
     var exitDate = new Date(lastEnd.getTime());
     exitDate.setDate(exitDate.getDate() + 14);
-    /** 수강 완료일 익일·그다음 날 */
-    var warnStart = new Date(lastEnd.getTime());
-    warnStart.setDate(warnStart.getDate() + 1);
-    var warnEnd = new Date(lastEnd.getTime());
-    warnEnd.setDate(warnEnd.getDate() + 2);
 
     var st;
     if (today.getTime() > exitDate.getTime()) {
       st = '이탈';
-    } else if (today.getTime() >= warnStart.getTime() && today.getTime() <= warnEnd.getTime()) {
+    } else if (today.getTime() > lastEnd.getTime()) {
       st = '주의 필요';
     } else {
       st = '수강중';
