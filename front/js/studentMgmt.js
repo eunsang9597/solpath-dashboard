@@ -849,16 +849,14 @@ async function openProductMembersModal_(prodKey, enrollFilter) {
  * @returns {string}
  */
 function renderMembersTable_(members) {
+  /** [payloadKey, 한글 헤더] — 일자별 수강 인원 모달 전용 */
   const cols = [
-    ['uid', 'uid'],
-    ['name', 'name'],
-    ['callnum', 'callnum'],
-    ['last_login_time', 'last_login_time'],
-    ['group_titles', 'group_titles'],
-    ['member_status_auto', 'member_status_auto'],
-    ['member_status_override', 'member_status_override'],
-    ['member_status', 'member_status'],
-    ['remarks_json', 'remarks_json']
+    ['uid', 'UID'],
+    ['name', '이름'],
+    ['callnum', '전화번호'],
+    ['last_login_time', '최근 로그인'],
+    ['member_status', '상태'],
+    ['product_end_date', '수강 만료일']
   ];
   const th = cols.map((c) => `<th>${c[1]}</th>`).join('');
   const rows = members

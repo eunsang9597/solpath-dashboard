@@ -1321,7 +1321,7 @@ function dbStudentMgmtDailyPeopleReport_(payload) {
  * - prodKey: normalize 된 상품명 키
  * - enrollFilter: 선택 — 빈 값이면 전체(총원), `신규`|`재등록`|`다시옴` 이면 해당 구분만
  * @param {Object} payload
- * @return {{ ok: true, data: { ymd: string, prodKey: string, prodName: string, enrollFilter: string, members: Object[] } }|{ ok: false, error: { code: string, message: string } }}
+ * @return {{ ok: true, data: { ymd: string, prodKey: string, prodName: string, enrollFilter: string, members: { uid: *, name: *, callnum: *, last_login_time: *, member_status: *, product_end_date: string }[] } }|{ ok: false, error: { code: string, message: string } }}
  */
 function dbStudentMgmtDailyPeopleProductMembers_(payload) {
   payload = payload || {};
@@ -1440,19 +1440,22 @@ function dbStudentMgmtDailyPeopleProductMembers_(payload) {
         prodKey: prodKey,
         prodName: prodName,
         startYmd: startYmd,
+        endYmd: endYmd,
         enrollStatus: dbStuNormalizeEnrollStatus_(r[eIdx.enroll_status])
       };
       continue;
     }
     if (startYmd > cur.startYmd) {
       cur.startYmd = startYmd;
+      cur.endYmd = endYmd;
       cur.enrollStatus = dbStuNormalizeEnrollStatus_(r[eIdx.enroll_status]);
       cur.prodName = prodName;
       cur.prodKey = prodKey;
     }
   }
 
-  var memberSet = {};
+  /** 통계에 포함된 (멤버코드 → 해당 주문의 수강 만료일) */
+  var orderMetaByMember = {};
   var keysBm = Object.keys(bestByMemberProd);
   var kb;
   for (kb = 0; kb < keysBm.length; kb++) {
@@ -1461,7 +1464,9 @@ function dbStudentMgmtDailyPeopleProductMembers_(payload) {
     if (enrollNorm.length && st !== enrollNorm) {
       continue;
     }
-    memberSet[it.memberCode] = 1;
+    orderMetaByMember[it.memberCode] = {
+      productEndYmd: String(it.endYmd != null ? it.endYmd : '').trim()
+    };
   }
 
   var mIdx = dbStuHeaderIndexMap_(shM, DB_STUDENT_MEMBER_HEADERS);
@@ -1471,20 +1476,17 @@ function dbStudentMgmtDailyPeopleProductMembers_(payload) {
   for (i = 0; i < mVals.length; i++) {
     var row = mVals[i] || [];
     var mc0 = String(row[mIdx.member_code] != null ? row[mIdx.member_code] : '').trim();
-    if (!mc0.length || !memberSet[mc0]) {
+    if (!mc0.length || !orderMetaByMember[mc0]) {
       continue;
     }
-    /** member_code, fetched_at, source_sync_id 제외 */
+    var om = orderMetaByMember[mc0];
     members.push({
       uid: mIdx.uid >= 0 ? row[mIdx.uid] : '',
       name: mIdx.name >= 0 ? row[mIdx.name] : '',
       callnum: mIdx.callnum >= 0 ? row[mIdx.callnum] : '',
       last_login_time: mIdx.last_login_time >= 0 ? row[mIdx.last_login_time] : '',
-      group_titles: mIdx.group_titles >= 0 ? row[mIdx.group_titles] : '',
-      member_status_auto: mIdx.member_status_auto >= 0 ? row[mIdx.member_status_auto] : '',
-      member_status_override: mIdx.member_status_override >= 0 ? row[mIdx.member_status_override] : '',
       member_status: mIdx.member_status >= 0 ? row[mIdx.member_status] : '',
-      remarks_json: mIdx.remarks_json >= 0 ? row[mIdx.remarks_json] : ''
+      product_end_date: om.productEndYmd || ''
     });
   }
   members.sort(function (a, b) {
