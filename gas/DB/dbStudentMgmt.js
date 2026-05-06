@@ -1081,6 +1081,37 @@ function dbStuEnrollStatusPriority_(status) {
 }
 
 /**
+ * 일자별 수강 인원·상품별 멤버 모달에서 제외: 환불/취소 완료 주문은 수강으로 치지 않음.
+ * @param {Array<*>} r
+ * @param {Object<string, number>} eIdx `dbStuHeaderIndexMap_(sh, DB_STUDENT_ORDER_EVENT_HEADERS)`
+ * @return {boolean} true면 집계·모달 후보에서 제외
+ */
+function dbStuOrderEventRowExcludedForDailyAttendance_(r, eIdx) {
+  if (!r || !eIdx) {
+    return true;
+  }
+  var claimLo = String(eIdx.claim_status >= 0 && r[eIdx.claim_status] != null ? r[eIdx.claim_status] : '')
+    .trim()
+    .toLowerCase();
+  if (claimLo === 'cancel') {
+    return true;
+  }
+  var sec = String(eIdx.section_status >= 0 && r[eIdx.section_status] != null ? r[eIdx.section_status] : '')
+    .trim()
+    .toUpperCase();
+  if (sec.indexOf('CANCEL') >= 0) {
+    return true;
+  }
+  var ord = String(eIdx.order_status >= 0 && r[eIdx.order_status] != null ? r[eIdx.order_status] : '')
+    .trim()
+    .toUpperCase();
+  if (ord.indexOf('CANCEL') >= 0) {
+    return true;
+  }
+  return false;
+}
+
+/**
  * 일자별 수강 인원(상품명 기준) 리포트
  * payload:
  * - ymd: yyyy-MM-dd
@@ -1122,6 +1153,9 @@ function dbStudentMgmtDailyPeopleReport_(payload) {
     }
     var cat = String(r[eIdx.internal_category] != null ? r[eIdx.internal_category] : '').trim().toLowerCase();
     if (!cat.length || cat === 'unmapped' || cat === 'textbook' || cat === 'jasoseo') {
+      continue;
+    }
+    if (dbStuOrderEventRowExcludedForDailyAttendance_(r, eIdx)) {
       continue;
     }
     var startYmd = dbStuNormalizeYmd_(r[eIdx.product_start_date] != null ? String(r[eIdx.product_start_date]) : '');
@@ -1274,6 +1308,7 @@ function dbStudentMgmtDailyPeopleProductMembers_(payload) {
     if (!mc.length) continue;
     var cat = String(r[eIdx.internal_category] != null ? r[eIdx.internal_category] : '').trim().toLowerCase();
     if (!cat.length || cat === 'unmapped' || cat === 'textbook' || cat === 'jasoseo') continue;
+    if (dbStuOrderEventRowExcludedForDailyAttendance_(r, eIdx)) continue;
     var pn = String(r[eIdx.prod_name] != null ? r[eIdx.prod_name] : '').trim();
     var pk = dbStuNormalizeProdNameKey_(pn);
     if (pk !== prodKey) continue;
