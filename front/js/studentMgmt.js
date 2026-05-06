@@ -269,6 +269,8 @@ let _warnRows = [];
 let _warnListOpen = false;
 let _dailyLastYmd = '';
 let _dailyLastRows = [];
+let _renewLastYmd = '';
+let _renewLastRows = [];
 
 /**
  * @param {string} c
@@ -401,6 +403,7 @@ export function initStudentMgmt(mount) {
   const btnWarnToggle = /** @type {HTMLButtonElement | null} */ (mount && mount.querySelector('#sp-stu-btnWarnToggle'));
   const dailyDate = /** @type {HTMLInputElement | null} */ (mount && mount.querySelector('#sp-stu-dailyDate'));
   const btnDailyLoad = /** @type {HTMLButtonElement | null} */ (mount && mount.querySelector('#sp-stu-btnDailyLoad'));
+  const btnRenewLoad = /** @type {HTMLButtonElement | null} */ (mount && mount.querySelector('#sp-stu-btnRenewLoad'));
   const modal = /** @type {HTMLElement | null} */ (document.querySelector('#sp-stu-modal'));
   const modalBackdrop = /** @type {HTMLElement | null} */ (document.querySelector('#sp-stu-modalBackdrop'));
   const modalClose = /** @type {HTMLButtonElement | null} */ (document.querySelector('#sp-stu-modalClose'));
@@ -427,6 +430,9 @@ export function initStudentMgmt(mount) {
     }
     if (btnDailyLoad) {
       btnDailyLoad.disabled = true;
+    }
+    if (btnRenewLoad) {
+      btnRenewLoad.disabled = true;
     }
     applyStudentMgmtStateFromData(mount, {});
     return;
@@ -513,6 +519,11 @@ export function initStudentMgmt(mount) {
     btnDailyLoad.addEventListener('click', function () {
       const ymd = dailyDate ? String(dailyDate.value || '').trim() : '';
       void loadDailyPeopleReport_(mount, ymd);
+    });
+  }
+  if (btnRenewLoad) {
+    btnRenewLoad.addEventListener('click', function () {
+      void loadRenewalStatusReport_(mount);
     });
   }
   const closeModal = function () {
@@ -685,6 +696,19 @@ function setDailyHint_(mount, msg, show) {
 
 /**
  * @param {HTMLElement | null} mount
+ * @param {string} msg
+ * @param {boolean} show
+ */
+function setRenewHint_(mount, msg, show) {
+  const hint = /** @type {HTMLElement | null} */ (mount && mount.querySelector('#sp-stu-renewHint'));
+  if (!hint) return;
+  hint.textContent = msg || '';
+  if (show) hint.removeAttribute('hidden');
+  else hint.setAttribute('hidden', '');
+}
+
+/**
+ * @param {HTMLElement | null} mount
  */
 /**
  * @param {string} s
@@ -827,6 +851,177 @@ function wireDailyPeopleTableButtons_(mount) {
       void openProductMembersModal_(pk, ef);
     };
   });
+}
+
+/**
+ * @param {string} bucket
+ * @returns {string}
+ */
+function renewBucketLabel_(bucket) {
+  const t = String(bucket || '').trim();
+  if (t === 'total') return '총원';
+  if (t === 're') return '재등록';
+  if (t === 'planned') return '등록예정';
+  if (t === 'drop') return '등록X';
+  if (t === 'contact') return '연락필요';
+  return t || '-';
+}
+
+/**
+ * @param {string} prodKey
+ * @param {string} bucket
+ * @param {number} n
+ * @returns {string}
+ */
+function renewCountButtonHtml_(prodKey, bucket, n) {
+  const v = n != null ? Number(n) : 0;
+  const dis = v <= 0 ? ' disabled' : '';
+  return (
+    `<button type="button" class="sp-stu-daily__cell-btn"${dis} data-renew-prod-key="${escapeAttr_(prodKey)}" data-renew-bucket="${escapeAttr_(bucket)}">` +
+    `${String(v)}</button>`
+  );
+}
+
+/**
+ * @param {HTMLElement | null} mount
+ */
+function renderRenewalStatusReport_(mount) {
+  const tbody = /** @type {HTMLElement | null} */ (mount && mount.querySelector('#sp-stu-renewTbody'));
+  if (!tbody) return;
+  if (!_renewLastRows.length) {
+    tbody.innerHTML = '<tr><td colspan="8" class="sp-stu-member-editor__empty">표 만들기를 눌러 주세요.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = '';
+  _renewLastRows.forEach(function (r) {
+    const tr = document.createElement('tr');
+    const prodKey = String(r.prodKey || '');
+    const prodName = String(r.prodName || '');
+    const tot = r.total != null ? r.total : 0;
+    const nRe = r.re != null ? r.re : 0;
+    const nPl = r.planned != null ? r.planned : 0;
+    const nDrop = r.drop != null ? r.drop : 0;
+    const nCon = r.contact != null ? r.contact : 0;
+    const rate = r.rate != null ? Number(r.rate) : 0;
+    const exp = r.expected != null ? Number(r.expected) : 0;
+    tr.innerHTML =
+      `<td class="sp-stu-daily__prod-cell">${escapeAttr_(prodName)}</td>` +
+      `<td class="sp-stu-daily__num-cell">${renewCountButtonHtml_(prodKey, 'total', tot)}</td>` +
+      `<td class="sp-stu-daily__num-cell">${renewCountButtonHtml_(prodKey, 're', nRe)}</td>` +
+      `<td class="sp-stu-daily__num-cell">${renewCountButtonHtml_(prodKey, 'planned', nPl)}</td>` +
+      `<td class="sp-stu-daily__num-cell">${renewCountButtonHtml_(prodKey, 'drop', nDrop)}</td>` +
+      `<td class="sp-stu-daily__num-cell">${renewCountButtonHtml_(prodKey, 'contact', nCon)}</td>` +
+      `<td class="sp-stu-daily__num-cell">${String(rate.toFixed(2))}%</td>` +
+      `<td class="sp-stu-daily__num-cell">${String(exp.toFixed(2))}%</td>`;
+    tbody.appendChild(tr);
+  });
+  wireRenewButtons_(mount);
+}
+
+/**
+ * @param {HTMLElement | null} mount
+ */
+function wireRenewButtons_(mount) {
+  const root = mount;
+  if (!root) return;
+  const btns = Array.from(root.querySelectorAll('.sp-stu-daily__cell-btn[data-renew-prod-key]'));
+  btns.forEach(function (b) {
+    if (!(b instanceof HTMLButtonElement)) return;
+    b.onclick = function () {
+      if (b.disabled) return;
+      const pk = String(b.getAttribute('data-renew-prod-key') || '');
+      const bucket = String(b.getAttribute('data-renew-bucket') || '');
+      if (!pk || !_renewLastYmd) return;
+      void openRenewalMembersModal_(pk, bucket);
+    };
+  });
+}
+
+/**
+ * @param {string} prodKey
+ * @param {string} bucket
+ */
+async function openRenewalMembersModal_(prodKey, bucket) {
+  const url = String(GAS_BASE_URL).trim();
+  const modal = /** @type {HTMLElement | null} */ (document.querySelector('#sp-stu-modal'));
+  const titleEl = /** @type {HTMLElement | null} */ (document.querySelector('#sp-stu-modalTitle'));
+  const subEl = /** @type {HTMLElement | null} */ (document.querySelector('#sp-stu-modalSub'));
+  const bodyEl = /** @type {HTMLElement | null} */ (document.querySelector('#sp-stu-modalBody'));
+  if (!url || !modal || !bodyEl) return;
+  modal.removeAttribute('hidden');
+  modal.setAttribute('aria-hidden', 'false');
+  if (titleEl) titleEl.textContent = '학생 목록';
+  if (subEl) subEl.textContent = '불러오는 중…';
+  bodyEl.innerHTML = '';
+  try {
+    const r = await gasJsonpWithParams_(
+      url,
+      'studentMgmtRenewalStatusProductMembers',
+      { payload: JSON.stringify({ ymd: _renewLastYmd, prodKey, bucket }) },
+      180000
+    );
+    if (!r || !r.ok) {
+      const em =
+        r && r.error && r.error.message
+          ? String(r.error.message)
+          : r && r.message
+            ? String(r.message)
+            : '목록을 불러오지 못했습니다.';
+      if (subEl) subEl.textContent = em;
+      bodyEl.innerHTML = '';
+      return;
+    }
+    const prodName = String(r.data && r.data.prodName ? r.data.prodName : prodKey);
+    const ymd = String(r.data && r.data.ymd ? r.data.ymd : _renewLastYmd);
+    const bucketOut = String(r.data && r.data.bucket ? r.data.bucket : bucket);
+    const members = r.data && Array.isArray(r.data.members) ? r.data.members : [];
+    if (titleEl) titleEl.textContent = prodName;
+    if (subEl) subEl.textContent = `${ymd} · ${renewBucketLabel_(bucketOut)} · ${members.length}명`;
+    if (!members.length) {
+      bodyEl.innerHTML = '<div class="sp-stu-member-editor__empty">표시할 학생이 없습니다.</div>';
+      return;
+    }
+    bodyEl.innerHTML = renderMembersTable_(members);
+  } catch (e) {
+    if (subEl) subEl.textContent = e && e.message != null ? String(e.message) : '요청 실패';
+    bodyEl.innerHTML = '';
+  }
+}
+
+/**
+ * @param {HTMLElement | null} mount
+ */
+async function loadRenewalStatusReport_(mount) {
+  const url = String(GAS_BASE_URL).trim();
+  if (!url || !mount) return;
+  setRenewHint_(mount, '표 만드는 중…', true);
+  try {
+    const r = await gasJsonpWithParams_(
+      url,
+      'studentMgmtRenewalStatusReport',
+      { payload: JSON.stringify({}) },
+      180000
+    );
+    if (!r || !r.ok) {
+      const em =
+        r && r.error && r.error.message
+          ? String(r.error.message)
+          : r && r.message
+            ? String(r.message)
+            : '표를 만들지 못했습니다.';
+      setRenewHint_(mount, em, true);
+      _renewLastYmd = '';
+      _renewLastRows = [];
+      renderRenewalStatusReport_(mount);
+      return;
+    }
+    _renewLastYmd = String(r.data && r.data.ymd ? r.data.ymd : todayYmdLocal_());
+    _renewLastRows = r.data && Array.isArray(r.data.rows) ? r.data.rows : [];
+    renderRenewalStatusReport_(mount);
+    setRenewHint_(mount, `기준일: ${_renewLastYmd}`, true);
+  } catch (e) {
+    setRenewHint_(mount, e && e.message != null ? String(e.message) : '요청 실패', true);
+  }
 }
 
 /**

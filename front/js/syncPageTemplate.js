@@ -625,6 +625,37 @@ export const SYNC_PAGE_SHELL_HTML = `<div class="app-shell app-shell--v9">
                   </div>
                 </div>
 
+                <div class="sp-stu-daily sp-stu-renew" id="sp-stu-renew">
+                  <div class="sp-stu-daily__head">
+                    <div class="sp-stu-daily__title">재등록 현황 (오늘 기준)</div>
+                    <div class="sp-stu-daily__controls">
+                      <button type="button" class="btn btn--secondary" id="sp-stu-btnRenewLoad">표 만들기</button>
+                    </div>
+                  </div>
+                  <p class="sp-pm__hint" id="sp-stu-renewHint" hidden></p>
+                  <div class="sp-stu-daily__table-wrap">
+                    <table class="sp-stu-member-editor__table sp-stu-daily__table" id="sp-stu-renewTable">
+                      <thead>
+                        <tr>
+                          <th>수강반</th>
+                          <th>총원</th>
+                          <th>재등록</th>
+                          <th>등록예정</th>
+                          <th>등록X</th>
+                          <th>연락필요</th>
+                          <th>재등록률</th>
+                          <th>예상재등록률</th>
+                        </tr>
+                      </thead>
+                      <tbody id="sp-stu-renewTbody">
+                        <tr>
+                          <td colspan="8" class="sp-stu-member-editor__empty">표 만들기를 눌러 주세요.</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
                 <div class="sp-stu-record" id="sp-stu-record">
                   <div class="sp-stu-daily__head">
                     <div class="sp-stu-daily__title">특이사항 및 수강상태 기록</div>

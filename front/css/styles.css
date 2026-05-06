@@ -2780,6 +2780,10 @@ button.sp-stu-remark__item--open:hover {
   font-weight: 750;
 }
 
+.sp-stu-renew .sp-stu-daily__table {
+  min-width: 860px;
+}
+
 .sp-stu-record__bar {
   display: flex;
   align-items: center;

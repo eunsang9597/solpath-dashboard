@@ -442,6 +442,19 @@ function dbStuDefaultReregReminderYmd_(startYmd, endYmd) {
 }
 
 /**
+ * 이탈 기준일(yyyy-MM-dd): 기준일 + 14일
+ * @param {string} baseYmd
+ * @return {string}
+ */
+function dbStuExitYmdFromBaseYmd_(baseYmd) {
+  var b = dbStuNormalizeYmd_(baseYmd);
+  if (!b.length) {
+    return '';
+  }
+  return dbStuYmdAddDays_(b, 14);
+}
+
+/**
  * @param {GoogleAppsScript.Spreadsheet.Sheet} sh
  * @param {string[]} headers
  * @return {Object}
@@ -1669,6 +1682,409 @@ function dbStudentMgmtDailyPeopleProductMembers_(payload) {
       prodKey: prodKeyPayload,
       prodName: prodNameBest || prodKeyPayload,
       enrollFilter: enrollNorm,
+      members: members
+    }
+  };
+}
+
+/**
+ * 재등록 현황(오늘 기준) — 상품명 기준
+ * 정의(우선순위 적용):
+ * - total(총원): status != 이탈 AND (해당 상품 현재 수강/관리 윈도우 내)
+ * - drop(등록X): status == 이탈 (해당 상품 이력 존재)
+ * - re(재등록): total 후보 중, exit(=base+14) 이후 시작하는 동일 상품 주문이 존재
+ * - planned(등록예정): total 후보 중, 재등록 아님 AND rereg_reminder_date가 오늘~3일 이내
+ * - contact(연락필요): total 후보 중, 재등록/등록예정 아님 AND status == 주의 필요
+ *
+ * rate(재등록률)=re/total, expected=(re+planned)/total (0이면 0)
+ *
+ * payload:
+ * - ymd: (선택) yyyy-MM-dd. 비어 있으면 오늘(서울)
+ * @param {Object} payload
+ * @return {{ ok: true, data: { ymd: string, rows: Object[] } }|{ ok: false, error: { code: string, message: string } }}
+ */
+function dbStudentMgmtRenewalStatusReport_(payload) {
+  payload = payload || {};
+  var ymd = payload.ymd != null ? dbStuNormalizeYmd_(String(payload.ymd)) : '';
+  if (!ymd.length) {
+    ymd = Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM-dd');
+  }
+
+  var ssStu = dbStuOpen_();
+  if (!ssStu) {
+    return { ok: false, error: { code: 'NO_STUDENT_SHEET', message: '수강생 DB가 없습니다.' } };
+  }
+  var shE = ssStu.getSheetByName(DB_SHEET_STUDENT_ORDER_EVENTS);
+  var shM = ssStu.getSheetByName(DB_SHEET_STUDENT_MEMBER_MASTER);
+  if (!shE || shE.getLastRow() < 2) {
+    return { ok: true, data: { ymd: ymd, rows: [] } };
+  }
+  if (!shM || shM.getLastRow() < 2) {
+    return { ok: false, error: { code: 'NO_MEMBER_ROWS', message: '수강생 멤버 데이터가 없습니다.' } };
+  }
+
+  /** member_code → 최종 상태 */
+  var mIdx = dbStuHeaderIndexMap_(shM, DB_STUDENT_MEMBER_HEADERS);
+  var mVals = shM.getRange(2, 1, shM.getLastRow() - 1, DB_STUDENT_MEMBER_HEADERS.length).getValues();
+  var statusByMc = {};
+  var mi;
+  for (mi = 0; mi < mVals.length; mi++) {
+    var mr = mVals[mi] || [];
+    var mc0 = String(mr[mIdx.member_code] != null ? mr[mIdx.member_code] : '').trim();
+    if (!mc0.length) continue;
+    statusByMc[mc0] =
+      mIdx.member_status >= 0
+        ? dbStuNormalizeMemberStatusCell_(String(mr[mIdx.member_status] != null ? mr[mIdx.member_status] : ''))
+        : '';
+  }
+
+  var pmMap = dbPmReadMappingMap_();
+  /** 표 행 후보: PM 유효 상품 전부(0도 가능) */
+  var byProd = {};
+  var pmKeysAll = Object.keys(pmMap);
+  var pi;
+  for (pi = 0; pi < pmKeysAll.length; pi++) {
+    var pmK0 = pmKeysAll[pi];
+    var pm0 = pmMap[pmK0];
+    if (!dbStuPmEligibleForDailyReportYmd_(pm0, ymd)) {
+      continue;
+    }
+    var pn0 = String(pm0.product_name != null ? pm0.product_name : '').trim();
+    if (!pn0.length) continue;
+    var pk0 = dbStuNormalizeProdNameKey_(pn0);
+    if (!pk0.length) continue;
+    if (!byProd[pk0]) {
+      byProd[pk0] = { prodKey: pk0, prodName: pn0, total: 0, re: 0, planned: 0, drop: 0, contact: 0 };
+    }
+  }
+
+  var eIdx = dbStuHeaderIndexMap_(shE, DB_STUDENT_ORDER_EVENT_HEADERS);
+  var eVals = shE.getRange(2, 1, shE.getLastRow() - 1, DB_STUDENT_ORDER_EVENT_HEADERS.length).getValues();
+
+  /** (member, prodKey)별 이벤트 배열 */
+  var groups = {};
+  var i;
+  for (i = 0; i < eVals.length; i++) {
+    var r = eVals[i] || [];
+    var mc = String(r[eIdx.member_code] != null ? r[eIdx.member_code] : '').trim();
+    if (!mc.length) continue;
+    var cat = String(r[eIdx.internal_category] != null ? r[eIdx.internal_category] : '').trim().toLowerCase();
+    if (!cat.length || cat === 'unmapped' || cat === 'textbook' || cat === 'jasoseo') continue;
+    if (dbStuOrderEventRowExcludedForDailyAttendance_(r, eIdx)) continue;
+    var pkeyEv = dbPmRowKey_(r[eIdx.prod_no]);
+    var pmEv = pkeyEv && pmMap[pkeyEv] ? pmMap[pkeyEv] : null;
+    if (!pmEv || !dbStuPmEligibleForDailyReportYmd_(pmEv, ymd)) continue;
+    var prodName = String(pmEv.product_name != null ? pmEv.product_name : '').trim();
+    var prodKey = dbStuNormalizeProdNameKey_(prodName);
+    if (!prodKey.length || !byProd[prodKey]) continue;
+
+    var startYmd = dbStuNormalizeYmd_(r[eIdx.product_start_date] != null ? String(r[eIdx.product_start_date]) : '');
+    var endYmd = dbStuNormalizeYmd_(r[eIdx.product_end_date] != null ? String(r[eIdx.product_end_date]) : '');
+    var rmYmd = eIdx.rereg_reminder_date >= 0 ? dbStuNormalizeYmd_(r[eIdx.rereg_reminder_date]) : '';
+    var baseYmd = rmYmd || endYmd || startYmd;
+    if (!baseYmd.length) continue;
+    var exitYmd = dbStuExitYmdFromBaseYmd_(baseYmd);
+    var gk = mc + '\t' + prodKey;
+    if (!groups[gk]) groups[gk] = [];
+    groups[gk].push({
+      memberCode: mc,
+      prodKey: prodKey,
+      prodName: prodName,
+      startYmd: startYmd,
+      endYmd: endYmd,
+      reregYmd: rmYmd,
+      baseYmd: baseYmd,
+      exitYmd: exitYmd
+    });
+  }
+
+  /** 집계 */
+  var gks = Object.keys(groups);
+  var gi;
+  for (gi = 0; gi < gks.length; gi++) {
+    var arr = groups[gks[gi]] || [];
+    if (!arr.length) continue;
+    arr.sort(function (a, b) {
+      return String(a.startYmd || '').localeCompare(String(b.startYmd || ''));
+    });
+    var mc2 = arr[0].memberCode;
+    var pk2 = arr[0].prodKey;
+    var stFin = statusByMc[mc2] || '';
+    if (stFin === '이탈') {
+      byProd[pk2].drop += 1;
+      continue;
+    }
+
+    /** current: 오늘이 exitYmd 이내인 것 중 시작일 최신 */
+    var cur = null;
+    var j;
+    for (j = 0; j < arr.length; j++) {
+      var it = arr[j];
+      if (!it.exitYmd.length) continue;
+      if (ymd <= it.exitYmd) {
+        if (!cur || String(it.startYmd || '') > String(cur.startYmd || '')) {
+          cur = it;
+        }
+      }
+    }
+    if (!cur) {
+      continue;
+    }
+    byProd[pk2].total += 1;
+
+    /** re: exit 이후 시작하는 이벤트 존재 */
+    var hasNext = false;
+    for (j = 0; j < arr.length; j++) {
+      var nx = arr[j];
+      if (nx.startYmd.length && cur.exitYmd.length && nx.startYmd > cur.exitYmd) {
+        hasNext = true;
+        break;
+      }
+    }
+    if (hasNext) {
+      byProd[pk2].re += 1;
+      continue;
+    }
+
+    /** planned: reregYmd D-3 이내 (오늘~오늘+3) */
+    if (cur.reregYmd && cur.reregYmd.length) {
+      var d0 = dbStuDateFromAny_(ymd);
+      var d1 = dbStuDateFromAny_(cur.reregYmd);
+      if (d0 && d1) {
+        var diff = Math.floor((d1.getTime() - d0.getTime()) / 86400000);
+        if (diff >= 0 && diff <= 3) {
+          byProd[pk2].planned += 1;
+          continue;
+        }
+      }
+    }
+
+    if (stFin === '주의 필요') {
+      byProd[pk2].contact += 1;
+      continue;
+    }
+  }
+
+  var outRows = [];
+  var prodKeys = Object.keys(byProd);
+  prodKeys.sort(function (a, b) {
+    return String(byProd[a].prodName || a).localeCompare(String(byProd[b].prodName || b));
+  });
+  for (i = 0; i < prodKeys.length; i++) {
+    var pr = byProd[prodKeys[i]];
+    var denom = pr.total || 0;
+    var rate = denom ? pr.re / denom : 0;
+    var exp = denom ? (pr.re + pr.planned) / denom : 0;
+    outRows.push({
+      prodKey: pr.prodKey,
+      prodName: pr.prodName,
+      total: pr.total,
+      re: pr.re,
+      planned: pr.planned,
+      drop: pr.drop,
+      contact: pr.contact,
+      rate: Math.round(rate * 10000) / 100,
+      expected: Math.round(exp * 10000) / 100
+    });
+  }
+  return { ok: true, data: { ymd: ymd, rows: outRows } };
+}
+
+/**
+ * 재등록 현황 셀 클릭 → 명단
+ * payload:
+ * - ymd(선택): yyyy-MM-dd (비어 있으면 오늘(서울))
+ * - prodKey: normalize 된 상품명 키
+ * - bucket: 'total'|'re'|'planned'|'drop'|'contact'
+ * @param {Object} payload
+ * @return {{ ok: true, data: { ymd: string, prodKey: string, prodName: string, bucket: string, members: Object[] } }|{ ok: false, error: { code: string, message: string } }}
+ */
+function dbStudentMgmtRenewalStatusProductMembers_(payload) {
+  payload = payload || {};
+  var ymd = payload.ymd != null ? dbStuNormalizeYmd_(String(payload.ymd)) : '';
+  if (!ymd.length) {
+    ymd = Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM-dd');
+  }
+  var prodKeyPayload = payload.prodKey != null ? dbStuNormalizeProdNameKey_(String(payload.prodKey)) : '';
+  var bucket = payload.bucket != null ? String(payload.bucket).trim() : '';
+  if (!prodKeyPayload.length) {
+    return { ok: false, error: { code: 'BAD_REQUEST', message: 'prodKey가 필요합니다.' } };
+  }
+  var okBucket = bucket === 'total' || bucket === 're' || bucket === 'planned' || bucket === 'drop' || bucket === 'contact';
+  if (!okBucket) {
+    return { ok: false, error: { code: 'BAD_REQUEST', message: 'bucket이 올바르지 않습니다.' } };
+  }
+
+  var ssStu = dbStuOpen_();
+  if (!ssStu) {
+    return { ok: false, error: { code: 'NO_STUDENT_SHEET', message: '수강생 DB가 없습니다.' } };
+  }
+  var shE = ssStu.getSheetByName(DB_SHEET_STUDENT_ORDER_EVENTS);
+  var shM = ssStu.getSheetByName(DB_SHEET_STUDENT_MEMBER_MASTER);
+  if (!shE || shE.getLastRow() < 2) {
+    return {
+      ok: true,
+      data: { ymd: ymd, prodKey: prodKeyPayload, prodName: prodKeyPayload, bucket: bucket, members: [] }
+    };
+  }
+  if (!shM || shM.getLastRow() < 2) {
+    return { ok: false, error: { code: 'NO_MEMBER_ROWS', message: '수강생 멤버 데이터가 없습니다.' } };
+  }
+
+  var pmMap = dbPmReadMappingMap_();
+  var prodNameBest = prodKeyPayload;
+  var pmKeysM = Object.keys(pmMap);
+  var qi;
+  for (qi = 0; qi < pmKeysM.length; qi++) {
+    var pmQ = pmMap[pmKeysM[qi]];
+    if (!dbStuPmEligibleForDailyReportYmd_(pmQ, ymd)) continue;
+    var nk = dbStuNormalizeProdNameKey_(String(pmQ.product_name != null ? pmQ.product_name : ''));
+    if (nk === prodKeyPayload) {
+      prodNameBest = String(pmQ.product_name != null ? pmQ.product_name : '').trim() || prodKeyPayload;
+      break;
+    }
+  }
+
+  var mIdx = dbStuHeaderIndexMap_(shM, DB_STUDENT_MEMBER_HEADERS);
+  var mVals = shM.getRange(2, 1, shM.getLastRow() - 1, DB_STUDENT_MEMBER_HEADERS.length).getValues();
+  var statusByMc = {};
+  var memberRowByMc = {};
+  var mi;
+  for (mi = 0; mi < mVals.length; mi++) {
+    var mr = mVals[mi] || [];
+    var mc0 = String(mr[mIdx.member_code] != null ? mr[mIdx.member_code] : '').trim();
+    if (!mc0.length) continue;
+    statusByMc[mc0] =
+      mIdx.member_status >= 0
+        ? dbStuNormalizeMemberStatusCell_(String(mr[mIdx.member_status] != null ? mr[mIdx.member_status] : ''))
+        : '';
+    memberRowByMc[mc0] = mr;
+  }
+
+  var eIdx = dbStuHeaderIndexMap_(shE, DB_STUDENT_ORDER_EVENT_HEADERS);
+  var eVals = shE.getRange(2, 1, shE.getLastRow() - 1, DB_STUDENT_ORDER_EVENT_HEADERS.length).getValues();
+  var groups = {};
+  var i;
+  for (i = 0; i < eVals.length; i++) {
+    var r = eVals[i] || [];
+    var mc = String(r[eIdx.member_code] != null ? r[eIdx.member_code] : '').trim();
+    if (!mc.length) continue;
+    var cat = String(r[eIdx.internal_category] != null ? r[eIdx.internal_category] : '').trim().toLowerCase();
+    if (!cat.length || cat === 'unmapped' || cat === 'textbook' || cat === 'jasoseo') continue;
+    if (dbStuOrderEventRowExcludedForDailyAttendance_(r, eIdx)) continue;
+    var pkeyEv = dbPmRowKey_(r[eIdx.prod_no]);
+    var pmEv = pkeyEv && pmMap[pkeyEv] ? pmMap[pkeyEv] : null;
+    if (!pmEv || !dbStuPmEligibleForDailyReportYmd_(pmEv, ymd)) continue;
+    var prodName = String(pmEv.product_name != null ? pmEv.product_name : '').trim();
+    var prodKey = dbStuNormalizeProdNameKey_(prodName);
+    if (!prodKey.length || prodKey !== prodKeyPayload) continue;
+
+    var startYmd = dbStuNormalizeYmd_(r[eIdx.product_start_date] != null ? String(r[eIdx.product_start_date]) : '');
+    var endYmd = dbStuNormalizeYmd_(r[eIdx.product_end_date] != null ? String(r[eIdx.product_end_date]) : '');
+    var rmYmd = eIdx.rereg_reminder_date >= 0 ? dbStuNormalizeYmd_(r[eIdx.rereg_reminder_date]) : '';
+    var baseYmd = rmYmd || endYmd || startYmd;
+    if (!baseYmd.length) continue;
+    var exitYmd = dbStuExitYmdFromBaseYmd_(baseYmd);
+    var gk = mc + '\t' + prodKey;
+    if (!groups[gk]) groups[gk] = [];
+    groups[gk].push({ memberCode: mc, startYmd: startYmd, endYmd: endYmd, reregYmd: rmYmd, exitYmd: exitYmd });
+  }
+
+  var pickedMc = {};
+  var pickedMeta = {};
+  var gks = Object.keys(groups);
+  var gi;
+  for (gi = 0; gi < gks.length; gi++) {
+    var arr = groups[gks[gi]] || [];
+    if (!arr.length) continue;
+    arr.sort(function (a, b) {
+      return String(a.startYmd || '').localeCompare(String(b.startYmd || ''));
+    });
+    var mc2 = arr[0].memberCode;
+    var stFin = statusByMc[mc2] || '';
+
+    if (bucket === 'drop') {
+      if (stFin === '이탈') {
+        pickedMc[mc2] = 1;
+      }
+      continue;
+    }
+    if (stFin === '이탈') {
+      continue;
+    }
+
+    var cur = null;
+    var j;
+    for (j = 0; j < arr.length; j++) {
+      var it = arr[j];
+      if (!it.exitYmd) continue;
+      if (ymd <= it.exitYmd) {
+        if (!cur || String(it.startYmd || '') > String(cur.startYmd || '')) {
+          cur = it;
+        }
+      }
+    }
+    if (!cur) continue;
+
+    var hasNext = false;
+    for (j = 0; j < arr.length; j++) {
+      var nx = arr[j];
+      if (nx.startYmd && cur.exitYmd && nx.startYmd > cur.exitYmd) {
+        hasNext = true;
+        break;
+      }
+    }
+    var isPlanned = false;
+    if (!hasNext && cur.reregYmd) {
+      var d0 = dbStuDateFromAny_(ymd);
+      var d1 = dbStuDateFromAny_(cur.reregYmd);
+      if (d0 && d1) {
+        var diff = Math.floor((d1.getTime() - d0.getTime()) / 86400000);
+        if (diff >= 0 && diff <= 3) {
+          isPlanned = true;
+        }
+      }
+    }
+    var isContact = !hasNext && !isPlanned && stFin === '주의 필요';
+
+    var ok =
+      bucket === 'total' ||
+      (bucket === 're' && hasNext) ||
+      (bucket === 'planned' && isPlanned) ||
+      (bucket === 'contact' && isContact);
+    if (!ok) continue;
+    pickedMc[mc2] = 1;
+    pickedMeta[mc2] = { product_end_date: cur.endYmd || '', rereg_reminder_date: cur.reregYmd || '' };
+  }
+
+  var members = [];
+  var mcs = Object.keys(pickedMc);
+  mcs.sort();
+  for (i = 0; i < mcs.length; i++) {
+    var mcx = mcs[i];
+    var row = memberRowByMc[mcx];
+    if (!row) continue;
+    var meta = pickedMeta[mcx] || { product_end_date: '', rereg_reminder_date: '' };
+    members.push({
+      uid: mIdx.uid >= 0 ? row[mIdx.uid] : '',
+      name: mIdx.name >= 0 ? row[mIdx.name] : '',
+      callnum: mIdx.callnum >= 0 ? row[mIdx.callnum] : '',
+      last_login_time: mIdx.last_login_time >= 0 ? row[mIdx.last_login_time] : '',
+      member_status: mIdx.member_status >= 0 ? row[mIdx.member_status] : '',
+      product_end_date: meta.product_end_date || '',
+      rereg_reminder_date: meta.rereg_reminder_date || ''
+    });
+  }
+  members.sort(function (a, b) {
+    return String(a.name || '').localeCompare(String(b.name || ''));
+  });
+  return {
+    ok: true,
+    data: {
+      ymd: ymd,
+      prodKey: prodKeyPayload,
+      prodName: prodNameBest,
+      bucket: bucket,
       members: members
     }
   };
