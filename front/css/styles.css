@@ -2421,6 +2421,17 @@ input.sp-confirm:disabled {
   letter-spacing: -0.01em;
 }
 
+.sp-stu-member-warn__note {
+  margin: 0.45rem 0 0.55rem;
+  padding: 0.45rem 0.5rem;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.75);
+  border: 1px solid #f3dbe0;
+  font-size: calc(0.78rem + var(--sp-text-bump));
+  line-height: 1.5;
+  color: #5a2a32;
+}
+
 .sp-stu-member-warn__meta {
   display: flex;
   align-items: center;
@@ -2618,7 +2629,8 @@ input.sp-confirm:disabled {
   text-overflow: ellipsis;
 }
 
-.sp-stu-daily {
+.sp-stu-daily,
+.sp-stu-record {
   border: 1px solid #dbe2ec;
   border-radius: 10px;
   background: #f8fafd;

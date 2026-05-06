@@ -775,7 +775,7 @@ function dbStuApplyEnrollStatus_(rows, idx) {
 /**
  * 멤버 자동 상태(today 기준)
  * - 최신 종료일 +14일 < today: 이탈
- * - 최신 종료일 +14일 까지 남은 기간 <= 5일: 주의 필요
+ * - 최신 종료일 +14일(이탈 기준일) 직전 2일 구간: 주의 필요
  * - 그 외: 수강중
  * @param {Array<Array<*>>} rows
  * @param {{ memberCode: number, category: number, end: number, start: number }} idx
@@ -819,7 +819,7 @@ function dbStuBuildMemberStatusAutoMap_(rows, idx) {
     var exitDate = new Date(lastEnd.getTime());
     exitDate.setDate(exitDate.getDate() + 14);
     var warnStart = new Date(exitDate.getTime());
-    warnStart.setDate(warnStart.getDate() - 5);
+    warnStart.setDate(warnStart.getDate() - 2);
 
     var st;
     if (today.getTime() > exitDate.getTime()) {

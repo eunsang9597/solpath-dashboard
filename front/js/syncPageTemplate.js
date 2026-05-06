@@ -568,6 +568,10 @@ export const SYNC_PAGE_SHELL_HTML = `<div class="app-shell app-shell--v9">
                       </button>
                     </div>
                   </div>
+                  <p class="sp-stu-member-warn__note" id="sp-stu-warnNote">
+                    아래는 멤버 <strong>최종 상태</strong>가 「주의 필요」인 경우입니다. 자동 판정: 멤버별 <strong>가장 늦은 수강 종료일</strong>을 기준으로
+                    <strong>종료일+14일</strong>(이탈 기준일) <strong>직전 2일</strong>에 들어오면 주의 필요로 표시됩니다. (수동 override가 있으면 최종 상태가 달라질 수 있습니다.)
+                  </p>
                   <div class="sp-stu-member-warn__list" id="sp-stu-warnList" hidden></div>
                 </div>
 
@@ -619,34 +623,37 @@ export const SYNC_PAGE_SHELL_HTML = `<div class="app-shell app-shell--v9">
                   </div>
                 </div>
 
-                <div class="sp-stu-member-editor__toolbar">
-                  <div class="sp-stu-member-editor__toolbar-left">
-                    <button type="button" class="btn btn--secondary" id="sp-stu-btnMemberLoad">목록 불러오기</button>
-                    <label class="sp-stu-member-editor__filter">
-                      <span>검색</span>
-                      <input type="search" id="sp-stu-memberSearch" placeholder="이름 또는 회원코드" autocomplete="off" />
-                    </label>
+                <div class="sp-stu-record" id="sp-stu-record">
+                  <div class="sp-stu-daily__head">
+                    <div class="sp-stu-daily__title">특이사항 및 수강상태 기록</div>
+                    <div class="sp-stu-daily__controls">
+                      <button type="button" class="btn btn--secondary" id="sp-stu-btnMemberLoad">목록 불러오기</button>
+                      <label class="sp-stu-member-editor__filter">
+                        <span>검색</span>
+                        <input type="search" id="sp-stu-memberSearch" placeholder="이름 또는 회원코드" autocomplete="off" />
+                      </label>
+                    </div>
                   </div>
-                </div>
-                <p class="sp-pm__hint" id="sp-stu-memberHint" hidden></p>
-                <div class="sp-stu-member-editor__table-wrap">
-                  <table class="sp-stu-member-editor__table" id="sp-stu-memberTable">
-                    <thead>
-                      <tr>
-                        <th>멤버</th>
-                        <th>과목</th>
-                        <th>자동</th>
-                        <th>수동(override)</th>
-                        <th>최종</th>
-                        <th>비고</th>
-                      </tr>
-                    </thead>
-                    <tbody id="sp-stu-memberTbody">
-                      <tr>
-                        <td colspan="6" class="sp-stu-member-editor__empty">목록을 불러와 주세요.</td>
-                      </tr>
-                    </tbody>
-                  </table>
+                  <p class="sp-pm__hint" id="sp-stu-memberHint" hidden></p>
+                  <div class="sp-stu-daily__table-wrap">
+                    <table class="sp-stu-member-editor__table" id="sp-stu-memberTable">
+                      <thead>
+                        <tr>
+                          <th>멤버</th>
+                          <th>과목</th>
+                          <th>자동</th>
+                          <th>수동(override)</th>
+                          <th>최종</th>
+                          <th>비고</th>
+                        </tr>
+                      </thead>
+                      <tbody id="sp-stu-memberTbody">
+                        <tr>
+                          <td colspan="6" class="sp-stu-member-editor__empty">목록을 불러와 주세요.</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </details>
             </div>
