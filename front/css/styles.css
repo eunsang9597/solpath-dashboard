@@ -2694,6 +2694,52 @@ input.sp-confirm:disabled {
   font-weight: 750;
 }
 
+.sp-stu-record__bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  margin-top: 0.5rem;
+}
+
+.sp-stu-record__tabs {
+  display: inline-flex;
+  gap: 0.2rem;
+  border: 1px solid #d8e6f4;
+  border-radius: 999px;
+  padding: 0.14rem;
+  background: #fff;
+}
+
+.sp-stu-record__tab {
+  border: 0;
+  background: transparent;
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  font: inherit;
+  font-size: calc(0.76rem + var(--sp-text-bump));
+  cursor: pointer;
+  color: #31445a;
+}
+
+.sp-stu-record__tab.is-active {
+  background: #1d4e89;
+  color: #fff;
+  font-weight: 650;
+}
+
+.sp-stu-record__tab-count {
+  font-weight: 700;
+  opacity: 0.95;
+}
+
+.sp-muted {
+  font-size: 0.88em;
+  color: #6b7785;
+  font-weight: 500;
+}
+
 .sp-modal[hidden] {
   display: none !important;
 }

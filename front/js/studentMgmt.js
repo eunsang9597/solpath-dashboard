@@ -139,6 +139,8 @@ let _dateSortEnd = 'none';
 
 /** @type {Array<any>} */
 let _memberRows = [];
+/** @type {'active'|'churn'} */
+let _memberTab = 'active';
 let _warnRows = [];
 let _warnListOpen = false;
 let _dailyLastYmd = '';
@@ -151,6 +153,41 @@ let _dailyLastRows = [];
 function stuCatLabel_(c) {
   const k = String(c || '').trim().toLowerCase();
   return STU_CAT_LABEL[k] || k || '-';
+}
+
+/**
+ * 과목 셀 표시용 — API는 영문 키를 콤마로 넘김
+ * @param {string} subjects
+ * @returns {string}
+ */
+function formatSubjectsCell_(subjects) {
+  const s = String(subjects != null ? subjects : '').trim();
+  if (!s) {
+    return '-';
+  }
+  return s
+    .split(',')
+    .map((x) => stuCatLabel_(x.trim()))
+    .filter(Boolean)
+    .join(', ');
+}
+
+/**
+ * 정렬용 — 과목 토큰을 정규화해 안정적으로 비교
+ * @param {string} subjects
+ * @returns {string}
+ */
+function subjectSortKey_(subjects) {
+  const s = String(subjects != null ? subjects : '').trim().toLowerCase();
+  if (!s) {
+    return '';
+  }
+  const parts = s
+    .split(',')
+    .map((x) => x.trim())
+    .filter(Boolean);
+  parts.sort();
+  return parts.join('\t');
 }
 
 /**
@@ -233,6 +270,9 @@ export function initStudentMgmt(mount) {
   const btnDateSaveAll = /** @type {HTMLButtonElement | null} */ (mount && mount.querySelector('#sp-stu-btnDateSaveAll'));
   const btnMemberLoad = /** @type {HTMLButtonElement | null} */ (mount && mount.querySelector('#sp-stu-btnMemberLoad'));
   const memberSearch = /** @type {HTMLInputElement | null} */ (mount && mount.querySelector('#sp-stu-memberSearch'));
+  const memberFilterCat = /** @type {HTMLSelectElement | null} */ (mount && mount.querySelector('#sp-stu-memberFilterCat'));
+  const tabMemberActive = /** @type {HTMLButtonElement | null} */ (mount && mount.querySelector('#sp-stu-tabMemberActive'));
+  const tabMemberChurn = /** @type {HTMLButtonElement | null} */ (mount && mount.querySelector('#sp-stu-tabMemberChurn'));
   const btnWarnToggle = /** @type {HTMLButtonElement | null} */ (mount && mount.querySelector('#sp-stu-btnWarnToggle'));
   const dailyDate = /** @type {HTMLInputElement | null} */ (mount && mount.querySelector('#sp-stu-dailyDate'));
   const btnDailyLoad = /** @type {HTMLButtonElement | null} */ (mount && mount.querySelector('#sp-stu-btnDailyLoad'));
@@ -298,6 +338,35 @@ export function initStudentMgmt(mount) {
   }
   if (memberSearch) {
     memberSearch.addEventListener('input', function () {
+      renderMemberEditorRows_(mount);
+    });
+  }
+  if (memberFilterCat) {
+    memberFilterCat.addEventListener('change', function () {
+      renderMemberEditorRows_(mount);
+    });
+  }
+  const setMemberTabUi_ = function () {
+    if (tabMemberActive) {
+      tabMemberActive.classList.toggle('is-active', _memberTab === 'active');
+      tabMemberActive.setAttribute('aria-selected', _memberTab === 'active' ? 'true' : 'false');
+    }
+    if (tabMemberChurn) {
+      tabMemberChurn.classList.toggle('is-active', _memberTab === 'churn');
+      tabMemberChurn.setAttribute('aria-selected', _memberTab === 'churn' ? 'true' : 'false');
+    }
+  };
+  if (tabMemberActive) {
+    tabMemberActive.addEventListener('click', function () {
+      _memberTab = 'active';
+      setMemberTabUi_();
+      renderMemberEditorRows_(mount);
+    });
+  }
+  if (tabMemberChurn) {
+    tabMemberChurn.addEventListener('click', function () {
+      _memberTab = 'churn';
+      setMemberTabUi_();
       renderMemberEditorRows_(mount);
     });
   }
@@ -715,8 +784,27 @@ function renderWarnBox_(mount) {
  */
 function getMemberViewRows_(mount) {
   const qEl = /** @type {HTMLInputElement | null} */ (mount && mount.querySelector('#sp-stu-memberSearch'));
+  const catEl = /** @type {HTMLSelectElement | null} */ (mount && mount.querySelector('#sp-stu-memberFilterCat'));
   const q = qEl ? String(qEl.value || '').trim().toLowerCase() : '';
+  const catFilter = catEl ? String(catEl.value || '').trim().toLowerCase() : '';
   let rows = _memberRows.slice();
+  rows = rows.filter((r) => {
+    const st = String(r.statusFinal || '').trim();
+    if (_memberTab === 'churn') {
+      return st === '이탈';
+    }
+    return st !== '이탈';
+  });
+  if (catFilter) {
+    rows = rows.filter((r) => {
+      const sub = String(r.subjects || '')
+        .toLowerCase()
+        .split(',')
+        .map((x) => x.trim())
+        .filter(Boolean);
+      return sub.indexOf(catFilter) >= 0;
+    });
+  }
   if (q) {
     rows = rows.filter((r) => {
       const nm = String(r.name || '').toLowerCase();
@@ -724,8 +812,25 @@ function getMemberViewRows_(mount) {
       return nm.includes(q) || mc.includes(q);
     });
   }
-  rows.sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
+  rows.sort((a, b) => {
+    const c1 = subjectSortKey_(String(a.subjects || '')).localeCompare(subjectSortKey_(String(b.subjects || '')));
+    if (c1 !== 0) {
+      return c1;
+    }
+    return String(a.name || '').localeCompare(String(b.name || ''));
+  });
   return rows;
+}
+
+/**
+ * @param {HTMLElement | null} mount
+ */
+function updateMemberChurnCount_(mount) {
+  const n = _memberRows.filter((r) => String(r.statusFinal || '').trim() === '이탈').length;
+  const el = /** @type {HTMLElement | null} */ (mount && mount.querySelector('#sp-stu-memberChurnCount'));
+  if (el) {
+    el.textContent = String(n);
+  }
 }
 
 /**
@@ -736,7 +841,9 @@ function renderMemberEditorRows_(mount) {
   if (!tbody) return;
   const rows = getMemberViewRows_(mount);
   if (!rows.length) {
-    tbody.innerHTML = '<tr><td colspan="6" class="sp-stu-member-editor__empty">표시할 항목이 없습니다.</td></tr>';
+    const emptyMsg =
+      _memberTab === 'churn' ? '이탈 학생이 없습니다.' : '표시할 항목이 없습니다. (필터·검색을 확인해 주세요.)';
+    tbody.innerHTML = `<tr><td colspan="6" class="sp-stu-member-editor__empty">${emptyMsg}</td></tr>`;
     return;
   }
   tbody.innerHTML = '';
@@ -751,7 +858,7 @@ function renderMemberEditorRows_(mount) {
     tr.setAttribute('data-member-code', mc);
     tr.innerHTML =
       `<td><strong>${String(r.name || '')}</strong><div class="sp-muted">#${mc}</div></td>` +
-      `<td>${String(r.subjects || '') || '-'}</td>` +
+      `<td>${formatSubjectsCell_(String(r.subjects || ''))}</td>` +
       `<td><span class="${statusBadgeClass_(stAuto)}">${STU_STATUS_LABEL[stAuto] || stAuto || '-'}</span></td>` +
       `<td>${renderOverrideSelectHtml_(mc, stOv)}</td>` +
       `<td><span class="${statusBadgeClass_(stFinal)}">${STU_STATUS_LABEL[stFinal] || stFinal || '-'}</span></td>` +
@@ -845,6 +952,7 @@ async function loadMemberEditorList_(mount) {
       _memberRows = [];
       _warnRows = [];
       renderWarnBox_(mount);
+      updateMemberChurnCount_(mount);
       renderMemberEditorRows_(mount);
       return;
     }
@@ -852,6 +960,7 @@ async function loadMemberEditorList_(mount) {
     _warnRows = r.data && Array.isArray(r.data.warnRows) ? r.data.warnRows : [];
     _warnListOpen = false;
     renderWarnBox_(mount);
+    updateMemberChurnCount_(mount);
     renderMemberEditorRows_(mount);
   } catch (e) {
     setMemberEditorHint_(mount, e && e.message != null ? String(e.message) : '요청 실패', true);

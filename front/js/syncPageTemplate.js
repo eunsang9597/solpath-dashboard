@@ -635,6 +635,35 @@ export const SYNC_PAGE_SHELL_HTML = `<div class="app-shell app-shell--v9">
                     </div>
                   </div>
                   <p class="sp-pm__hint" id="sp-stu-memberHint" hidden></p>
+                  <div class="sp-stu-record__bar">
+                    <div class="sp-stu-record__tabs" role="tablist" aria-label="수강상태 목록 구분">
+                      <button
+                        type="button"
+                        class="sp-stu-record__tab is-active"
+                        id="sp-stu-tabMemberActive"
+                        role="tab"
+                        aria-selected="true"
+                        data-member-tab="active"
+                      >수강·관리</button>
+                      <button
+                        type="button"
+                        class="sp-stu-record__tab"
+                        id="sp-stu-tabMemberChurn"
+                        role="tab"
+                        aria-selected="false"
+                        data-member-tab="churn"
+                      >이탈 학생 <span class="sp-stu-record__tab-count" id="sp-stu-memberChurnCount">0</span></button>
+                    </div>
+                    <label class="sp-stu-member-editor__filter">
+                      <span>과목</span>
+                      <select id="sp-stu-memberFilterCat" title="과목(표시 문자열에 포함된 카테고리 기준)">
+                        <option value="">전체</option>
+                        <option value="solpass">솔패스</option>
+                        <option value="solutine">솔루틴</option>
+                        <option value="challenge">챌린지</option>
+                      </select>
+                    </label>
+                  </div>
                   <div class="sp-stu-daily__table-wrap">
                     <table class="sp-stu-member-editor__table" id="sp-stu-memberTable">
                       <thead>
