@@ -835,6 +835,52 @@ function dbStuBuildMemberStatusAutoMap_(rows, idx) {
 }
 
 /**
+ * 멤버별로 order_time 기준 **가장 최신** 이벤트 1건을 고른 뒤, 그게 환불(`claim_status=cancel`)이면 이탈 처리.
+ * (날짜 편집 목록과 동일하게 cancel 행은 제외하지 않고 후보에 넣어 “최신이 환불”인지 본다.)
+ * @param {Array<Array<*>>} rows
+ * @param {{ memberCode: number, orderTime: number, claimStatus: number, orderItemCode: number, internalCategory: number }} idx
+ * @return {Object<string, boolean>} member_code → true면 자동 상태를 이탈로 강제
+ */
+function dbStuMemberLatestOrderIsRefundChurn_(rows, idx) {
+  if (idx.memberCode < 0 || idx.orderTime < 0 || idx.claimStatus < 0) {
+    return {};
+  }
+  var bestKeyByMc = {};
+  var latestIsRefund = {};
+  var i;
+  for (i = 0; i < rows.length; i++) {
+    var r = rows[i] || [];
+    var mc = String(r[idx.memberCode] != null ? r[idx.memberCode] : '').trim();
+    if (!mc.length) {
+      continue;
+    }
+    var cat = String(r[idx.internalCategory] != null ? r[idx.internalCategory] : '').trim().toLowerCase();
+    if (cat === 'jasoseo' || !dbStuIsAllowedCategory_(cat)) {
+      continue;
+    }
+    var ot = String(r[idx.orderTime] != null ? r[idx.orderTime] : '').trim();
+    var itemCode = idx.orderItemCode >= 0 ? String(r[idx.orderItemCode] != null ? r[idx.orderItemCode] : '').trim() : '';
+    var sortKey = dbStuNormalizeYmd_(ot) + '\t' + ot + '\t' + itemCode;
+    var claimLo = String(r[idx.claimStatus] != null ? r[idx.claimStatus] : '').trim().toLowerCase();
+    var isRefund = claimLo === 'cancel';
+    if (!bestKeyByMc[mc] || sortKey > bestKeyByMc[mc]) {
+      bestKeyByMc[mc] = sortKey;
+      latestIsRefund[mc] = isRefund;
+    }
+  }
+  var out = {};
+  var codes = Object.keys(latestIsRefund);
+  var j;
+  for (j = 0; j < codes.length; j++) {
+    var c = codes[j];
+    if (latestIsRefund[c]) {
+      out[c] = true;
+    }
+  }
+  return out;
+}
+
+/**
  * 멤버 상태 override 유효값 검증. 빈 값은 허용(자동 사용).
  * @param {string} s
  * @return {string}
@@ -1540,6 +1586,14 @@ function dbStudentMgmtRebuildFromMaster_() {
     start: ixEvStart,
     end: ixEvEnd
   });
+  var ixEvClaim = evHeaders.indexOf('claim_status');
+  var refundChurnByMember = dbStuMemberLatestOrderIsRefundChurn_(outEv, {
+    memberCode: 2,
+    orderTime: 3,
+    claimStatus: ixEvClaim,
+    orderItemCode: 0,
+    internalCategory: 4
+  });
 
   var memberCodes = {};
   var k;
@@ -1559,6 +1613,9 @@ function dbStudentMgmtRebuildFromMaster_() {
     var ov = dbStuNormalizeMemberStatusOverride_(ops.statusOverride);
     var autoPack = memberAutoMap[code] || { statusAuto: '이탈', lastEndYmd: '' };
     var autoStatus = autoPack.statusAuto || '이탈';
+    if (refundChurnByMember[code]) {
+      autoStatus = '이탈';
+    }
     var finalStatus = ov ? ov : autoStatus;
     var remarksJson = ops.remarksJson != null ? String(ops.remarksJson) : '';
     if (!mr) {
