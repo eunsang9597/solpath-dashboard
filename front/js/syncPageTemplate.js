@@ -569,8 +569,9 @@ export const SYNC_PAGE_SHELL_HTML = `<div class="app-shell app-shell--v9">
                     </div>
                   </div>
                   <p class="sp-stu-member-warn__note" id="sp-stu-warnNote">
-                    아래는 멤버 <strong>최종 상태</strong>가 「주의 필요」인 경우입니다. 자동 판정: 멤버별 <strong>가장 늦은 수강 종료일</strong>을 기준으로
-                    <strong>종료일+14일</strong>(이탈 기준일) <strong>직전 2일</strong>에 들어오면 주의 필요로 표시됩니다. (수동 override가 있으면 최종 상태가 달라질 수 있습니다.)
+                    아래는 멤버 <strong>최종 상태</strong>가 「주의 필요」인 경우입니다. 자동 판정: 멤버별 <strong>가장 늦은 수강 완료일(종료일)</strong> 기준
+                    <strong>다음 날·다다음 날(이틀)</strong>에 주의 필요로 표시됩니다. <strong>이탈</strong>은 같은 완료일 기준 <strong>+14일</strong>이 지난 뒤입니다.
+                    (수동 override가 있으면 최종 상태가 달라질 수 있습니다.)
                   </p>
                   <div class="sp-stu-member-warn__list" id="sp-stu-warnList" hidden></div>
                 </div>

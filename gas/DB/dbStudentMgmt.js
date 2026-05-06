@@ -774,8 +774,8 @@ function dbStuApplyEnrollStatus_(rows, idx) {
 
 /**
  * 멤버 자동 상태(today 기준)
- * - 최신 종료일 +14일 < today: 이탈
- * - 최신 종료일 +14일(이탈 기준일) 직전 2일 구간: 주의 필요
+ * - 최신 수강 완료일(가장 늦은 종료일) +14일 < today: 이탈
+ * - 수강 완료일 다음 날·다다음 날(캘린더 2일): 주의 필요
  * - 그 외: 수강중
  * @param {Array<Array<*>>} rows
  * @param {{ memberCode: number, category: number, end: number, start: number }} idx
@@ -818,13 +818,16 @@ function dbStuBuildMemberStatusAutoMap_(rows, idx) {
     lastEnd.setHours(0, 0, 0, 0);
     var exitDate = new Date(lastEnd.getTime());
     exitDate.setDate(exitDate.getDate() + 14);
-    var warnStart = new Date(exitDate.getTime());
-    warnStart.setDate(warnStart.getDate() - 2);
+    /** 수강 완료일 익일·그다음 날 */
+    var warnStart = new Date(lastEnd.getTime());
+    warnStart.setDate(warnStart.getDate() + 1);
+    var warnEnd = new Date(lastEnd.getTime());
+    warnEnd.setDate(warnEnd.getDate() + 2);
 
     var st;
     if (today.getTime() > exitDate.getTime()) {
       st = '이탈';
-    } else if (today.getTime() > warnStart.getTime()) {
+    } else if (today.getTime() >= warnStart.getTime() && today.getTime() <= warnEnd.getTime()) {
       st = '주의 필요';
     } else {
       st = '수강중';
@@ -1726,6 +1729,29 @@ function dbStudentMgmtMemberList_() {
     var eVals = shE.getRange(2, 1, shE.getLastRow() - 1, wE).getValues();
     var today = new Date();
     today.setHours(0, 0, 0, 0);
+    /** 멤버·카테고리별 가장 최신 주문 1건이 환불이면 과목 표시에서 제외 */
+    var latestByMcCat = {};
+    var i0;
+    for (i0 = 0; i0 < eVals.length; i0++) {
+      var r0 = eVals[i0] || [];
+      var mc0 = String(r0[eIdx.member_code] != null ? r0[eIdx.member_code] : '').trim();
+      if (!mc0.length) {
+        continue;
+      }
+      var cat0 = String(r0[eIdx.internal_category] != null ? r0[eIdx.internal_category] : '').trim().toLowerCase();
+      if (!cat0.length || cat0 === 'jasoseo' || cat0 === 'textbook' || cat0 === 'unmapped') {
+        continue;
+      }
+      var ot0 = String(r0[eIdx.order_time] != null ? r0[eIdx.order_time] : '').trim();
+      var item0 = String(r0[eIdx.order_item_code] != null ? r0[eIdx.order_item_code] : '').trim();
+      var sk0 = dbStuNormalizeYmd_(ot0) + '\t' + ot0 + '\t' + item0;
+      var k0 = mc0 + '\t' + cat0;
+      var cl0 = String(r0[eIdx.claim_status] != null ? r0[eIdx.claim_status] : '').trim().toLowerCase();
+      var can0 = cl0 === 'cancel';
+      if (!latestByMcCat[k0] || sk0 > latestByMcCat[k0].sortKey) {
+        latestByMcCat[k0] = { sortKey: sk0, isCancel: can0 };
+      }
+    }
     var i;
     for (i = 0; i < eVals.length; i++) {
       var r = eVals[i] || [];
@@ -1735,6 +1761,11 @@ function dbStudentMgmtMemberList_() {
       }
       var cat = String(r[eIdx.internal_category] != null ? r[eIdx.internal_category] : '').trim().toLowerCase();
       if (!cat.length || cat === 'jasoseo' || cat === 'textbook' || cat === 'unmapped') {
+        continue;
+      }
+      var lk = mc + '\t' + cat;
+      var le = latestByMcCat[lk];
+      if (le && le.isCancel) {
         continue;
       }
       var endDt = dbStuDateFromAny_(r[eIdx.product_end_date]);
