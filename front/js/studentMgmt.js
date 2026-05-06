@@ -1793,5 +1793,6 @@ export async function studentMgmtOnTabActivate(mount) {
     dailyDateEl.value = ymd;
   }
   void loadDailyPeopleReport_(mount, ymd);
+  void loadRenewalStatusReport_(mount);
   await loadMemberEditorList_(mount);
 }
