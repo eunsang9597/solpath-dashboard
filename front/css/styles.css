@@ -2531,9 +2531,17 @@ input.sp-confirm:disabled {
 
 .sp-stu-member-editor__table {
   width: 100%;
-  min-width: 980px;
+  min-width: 760px;
   border-collapse: collapse;
   font-size: calc(0.82rem + var(--sp-text-bump));
+}
+
+.sp-stu-member-status-cell {
+  min-width: 13.5rem;
+}
+
+.sp-stu-member-status-cell__display {
+  margin-bottom: 0.4rem;
 }
 
 .sp-stu-member-editor__table th,

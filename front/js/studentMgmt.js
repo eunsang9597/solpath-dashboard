@@ -195,6 +195,19 @@ function memberStatusDisplayLabel_(s) {
 }
 
 /**
+ * 표시·이탈 탭 분류: 수동 상태가 있으면 그 값, 없으면 자동 판정값
+ * @param {{ statusAuto?: string, statusOverride?: string }} r
+ * @returns {string}
+ */
+function memberEffectiveStatus_(r) {
+  const stOv = normalizeMemberStatus_(String(r.statusOverride != null ? r.statusOverride : ''));
+  if (stOv.length) {
+    return stOv;
+  }
+  return normalizeMemberStatus_(String(r.statusAuto != null ? r.statusAuto : ''));
+}
+
+/**
  * @param {any} raw
  * @returns {Array<{title:string, body:string, updatedAt:string}>}
  */
@@ -985,7 +998,7 @@ function getMemberViewRows_(mount) {
   const catFilter = catEl ? String(catEl.value || '').trim().toLowerCase() : '';
   let rows = _memberRows.slice();
   rows = rows.filter((r) => {
-    const st = normalizeMemberStatus_(String(r.statusFinal || ''));
+    const st = memberEffectiveStatus_(r);
     if (_memberTab === 'churn') {
       return st === '이탈';
     }
@@ -1022,7 +1035,7 @@ function getMemberViewRows_(mount) {
  * @param {HTMLElement | null} mount
  */
 function updateMemberChurnCount_(mount) {
-  const n = _memberRows.filter((r) => normalizeMemberStatus_(String(r.statusFinal || '')) === '이탈').length;
+  const n = _memberRows.filter((r) => memberEffectiveStatus_(r) === '이탈').length;
   const el = /** @type {HTMLElement | null} */ (mount && mount.querySelector('#sp-stu-memberChurnCount'));
   if (el) {
     el.textContent = String(n);
@@ -1039,16 +1052,15 @@ function renderMemberEditorRows_(mount) {
   if (!rows.length) {
     const emptyMsg =
       _memberTab === 'churn' ? '이탈 학생이 없습니다.' : '표시할 항목이 없습니다. (필터·검색을 확인해 주세요.)';
-    tbody.innerHTML = `<tr><td colspan="6" class="sp-stu-member-editor__empty">${emptyMsg}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="4" class="sp-stu-member-editor__empty">${emptyMsg}</td></tr>`;
     return;
   }
   tbody.innerHTML = '';
   rows.forEach(function (r) {
     const tr = document.createElement('tr');
     const mc = String(r.memberCode || '');
-    const stAuto = normalizeMemberStatus_(String(r.statusAuto || ''));
     const stOv = normalizeMemberStatus_(String(r.statusOverride || ''));
-    const stFinal = normalizeMemberStatus_(String(r.statusFinal || ''));
+    const displaySt = memberEffectiveStatus_(r);
     const remarks = parseRemarks_(r.remarksJson);
     const remarkList =
       remarks.length === 0
@@ -1068,9 +1080,10 @@ function renderMemberEditorRows_(mount) {
     tr.innerHTML =
       `<td><strong>${String(r.name || '')}</strong><div class="sp-muted">#${mc}</div></td>` +
       `<td>${formatSubjectsCell_(String(r.subjects || ''))}</td>` +
-      `<td><span class="${statusBadgeClass_(stAuto)}">${memberStatusDisplayLabel_(stAuto)}</span></td>` +
-      `<td>${renderOverrideSelectHtml_(mc, stOv)}</td>` +
-      `<td><span class="${statusBadgeClass_(stFinal)}">${memberStatusDisplayLabel_(stFinal)}</span></td>` +
+      `<td class="sp-stu-member-status-cell">` +
+      `<div class="sp-stu-member-status-cell__display"><span class="${statusBadgeClass_(displaySt)}">${memberStatusDisplayLabel_(displaySt)}</span></div>` +
+      `${renderOverrideSelectHtml_(mc, stOv)}` +
+      `</td>` +
       `<td>${renderRemarkBoxHtml_(mc, remarkList)}</td>`;
     tbody.appendChild(tr);
   });

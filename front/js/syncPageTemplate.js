@@ -570,9 +570,9 @@ export const SYNC_PAGE_SHELL_HTML = `<div class="app-shell app-shell--v9">
                     </div>
                   </div>
                   <p class="sp-stu-member-warn__note" id="sp-stu-warnNote">
-                    아래는 멤버 <strong>최종 상태</strong>가 「주의 필요」인 경우입니다. 자동 판정: 멤버별 <strong>가장 늦은 수강 완료일(종료일)</strong> 기준
+                    아래는 멤버 <strong>상태</strong>가 「주의 필요」인 경우입니다. 자동 판정: 멤버별 <strong>가장 늦은 수강 완료일(종료일)</strong> 기준
                     <strong>다음 날부터</strong> 같은 완료일 기준 <strong>+14일(이탈 기준일)까지</strong> 주의 필요로 표시됩니다. <strong>이탈</strong>은 그 다음 날부터입니다.
-                    (수동 override가 있으면 최종 상태가 달라질 수 있습니다.)
+                    표에서 수동으로 상태를 저장하면 그 값이 <strong>상태</strong>에 반영됩니다.
                   </p>
                   <div class="sp-stu-member-warn__list" id="sp-stu-warnList" hidden></div>
                 </div>
@@ -672,15 +672,13 @@ export const SYNC_PAGE_SHELL_HTML = `<div class="app-shell app-shell--v9">
                         <tr>
                           <th>멤버</th>
                           <th>과목</th>
-                          <th>자동</th>
-                          <th>수동(override)</th>
-                          <th>최종</th>
+                          <th>상태</th>
                           <th>비고</th>
                         </tr>
                       </thead>
                       <tbody id="sp-stu-memberTbody">
                         <tr>
-                          <td colspan="6" class="sp-stu-member-editor__empty">목록을 불러와 주세요.</td>
+                          <td colspan="4" class="sp-stu-member-editor__empty">목록을 불러와 주세요.</td>
                         </tr>
                       </tbody>
                     </table>
