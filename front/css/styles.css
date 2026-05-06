@@ -2689,6 +2689,38 @@ input.sp-confirm:disabled {
   text-decoration: underline;
 }
 
+.sp-stu-daily__prod-cell {
+  font-weight: 650;
+  color: #1a2a3c;
+}
+
+.sp-stu-daily__num-cell {
+  text-align: right;
+  vertical-align: middle;
+}
+
+.sp-stu-daily__cell-btn {
+  border: 1px solid #c5d6ea;
+  background: #fff;
+  border-radius: 6px;
+  padding: 0.12rem 0.45rem;
+  min-width: 2.1rem;
+  cursor: pointer;
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  color: #0f3f73;
+}
+
+.sp-stu-daily__cell-btn:hover:not(:disabled) {
+  background: #eef4fb;
+  border-color: #9bb8d9;
+}
+
+.sp-stu-daily__cell-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
 .sp-stu-daily__sum-row td {
   background: #fff;
   font-weight: 750;

@@ -640,6 +640,36 @@ function setDailyHint_(mount, msg, show) {
 /**
  * @param {HTMLElement | null} mount
  */
+/**
+ * @param {string} s
+ * @returns {string}
+ */
+function escapeAttr_(s) {
+  return String(s != null ? s : '')
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;');
+}
+
+/**
+ * @param {string} prodKey
+ * @param {string} enrollFilter 빈 값 = 전체(총원)
+ * @param {number} n
+ * @returns {string}
+ */
+function dailyPeopleCountButtonHtml_(prodKey, enrollFilter, n) {
+  const v = n != null ? Number(n) : 0;
+  const dis = v <= 0 ? ' disabled' : '';
+  const ef = enrollFilter != null ? String(enrollFilter) : '';
+  return (
+    `<button type="button" class="sp-stu-daily__cell-btn"${dis} data-prod-key="${escapeAttr_(prodKey)}" data-enroll-filter="${escapeAttr_(ef)}">` +
+    `${String(v)}</button>`
+  );
+}
+
+/**
+ * @param {HTMLElement | null} mount
+ */
 function renderDailyReport_(mount) {
   const tbody = /** @type {HTMLElement | null} */ (mount && mount.querySelector('#sp-stu-dailyTbody'));
   if (!tbody) return;
@@ -652,30 +682,36 @@ function renderDailyReport_(mount) {
     const tr = document.createElement('tr');
     const prodKey = String(r.prodKey || '');
     const prodName = String(r.prodName || '');
+    const tot = r.total != null ? r.total : 0;
+    const nNew = r['신규'] != null ? r['신규'] : 0;
+    const nRe = r['재등록'] != null ? r['재등록'] : 0;
+    const nBack = r['다시옴'] != null ? r['다시옴'] : 0;
     tr.innerHTML =
-      `<td><button type="button" class="sp-stu-daily__prod-btn" data-prod-key="${prodKey}">${prodName}</button></td>` +
-      `<td>${String(r.total != null ? r.total : 0)}</td>` +
-      `<td>${String(r['신규'] != null ? r['신규'] : 0)}</td>` +
-      `<td>${String(r['재등록'] != null ? r['재등록'] : 0)}</td>` +
-      `<td>${String(r['다시옴'] != null ? r['다시옴'] : 0)}</td>`;
+      `<td class="sp-stu-daily__prod-cell">${escapeAttr_(prodName)}</td>` +
+      `<td class="sp-stu-daily__num-cell">${dailyPeopleCountButtonHtml_(prodKey, '', tot)}</td>` +
+      `<td class="sp-stu-daily__num-cell">${dailyPeopleCountButtonHtml_(prodKey, '신규', nNew)}</td>` +
+      `<td class="sp-stu-daily__num-cell">${dailyPeopleCountButtonHtml_(prodKey, '재등록', nRe)}</td>` +
+      `<td class="sp-stu-daily__num-cell">${dailyPeopleCountButtonHtml_(prodKey, '다시옴', nBack)}</td>`;
     tbody.appendChild(tr);
   });
-  wireDailyProductButtons_(mount);
+  wireDailyPeopleTableButtons_(mount);
 }
 
 /**
  * @param {HTMLElement | null} mount
  */
-function wireDailyProductButtons_(mount) {
+function wireDailyPeopleTableButtons_(mount) {
   const root = mount;
   if (!root) return;
-  const btns = Array.from(root.querySelectorAll('.sp-stu-daily__prod-btn'));
+  const btns = Array.from(root.querySelectorAll('.sp-stu-daily__cell-btn'));
   btns.forEach(function (b) {
     if (!(b instanceof HTMLButtonElement)) return;
     b.onclick = function () {
+      if (b.disabled) return;
       const pk = String(b.getAttribute('data-prod-key') || '');
+      const ef = String(b.getAttribute('data-enroll-filter') || '');
       if (!pk || !_dailyLastYmd) return;
-      void openProductMembersModal_(pk);
+      void openProductMembersModal_(pk, ef);
     };
   });
 }
@@ -744,15 +780,27 @@ async function loadDailyPeopleReport_(mount, ymd) {
 }
 
 /**
- * @param {string} prodKey
+ * @param {string} enrollFilter
+ * @returns {string}
  */
-async function openProductMembersModal_(prodKey) {
+function dailyPeopleEnrollFilterLabel_(enrollFilter) {
+  const t = String(enrollFilter != null ? enrollFilter : '').trim();
+  if (!t) return '전체(총원)';
+  return t;
+}
+
+/**
+ * @param {string} prodKey
+ * @param {string} [enrollFilter] 빈 값 = 총원
+ */
+async function openProductMembersModal_(prodKey, enrollFilter) {
   const url = String(GAS_BASE_URL).trim();
   const modal = /** @type {HTMLElement | null} */ (document.querySelector('#sp-stu-modal'));
   const titleEl = /** @type {HTMLElement | null} */ (document.querySelector('#sp-stu-modalTitle'));
   const subEl = /** @type {HTMLElement | null} */ (document.querySelector('#sp-stu-modalSub'));
   const bodyEl = /** @type {HTMLElement | null} */ (document.querySelector('#sp-stu-modalBody'));
   if (!url || !modal || !bodyEl) return;
+  const ef = enrollFilter != null ? String(enrollFilter).trim() : '';
   modal.removeAttribute('hidden');
   modal.setAttribute('aria-hidden', 'false');
   if (titleEl) titleEl.textContent = '학생 목록';
@@ -762,7 +810,7 @@ async function openProductMembersModal_(prodKey) {
     const r = await gasJsonpWithParams_(
       url,
       'studentMgmtDailyPeopleProductMembers',
-      { payload: JSON.stringify({ ymd: _dailyLastYmd, prodKey }) },
+      { payload: JSON.stringify({ ymd: _dailyLastYmd, prodKey, enrollFilter: ef }) },
       180000
     );
     if (!r || !r.ok) {
@@ -778,9 +826,12 @@ async function openProductMembersModal_(prodKey) {
     }
     const prodName = String(r.data && r.data.prodName ? r.data.prodName : prodKey);
     const ymd = String(r.data && r.data.ymd ? r.data.ymd : _dailyLastYmd);
+    const efOut = r.data && r.data.enrollFilter != null ? String(r.data.enrollFilter).trim() : ef;
     const members = r.data && Array.isArray(r.data.members) ? r.data.members : [];
     if (titleEl) titleEl.textContent = prodName;
-    if (subEl) subEl.textContent = `${ymd} 수강중 · ${members.length}명`;
+    if (subEl) {
+      subEl.textContent = `${ymd} · ${dailyPeopleEnrollFilterLabel_(efOut)} · ${members.length}명`;
+    }
 
     if (!members.length) {
       bodyEl.innerHTML = '<div class="sp-stu-member-editor__empty">표시할 학생이 없습니다.</div>';
