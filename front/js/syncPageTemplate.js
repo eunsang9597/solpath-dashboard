@@ -551,10 +551,120 @@ export const SYNC_PAGE_SHELL_HTML = `<div class="app-shell app-shell--v9">
                   </table>
                 </div>
               </details>
+
+              <details class="sp-stu-member-editor" id="sp-stu-memberEditor">
+                <summary class="sp-stu-member-editor__summary">학생 수강상태 관리</summary>
+                <p class="sp-stu-member-editor__lede">
+                  멤버(회원) 기준으로 상태를 확인하고, 운영 수동 상태(복귀 예정 등)와 비고(메모)를 남깁니다.
+                </p>
+
+                <div class="sp-stu-member-warn" id="sp-stu-warnBox">
+                  <div class="sp-stu-member-warn__head">
+                    <div class="sp-stu-member-warn__title">주의 필요 학생</div>
+                    <div class="sp-stu-member-warn__meta">
+                      총 <strong id="sp-stu-warnCount">—</strong>명
+                      <button type="button" class="btn btn--secondary sp-stu-member-warn__btn" id="sp-stu-btnWarnToggle">
+                        목록 펼치기
+                      </button>
+                    </div>
+                  </div>
+                  <div class="sp-stu-member-warn__list" id="sp-stu-warnList" hidden></div>
+                </div>
+
+                <div class="sp-stu-daily" id="sp-stu-daily">
+                  <div class="sp-stu-daily__head">
+                    <div class="sp-stu-daily__title">일자별 수강 인원</div>
+                    <div class="sp-stu-daily__controls">
+                      <label class="sp-stu-member-editor__filter">
+                        <span>날짜</span>
+                        <input type="date" id="sp-stu-dailyDate" />
+                      </label>
+                      <button type="button" class="btn btn--secondary" id="sp-stu-btnDailyLoad">표 만들기</button>
+                    </div>
+                  </div>
+                  <p class="sp-pm__hint" id="sp-stu-dailyHint" hidden></p>
+                  <div class="sp-stu-daily__table-wrap">
+                    <table class="sp-stu-member-editor__table sp-stu-daily__table" id="sp-stu-dailyTable">
+                      <thead>
+                        <tr>
+                          <th>수강반</th>
+                          <th>총원</th>
+                          <th>신규</th>
+                          <th>재등록</th>
+                          <th>다시옴</th>
+                        </tr>
+                      </thead>
+                      <tbody id="sp-stu-dailyTbody">
+                        <tr>
+                          <td colspan="5" class="sp-stu-member-editor__empty">날짜를 선택하고 표 만들기를 눌러 주세요.</td>
+                        </tr>
+                      </tbody>
+                      <tfoot>
+                        <tr class="sp-stu-daily__sum-row">
+                          <td><strong>합계(상품)</strong></td>
+                          <td id="sp-stu-dailySumTotal">—</td>
+                          <td id="sp-stu-dailySumNew">—</td>
+                          <td id="sp-stu-dailySumRe">—</td>
+                          <td id="sp-stu-dailySumBack">—</td>
+                        </tr>
+                        <tr class="sp-stu-daily__sum-row">
+                          <td><strong>회원별 총합(유니크)</strong></td>
+                          <td id="sp-stu-dailyUniqTotal">—</td>
+                          <td id="sp-stu-dailyUniqNew">—</td>
+                          <td id="sp-stu-dailyUniqRe">—</td>
+                          <td id="sp-stu-dailyUniqBack">—</td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </div>
+
+                <div class="sp-stu-member-editor__toolbar">
+                  <div class="sp-stu-member-editor__toolbar-left">
+                    <button type="button" class="btn btn--secondary" id="sp-stu-btnMemberLoad">목록 불러오기</button>
+                    <label class="sp-stu-member-editor__filter">
+                      <span>검색</span>
+                      <input type="search" id="sp-stu-memberSearch" placeholder="이름 또는 회원코드" autocomplete="off" />
+                    </label>
+                  </div>
+                </div>
+                <p class="sp-pm__hint" id="sp-stu-memberHint" hidden></p>
+                <div class="sp-stu-member-editor__table-wrap">
+                  <table class="sp-stu-member-editor__table" id="sp-stu-memberTable">
+                    <thead>
+                      <tr>
+                        <th>멤버</th>
+                        <th>과목</th>
+                        <th>자동</th>
+                        <th>수동(override)</th>
+                        <th>최종</th>
+                        <th>비고</th>
+                      </tr>
+                    </thead>
+                    <tbody id="sp-stu-memberTbody">
+                      <tr>
+                        <td colspan="6" class="sp-stu-member-editor__empty">목록을 불러와 주세요.</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </details>
             </div>
           </div>
         </section>
         </div>
         </main>
+      </div>
+    </div>
+
+    <div class="sp-modal" id="sp-stu-modal" hidden aria-hidden="true" role="dialog" aria-modal="true">
+      <div class="sp-modal__backdrop" id="sp-stu-modalBackdrop"></div>
+      <div class="sp-modal__panel" role="document">
+        <div class="sp-modal__head">
+          <div class="sp-modal__title" id="sp-stu-modalTitle">학생 목록</div>
+          <button type="button" class="btn btn--secondary sp-modal__close" id="sp-stu-modalClose">닫기</button>
+        </div>
+        <p class="sp-modal__sub" id="sp-stu-modalSub"></p>
+        <div class="sp-modal__body" id="sp-stu-modalBody"></div>
       </div>
     </div>`;

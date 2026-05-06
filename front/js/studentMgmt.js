@@ -91,12 +91,58 @@ const STU_CAT_LABEL = {
   challenge: '챌린지'
 };
 
+const STU_STATUS_LABEL = {
+  '수강중': '수강중',
+  '주의 필요': '주의 필요',
+  '이탈': '이탈',
+  '복귀 예정': '복귀 예정'
+};
+
+/**
+ * @param {string} s
+ * @returns {string}
+ */
+function statusBadgeClass_(s) {
+  const t = String(s || '').trim();
+  if (t === '주의 필요') return 'sp-stu-status-badge sp-stu-status-badge--warn';
+  if (t === '이탈') return 'sp-stu-status-badge sp-stu-status-badge--out';
+  if (t === '복귀 예정') return 'sp-stu-status-badge sp-stu-status-badge--plan';
+  return 'sp-stu-status-badge sp-stu-status-badge--ok';
+}
+
+/**
+ * @param {any} raw
+ * @returns {Array<{title:string, body:string, updatedAt:string}>}
+ */
+function parseRemarks_(raw) {
+  const t = String(raw != null ? raw : '').trim();
+  if (!t) return [];
+  try {
+    const j = JSON.parse(t);
+    if (!Array.isArray(j)) return [];
+    return j.map((x) => ({
+      title: x && x.title != null ? String(x.title) : '',
+      body: x && x.body != null ? String(x.body) : '',
+      updatedAt: x && x.updatedAt != null ? String(x.updatedAt) : ''
+    }));
+  } catch (_e) {
+    return [];
+  }
+}
+
 /** @type {Array<Record<string, string>>} */
 let _dateEditorRows = [];
 /** @type {'none'|'asc'|'desc'} */
 let _dateSortStart = 'none';
 /** @type {'none'|'asc'|'desc'} */
 let _dateSortEnd = 'none';
+
+/** @type {Array<any>} */
+let _memberRows = [];
+let _warnRows = [];
+let _warnListOpen = false;
+let _dailyLastYmd = '';
+let _dailyLastRows = [];
 
 /**
  * @param {string} c
@@ -185,6 +231,14 @@ export function initStudentMgmt(mount) {
   const btnRefresh = /** @type {HTMLButtonElement | null} */ (mount && mount.querySelector('#sp-stu-btnRefresh'));
   const btnDateLoad = /** @type {HTMLButtonElement | null} */ (mount && mount.querySelector('#sp-stu-btnDateLoad'));
   const btnDateSaveAll = /** @type {HTMLButtonElement | null} */ (mount && mount.querySelector('#sp-stu-btnDateSaveAll'));
+  const btnMemberLoad = /** @type {HTMLButtonElement | null} */ (mount && mount.querySelector('#sp-stu-btnMemberLoad'));
+  const memberSearch = /** @type {HTMLInputElement | null} */ (mount && mount.querySelector('#sp-stu-memberSearch'));
+  const btnWarnToggle = /** @type {HTMLButtonElement | null} */ (mount && mount.querySelector('#sp-stu-btnWarnToggle'));
+  const dailyDate = /** @type {HTMLInputElement | null} */ (mount && mount.querySelector('#sp-stu-dailyDate'));
+  const btnDailyLoad = /** @type {HTMLButtonElement | null} */ (mount && mount.querySelector('#sp-stu-btnDailyLoad'));
+  const modal = /** @type {HTMLElement | null} */ (document.querySelector('#sp-stu-modal'));
+  const modalBackdrop = /** @type {HTMLElement | null} */ (document.querySelector('#sp-stu-modalBackdrop'));
+  const modalClose = /** @type {HTMLButtonElement | null} */ (document.querySelector('#sp-stu-modalClose'));
   const filterCat = /** @type {HTMLSelectElement | null} */ (mount && mount.querySelector('#sp-stu-dateFilterCat'));
   const sortBtns = mount ? Array.from(mount.querySelectorAll('.sp-stu-sort-btn')) : [];
   if (!mount) {
@@ -202,6 +256,12 @@ export function initStudentMgmt(mount) {
     }
     if (btnDateSaveAll) {
       btnDateSaveAll.disabled = true;
+    }
+    if (btnMemberLoad) {
+      btnMemberLoad.disabled = true;
+    }
+    if (btnDailyLoad) {
+      btnDailyLoad.disabled = true;
     }
     applyStudentMgmtStateFromData(mount, {});
     return;
@@ -230,6 +290,52 @@ export function initStudentMgmt(mount) {
       void saveDateEditorAll_(mount);
     });
   }
+  if (btnMemberLoad) {
+    btnMemberLoad.disabled = false;
+    btnMemberLoad.addEventListener('click', function () {
+      void loadMemberEditorList_(mount);
+    });
+  }
+  if (memberSearch) {
+    memberSearch.addEventListener('input', function () {
+      renderMemberEditorRows_(mount);
+    });
+  }
+  if (btnWarnToggle) {
+    btnWarnToggle.addEventListener('click', function () {
+      _warnListOpen = !_warnListOpen;
+      renderWarnBox_(mount);
+    });
+  }
+  if (dailyDate) {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    const d = String(now.getDate()).padStart(2, '0');
+    dailyDate.value = `${y}-${m}-${d}`;
+  }
+  if (btnDailyLoad) {
+    btnDailyLoad.addEventListener('click', function () {
+      const ymd = dailyDate ? String(dailyDate.value || '').trim() : '';
+      void loadDailyPeopleReport_(mount, ymd);
+    });
+  }
+  const closeModal = function () {
+    if (!modal) return;
+    modal.setAttribute('hidden', '');
+    modal.setAttribute('aria-hidden', 'true');
+  };
+  if (modalBackdrop) {
+    modalBackdrop.addEventListener('click', closeModal);
+  }
+  if (modalClose) {
+    modalClose.addEventListener('click', closeModal);
+  }
+  document.addEventListener('keydown', function (e) {
+    if (e && e.key === 'Escape') {
+      closeModal();
+    }
+  });
   if (filterCat) {
     filterCat.addEventListener('change', function () {
       renderDateEditorRows_(mount);
@@ -353,6 +459,468 @@ function setDateEditorHint_(mount, msg, show) {
     hint.removeAttribute('hidden');
   } else {
     hint.setAttribute('hidden', '');
+  }
+}
+
+/**
+ * @param {HTMLElement | null} mount
+ * @param {string} msg
+ * @param {boolean} show
+ */
+function setMemberEditorHint_(mount, msg, show) {
+  const hint = /** @type {HTMLElement | null} */ (mount && mount.querySelector('#sp-stu-memberHint'));
+  if (!hint) return;
+  hint.textContent = msg || '';
+  if (show) hint.removeAttribute('hidden');
+  else hint.setAttribute('hidden', '');
+}
+
+/**
+ * @param {HTMLElement | null} mount
+ * @param {string} msg
+ * @param {boolean} show
+ */
+function setDailyHint_(mount, msg, show) {
+  const hint = /** @type {HTMLElement | null} */ (mount && mount.querySelector('#sp-stu-dailyHint'));
+  if (!hint) return;
+  hint.textContent = msg || '';
+  if (show) hint.removeAttribute('hidden');
+  else hint.setAttribute('hidden', '');
+}
+
+/**
+ * @param {HTMLElement | null} mount
+ */
+function renderDailyReport_(mount) {
+  const tbody = /** @type {HTMLElement | null} */ (mount && mount.querySelector('#sp-stu-dailyTbody'));
+  if (!tbody) return;
+  if (!_dailyLastRows.length) {
+    tbody.innerHTML = '<tr><td colspan="5" class="sp-stu-member-editor__empty">표시할 항목이 없습니다.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = '';
+  _dailyLastRows.forEach(function (r) {
+    const tr = document.createElement('tr');
+    const prodKey = String(r.prodKey || '');
+    const prodName = String(r.prodName || '');
+    tr.innerHTML =
+      `<td><button type="button" class="sp-stu-daily__prod-btn" data-prod-key="${prodKey}">${prodName}</button></td>` +
+      `<td>${String(r.total != null ? r.total : 0)}</td>` +
+      `<td>${String(r['신규'] != null ? r['신규'] : 0)}</td>` +
+      `<td>${String(r['재등록'] != null ? r['재등록'] : 0)}</td>` +
+      `<td>${String(r['다시옴'] != null ? r['다시옴'] : 0)}</td>`;
+    tbody.appendChild(tr);
+  });
+  wireDailyProductButtons_(mount);
+}
+
+/**
+ * @param {HTMLElement | null} mount
+ */
+function wireDailyProductButtons_(mount) {
+  const root = mount;
+  if (!root) return;
+  const btns = Array.from(root.querySelectorAll('.sp-stu-daily__prod-btn'));
+  btns.forEach(function (b) {
+    if (!(b instanceof HTMLButtonElement)) return;
+    b.onclick = function () {
+      const pk = String(b.getAttribute('data-prod-key') || '');
+      if (!pk || !_dailyLastYmd) return;
+      void openProductMembersModal_(pk);
+    };
+  });
+}
+
+/**
+ * @param {Object} totals
+ * @param {Object} uniq
+ * @param {HTMLElement|null} mount
+ */
+function applyDailyTotals_(mount, totals, uniq) {
+  const set = (id, v) => {
+    const el = mount && mount.querySelector(id);
+    if (el) el.textContent = String(v != null ? v : '—');
+  };
+  set('#sp-stu-dailySumTotal', totals && totals.total != null ? totals.total : '—');
+  set('#sp-stu-dailySumNew', totals && totals['신규'] != null ? totals['신규'] : '—');
+  set('#sp-stu-dailySumRe', totals && totals['재등록'] != null ? totals['재등록'] : '—');
+  set('#sp-stu-dailySumBack', totals && totals['다시옴'] != null ? totals['다시옴'] : '—');
+  set('#sp-stu-dailyUniqTotal', uniq && uniq.total != null ? uniq.total : '—');
+  set('#sp-stu-dailyUniqNew', uniq && uniq['신규'] != null ? uniq['신규'] : '—');
+  set('#sp-stu-dailyUniqRe', uniq && uniq['재등록'] != null ? uniq['재등록'] : '—');
+  set('#sp-stu-dailyUniqBack', uniq && uniq['다시옴'] != null ? uniq['다시옴'] : '—');
+}
+
+/**
+ * @param {HTMLElement | null} mount
+ * @param {string} ymd
+ */
+async function loadDailyPeopleReport_(mount, ymd) {
+  const url = String(GAS_BASE_URL).trim();
+  if (!url || !mount) return;
+  if (!ymd) {
+    setDailyHint_(mount, '날짜를 선택해 주세요.', true);
+    return;
+  }
+  setDailyHint_(mount, '표 만드는 중…', true);
+  try {
+    const r = await gasJsonpWithParams_(
+      url,
+      'studentMgmtDailyPeopleReport',
+      { payload: JSON.stringify({ ymd }) },
+      180000
+    );
+    if (!r || !r.ok) {
+      const em =
+        r && r.error && r.error.message
+          ? String(r.error.message)
+          : r && r.message
+            ? String(r.message)
+            : '표를 만들지 못했습니다.';
+      setDailyHint_(mount, em, true);
+      _dailyLastYmd = '';
+      _dailyLastRows = [];
+      renderDailyReport_(mount);
+      applyDailyTotals_(mount, null, null);
+      return;
+    }
+    _dailyLastYmd = String(r.data && r.data.ymd ? r.data.ymd : ymd);
+    _dailyLastRows = r.data && Array.isArray(r.data.rows) ? r.data.rows : [];
+    renderDailyReport_(mount);
+    applyDailyTotals_(mount, r.data ? r.data.totals : null, r.data ? r.data.uniqueTotals : null);
+    setDailyHint_(mount, `기준일: ${_dailyLastYmd}`, true);
+  } catch (e) {
+    setDailyHint_(mount, e && e.message != null ? String(e.message) : '요청 실패', true);
+  }
+}
+
+/**
+ * @param {string} prodKey
+ */
+async function openProductMembersModal_(prodKey) {
+  const url = String(GAS_BASE_URL).trim();
+  const modal = /** @type {HTMLElement | null} */ (document.querySelector('#sp-stu-modal'));
+  const titleEl = /** @type {HTMLElement | null} */ (document.querySelector('#sp-stu-modalTitle'));
+  const subEl = /** @type {HTMLElement | null} */ (document.querySelector('#sp-stu-modalSub'));
+  const bodyEl = /** @type {HTMLElement | null} */ (document.querySelector('#sp-stu-modalBody'));
+  if (!url || !modal || !bodyEl) return;
+  modal.removeAttribute('hidden');
+  modal.setAttribute('aria-hidden', 'false');
+  if (titleEl) titleEl.textContent = '학생 목록';
+  if (subEl) subEl.textContent = '불러오는 중…';
+  bodyEl.innerHTML = '';
+  try {
+    const r = await gasJsonpWithParams_(
+      url,
+      'studentMgmtDailyPeopleProductMembers',
+      { payload: JSON.stringify({ ymd: _dailyLastYmd, prodKey }) },
+      180000
+    );
+    if (!r || !r.ok) {
+      const em =
+        r && r.error && r.error.message
+          ? String(r.error.message)
+          : r && r.message
+            ? String(r.message)
+            : '목록을 불러오지 못했습니다.';
+      if (subEl) subEl.textContent = em;
+      bodyEl.innerHTML = '';
+      return;
+    }
+    const prodName = String(r.data && r.data.prodName ? r.data.prodName : prodKey);
+    const ymd = String(r.data && r.data.ymd ? r.data.ymd : _dailyLastYmd);
+    const members = r.data && Array.isArray(r.data.members) ? r.data.members : [];
+    if (titleEl) titleEl.textContent = prodName;
+    if (subEl) subEl.textContent = `${ymd} 수강중 · ${members.length}명`;
+
+    if (!members.length) {
+      bodyEl.innerHTML = '<div class="sp-stu-member-editor__empty">표시할 학생이 없습니다.</div>';
+      return;
+    }
+    bodyEl.innerHTML = renderMembersTable_(members);
+  } catch (e) {
+    if (subEl) subEl.textContent = e && e.message != null ? String(e.message) : '요청 실패';
+    bodyEl.innerHTML = '';
+  }
+}
+
+/**
+ * @param {Array<any>} members
+ * @returns {string}
+ */
+function renderMembersTable_(members) {
+  const cols = [
+    ['uid', 'uid'],
+    ['name', 'name'],
+    ['callnum', 'callnum'],
+    ['last_login_time', 'last_login_time'],
+    ['group_titles', 'group_titles'],
+    ['member_status_auto', 'member_status_auto'],
+    ['member_status_override', 'member_status_override'],
+    ['member_status', 'member_status'],
+    ['remarks_json', 'remarks_json']
+  ];
+  const th = cols.map((c) => `<th>${c[1]}</th>`).join('');
+  const rows = members
+    .map((m) => {
+      const tds = cols
+        .map((c) => {
+          const v = m && m[c[0]] != null ? String(m[c[0]]) : '';
+          const safe = v.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+          return `<td>${safe}</td>`;
+        })
+        .join('');
+      return `<tr>${tds}</tr>`;
+    })
+    .join('');
+  return `<table class="sp-stu-modal-table"><thead><tr>${th}</tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+/**
+ * @param {HTMLElement | null} mount
+ */
+function renderWarnBox_(mount) {
+  const countEl = /** @type {HTMLElement | null} */ (mount && mount.querySelector('#sp-stu-warnCount'));
+  const listEl = /** @type {HTMLElement | null} */ (mount && mount.querySelector('#sp-stu-warnList'));
+  const btn = /** @type {HTMLButtonElement | null} */ (mount && mount.querySelector('#sp-stu-btnWarnToggle'));
+  if (countEl) countEl.textContent = String(_warnRows.length);
+  if (!listEl) return;
+  if (!_warnRows.length) {
+    listEl.innerHTML = '<div class="sp-stu-member-editor__empty">주의 필요 학생이 없습니다.</div>';
+    listEl.setAttribute('hidden', '');
+    if (btn) btn.textContent = '목록 펼치기';
+    return;
+  }
+  if (!_warnListOpen) {
+    listEl.setAttribute('hidden', '');
+    if (btn) btn.textContent = '목록 펼치기';
+    return;
+  }
+  if (btn) btn.textContent = '목록 접기';
+  listEl.removeAttribute('hidden');
+  listEl.innerHTML = '';
+  _warnRows.forEach(function (r) {
+    const el = document.createElement('div');
+    el.className = 'sp-stu-member-warn__item';
+    el.innerHTML =
+      `<div class="sp-stu-member-warn__item-name">${String(r.name || '')}</div>` +
+      `<div class="sp-stu-member-warn__item-subjects">${String(r.subjects || '') || '-'}</div>`;
+    listEl.appendChild(el);
+  });
+}
+
+/**
+ * @param {HTMLElement | null} mount
+ * @returns {Array<any>}
+ */
+function getMemberViewRows_(mount) {
+  const qEl = /** @type {HTMLInputElement | null} */ (mount && mount.querySelector('#sp-stu-memberSearch'));
+  const q = qEl ? String(qEl.value || '').trim().toLowerCase() : '';
+  let rows = _memberRows.slice();
+  if (q) {
+    rows = rows.filter((r) => {
+      const nm = String(r.name || '').toLowerCase();
+      const mc = String(r.memberCode || '').toLowerCase();
+      return nm.includes(q) || mc.includes(q);
+    });
+  }
+  rows.sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
+  return rows;
+}
+
+/**
+ * @param {HTMLElement | null} mount
+ */
+function renderMemberEditorRows_(mount) {
+  const tbody = /** @type {HTMLElement | null} */ (mount && mount.querySelector('#sp-stu-memberTbody'));
+  if (!tbody) return;
+  const rows = getMemberViewRows_(mount);
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="6" class="sp-stu-member-editor__empty">표시할 항목이 없습니다.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = '';
+  rows.forEach(function (r) {
+    const tr = document.createElement('tr');
+    const mc = String(r.memberCode || '');
+    const stAuto = String(r.statusAuto || '');
+    const stOv = String(r.statusOverride || '');
+    const stFinal = String(r.statusFinal || '');
+    const remarks = parseRemarks_(r.remarksJson);
+    const remarkList = remarks.slice(0, 3).map((x) => `<div class="sp-stu-remark__item">${String(x.title || '')}</div>`).join('');
+    tr.setAttribute('data-member-code', mc);
+    tr.innerHTML =
+      `<td><strong>${String(r.name || '')}</strong><div class="sp-muted">#${mc}</div></td>` +
+      `<td>${String(r.subjects || '') || '-'}</td>` +
+      `<td><span class="${statusBadgeClass_(stAuto)}">${STU_STATUS_LABEL[stAuto] || stAuto || '-'}</span></td>` +
+      `<td>${renderOverrideSelectHtml_(mc, stOv)}</td>` +
+      `<td><span class="${statusBadgeClass_(stFinal)}">${STU_STATUS_LABEL[stFinal] || stFinal || '-'}</span></td>` +
+      `<td>${renderRemarkBoxHtml_(mc, remarkList)}</td>`;
+    tbody.appendChild(tr);
+  });
+  wireMemberRowEvents_(mount);
+}
+
+/**
+ * @param {string} memberCode
+ * @param {string} current
+ * @returns {string}
+ */
+function renderOverrideSelectHtml_(memberCode, current) {
+  const cur = String(current || '').trim();
+  const opts = ['', '수강중', '주의 필요', '이탈', '복귀 예정'];
+  const o = opts
+    .map((x) => {
+      const lbl = x === '' ? '(자동 사용)' : x;
+      const sel = x === cur ? ' selected' : '';
+      return `<option value="${x}"${sel}>${lbl}</option>`;
+    })
+    .join('');
+  return `<div class="sp-stu-remark__row"><select class="sp-confirm sp-stu-ov-select" data-member-code="${memberCode}">${o}</select><button type="button" class="btn btn--primary sp-stu-remark__btn sp-stu-ov-save" data-member-code="${memberCode}">저장</button></div>`;
+}
+
+/**
+ * @param {string} memberCode
+ * @param {string} remarkListHtml
+ * @returns {string}
+ */
+function renderRemarkBoxHtml_(memberCode, remarkListHtml) {
+  return (
+    `<div class="sp-stu-remark">` +
+    `<textarea class="sp-stu-remark-in" data-member-code="${memberCode}" placeholder="비고(메모) — 비워도 저장하면 날짜가 남습니다."></textarea>` +
+    `<div class="sp-stu-remark__row">` +
+    `<button type="button" class="btn btn--secondary sp-stu-remark__btn sp-stu-remark-add" data-member-code="${memberCode}">메모 추가</button>` +
+    `</div>` +
+    `<div class="sp-stu-remark__list">${remarkListHtml || '<div class="sp-stu-remark__item">메모 없음</div>'}</div>` +
+    `</div>`
+  );
+}
+
+/**
+ * @param {HTMLElement | null} mount
+ */
+function wireMemberRowEvents_(mount) {
+  const root = mount;
+  if (!root) return;
+  const saves = Array.from(root.querySelectorAll('.sp-stu-ov-save'));
+  saves.forEach((b) => {
+    if (!(b instanceof HTMLButtonElement)) return;
+    b.onclick = function () {
+      const mc = String(b.getAttribute('data-member-code') || '');
+      const sel = /** @type {HTMLSelectElement | null} */ (root.querySelector(`.sp-stu-ov-select[data-member-code="${mc}"]`));
+      const v = sel ? String(sel.value || '') : '';
+      void saveMemberOverride_(mount, mc, v);
+    };
+  });
+  const adds = Array.from(root.querySelectorAll('.sp-stu-remark-add'));
+  adds.forEach((b) => {
+    if (!(b instanceof HTMLButtonElement)) return;
+    b.onclick = function () {
+      const mc = String(b.getAttribute('data-member-code') || '');
+      const ta = /** @type {HTMLTextAreaElement | null} */ (root.querySelector(`.sp-stu-remark-in[data-member-code="${mc}"]`));
+      const body = ta ? String(ta.value || '') : '';
+      if (ta) ta.value = '';
+      void appendMemberRemark_(mount, mc, body);
+    };
+  });
+}
+
+/**
+ * @param {HTMLElement | null} mount
+ */
+async function loadMemberEditorList_(mount) {
+  const url = String(GAS_BASE_URL).trim();
+  if (!url || !mount) return;
+  setMemberEditorHint_(mount, '', false);
+  try {
+    const r = await gasJsonp_(url, 'studentMgmtMemberList', 120000);
+    if (!r || !r.ok) {
+      const em =
+        r && r.error && r.error.message
+          ? String(r.error.message)
+          : r && r.message
+            ? String(r.message)
+            : '목록을 불러오지 못했습니다.';
+      setMemberEditorHint_(mount, em, true);
+      _memberRows = [];
+      _warnRows = [];
+      renderWarnBox_(mount);
+      renderMemberEditorRows_(mount);
+      return;
+    }
+    _memberRows = r.data && Array.isArray(r.data.rows) ? r.data.rows : [];
+    _warnRows = r.data && Array.isArray(r.data.warnRows) ? r.data.warnRows : [];
+    _warnListOpen = false;
+    renderWarnBox_(mount);
+    renderMemberEditorRows_(mount);
+  } catch (e) {
+    setMemberEditorHint_(mount, e && e.message != null ? String(e.message) : '요청 실패', true);
+  }
+}
+
+/**
+ * @param {HTMLElement | null} mount
+ * @param {string} memberCode
+ * @param {string} statusOverride
+ */
+async function saveMemberOverride_(mount, memberCode, statusOverride) {
+  const url = String(GAS_BASE_URL).trim();
+  if (!url || !mount) return;
+  setMemberEditorHint_(mount, '저장 중…', true);
+  try {
+    const r = await gasJsonpWithParams_(
+      url,
+      'studentMgmtMemberSave',
+      { payload: JSON.stringify({ memberCode, statusOverride }) },
+      120000
+    );
+    if (!r || !r.ok) {
+      const em =
+        r && r.error && r.error.message
+          ? String(r.error.message)
+          : r && r.message
+            ? String(r.message)
+            : '저장하지 못했습니다.';
+      setMemberEditorHint_(mount, em, true);
+      return;
+    }
+    await loadMemberEditorList_(mount);
+    setMemberEditorHint_(mount, '저장 완료', true);
+  } catch (e) {
+    setMemberEditorHint_(mount, e && e.message != null ? String(e.message) : '요청 실패', true);
+  }
+}
+
+/**
+ * @param {HTMLElement | null} mount
+ * @param {string} memberCode
+ * @param {string} remarkBody
+ */
+async function appendMemberRemark_(mount, memberCode, remarkBody) {
+  const url = String(GAS_BASE_URL).trim();
+  if (!url || !mount) return;
+  setMemberEditorHint_(mount, '메모 저장 중…', true);
+  try {
+    const r = await gasJsonpWithParams_(
+      url,
+      'studentMgmtMemberSave',
+      { payload: JSON.stringify({ memberCode, appendRemark: true, remarkBody }) },
+      120000
+    );
+    if (!r || !r.ok) {
+      const em =
+        r && r.error && r.error.message
+          ? String(r.error.message)
+          : r && r.message
+            ? String(r.message)
+            : '메모를 저장하지 못했습니다.';
+      setMemberEditorHint_(mount, em, true);
+      return;
+    }
+    await loadMemberEditorList_(mount);
+    setMemberEditorHint_(mount, '메모 저장 완료', true);
+  } catch (e) {
+    setMemberEditorHint_(mount, e && e.message != null ? String(e.message) : '요청 실패', true);
   }
 }
 

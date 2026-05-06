@@ -84,6 +84,17 @@ var DB_STUDENT_MEMBER_HEADERS = [
   'callnum',
   'last_login_time',
   'group_titles',
+  /** 자동 계산: `수강중`/`주의 필요`/`이탈` */
+  'member_status_auto',
+  /**
+   * 운영 수동값(빈 값이면 자동 사용):
+   * `수강중`/`주의 필요`/`이탈`/`복귀 예정`
+   */
+  'member_status_override',
+  /** 최종 표시 값(override 우선, 없으면 auto) */
+  'member_status',
+  /** 멤버 비고(메모 리스트) — JSON 문자열 */
+  'remarks_json',
   'fetched_at',
   'source_sync_id'
 ];
@@ -98,6 +109,8 @@ var DB_STUDENT_ORDER_EVENT_HEADERS = [
   'lifecycle',
   'product_start_date',
   'product_end_date',
+  'enroll_status',
+  'rereg_base_date',
   'order_status',
   'section_status',
   'claim_status',

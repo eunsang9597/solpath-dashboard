@@ -122,17 +122,21 @@
 | 4 | `callnum` | |
 | 5 | `last_login_time` | |
 | 6 | `group_titles` | JSON 문자열, 원천과 동일 의미 |
+| 7 | `member_status_auto` | 자동 상태 (`수강중`/`주의 필요`/`이탈`) — today 기준 계산값 |
+| 8 | `member_status_override` | 운영 수동 상태 (`수강중`/`주의 필요`/`이탈`/`복귀 예정`) — 비면 자동 사용 |
+| 9 | `member_status` | 최종 상태(override 우선, 없으면 auto) |
+| 10 | `remarks_json` | 멤버 비고(메모 리스트) JSON 문자열 |
 
 **넣지 않음**: `member_grade`, `join_time`, `sms_agree`, `email_agree` 및 그 외 주소·추천 등.
 
 | # | 컬럼명 | 설명 |
 |---|--------|------|
-| 7 | `fetched_at` | 행 반영 시각 (ISO) |
-| 8 | `source_sync_id` | 마지막 반영 동기화 ID |
+| 11 | `fetched_at` | 행 반영 시각 (ISO) |
+| 12 | `source_sync_id` | 마지막 반영 동기화 ID |
 
 **1행 헤더 순서 (확정)**
 
-`member_code`, `uid`, `name`, `callnum`, `last_login_time`, `group_titles`, `fetched_at`, `source_sync_id`
+`member_code`, `uid`, `name`, `callnum`, `last_login_time`, `group_titles`, `member_status_auto`, `member_status_override`, `member_status`, `remarks_json`, `fetched_at`, `source_sync_id`
 
 ---
 
@@ -157,12 +161,14 @@
 | `lifecycle` | `product_mapping.lifecycle` |
 | `product_start_date` | §6 규칙 + 프론트 수정 |
 | `product_end_date` | §6 규칙 + 프론트 수정 |
+| `enroll_status` | 주문 이벤트 기준 상태 (`신규`/`재등록`/`다시옴`) |
+| `rereg_base_date` | 재등록 판정 기준일(`yyyy-MM-dd`) |
 
 ### 8.4 권장 1행 헤더 순서 (확정안)
 
 식별·조인·기간·상태·상품·메타 순.
 
-`order_item_code`, `order_no`, `member_code`, `order_time`, `internal_category`, `lifecycle`, `product_start_date`, `product_end_date`, `order_status`, `section_status`, `claim_status`, `claim_type`, `claim_event_time`, `prod_no`, `prod_name`, `options_raw`, `options_count`, `row_json`, `updated_at`, `fetched_at`, `source_sync_id`
+`order_item_code`, `order_no`, `member_code`, `order_time`, `internal_category`, `lifecycle`, `product_start_date`, `product_end_date`, `enroll_status`, `rereg_base_date`, `order_status`, `section_status`, `claim_status`, `claim_type`, `claim_event_time`, `prod_no`, `prod_name`, `options_raw`, `options_count`, `row_json`, `updated_at`, `fetched_at`, `source_sync_id`
 
 - `updated_at`: 프론트의 “수강 시작일, 종료일 설정”에서 시작/종료를 저장한 시각(ISO). 날짜 미수정 행은 빈 값일 수 있다.
 

@@ -114,6 +114,10 @@ function openSyncAllowedActions_() {
     'studentMgmtDateEditorList',
     'studentMgmtDateEditorSave',
     'studentMgmtDateEditorSaveBatch',
+    'studentMgmtMemberList',
+    'studentMgmtMemberSave',
+    'studentMgmtDailyPeopleReport',
+    'studentMgmtDailyPeopleProductMembers',
     'analyticsExportStagingPut',
     'analyticsTableExportFromStaging'
   ];
@@ -337,6 +341,30 @@ function openSyncRouteAction_(action, e) {
       return { ok: false, error: { code: 'BAD_REQUEST', message: 'payload 없음' } };
     }
     return dbStudentMgmtDateEditorSaveBatch_(pStuSaveB);
+  }
+  if (action === 'studentMgmtMemberList') {
+    return dbStudentMgmtMemberList_();
+  }
+  if (action === 'studentMgmtMemberSave') {
+    var pStuMemSave = openSyncExtractPayloadJson_(e);
+    if (!pStuMemSave) {
+      return { ok: false, error: { code: 'BAD_REQUEST', message: 'payload 없음' } };
+    }
+    return dbStudentMgmtMemberSave_(pStuMemSave);
+  }
+  if (action === 'studentMgmtDailyPeopleReport') {
+    var pStuDaily = openSyncExtractPayloadJson_(e);
+    if (!pStuDaily) {
+      return { ok: false, error: { code: 'BAD_REQUEST', message: 'payload 없음' } };
+    }
+    return dbStudentMgmtDailyPeopleReport_(pStuDaily);
+  }
+  if (action === 'studentMgmtDailyPeopleProductMembers') {
+    var pStuDailyM = openSyncExtractPayloadJson_(e);
+    if (!pStuDailyM) {
+      return { ok: false, error: { code: 'BAD_REQUEST', message: 'payload 없음' } };
+    }
+    return dbStudentMgmtDailyPeopleProductMembers_(pStuDailyM);
   }
   return { ok: false, error: 'UNKNOWN_ACTION', allowed: openSyncAllowedActions_() };
 }
