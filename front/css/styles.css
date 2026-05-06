@@ -2629,6 +2629,52 @@ input.sp-confirm:disabled {
   text-overflow: ellipsis;
 }
 
+button.sp-stu-remark__item--open {
+  display: block;
+  width: 100%;
+  border: 0;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+button.sp-stu-remark__item--open:hover {
+  color: #0f3f73;
+  text-decoration: underline;
+}
+
+.sp-stu-remark-detail {
+  font-size: calc(0.84rem + var(--sp-text-bump));
+  color: #1a2a3c;
+}
+
+.sp-stu-remark-detail__dl {
+  margin: 0;
+  display: grid;
+  gap: 0.5rem 0.75rem;
+}
+
+.sp-stu-remark-detail__dl dt {
+  margin: 0;
+  font-weight: 700;
+  font-size: calc(0.72rem + var(--sp-text-bump));
+  color: #5b6470;
+}
+
+.sp-stu-remark-detail__dl dd {
+  margin: 0;
+}
+
+.sp-stu-remark-detail__body {
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.45;
+}
+
 .sp-stu-daily,
 .sp-stu-record {
   border: 1px solid #dbe2ec;

@@ -652,6 +652,73 @@ function escapeAttr_(s) {
 }
 
 /**
+ * @param {string} s
+ * @returns {string}
+ */
+function escapeHtmlText_(s) {
+  return String(s != null ? s : '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+/**
+ * @param {string} memberCode
+ * @param {number} remarkIndex `remarks_json` 배열 인덱스(목록에 보이는 순서와 동일)
+ */
+function openMemberRemarkDetailModal_(memberCode, remarkIndex) {
+  const modal = /** @type {HTMLElement | null} */ (document.querySelector('#sp-stu-modal'));
+  const titleEl = /** @type {HTMLElement | null} */ (document.querySelector('#sp-stu-modalTitle'));
+  const subEl = /** @type {HTMLElement | null} */ (document.querySelector('#sp-stu-modalSub'));
+  const bodyEl = /** @type {HTMLElement | null} */ (document.querySelector('#sp-stu-modalBody'));
+  if (!modal || !bodyEl) {
+    return;
+  }
+  const mc = String(memberCode || '').trim();
+  const ix = Number(remarkIndex);
+  if (!mc.length || !Number.isFinite(ix) || ix < 0) {
+    return;
+  }
+  const row = _memberRows.find(function (r) {
+    return String(r.memberCode || '').trim() === mc;
+  });
+  if (!row) {
+    return;
+  }
+  const remarks = parseRemarks_(row.remarksJson);
+  const item = remarks[ix];
+  if (!item) {
+    return;
+  }
+  modal.removeAttribute('hidden');
+  modal.setAttribute('aria-hidden', 'false');
+  if (titleEl) {
+    titleEl.textContent = '메모';
+  }
+  const name = String(row.name || '').trim();
+  if (subEl) {
+    subEl.textContent = name ? `${name} · #${mc}` : `#${mc}`;
+  }
+  const t = String(item.title || '').trim();
+  const b = String(item.body || '');
+  const u = String(item.updatedAt || '').trim();
+  const bodyHtml =
+    '<div class="sp-stu-remark-detail">' +
+    '<dl class="sp-stu-remark-detail__dl">' +
+    '<dt>기록 제목</dt><dd>' +
+    escapeHtmlText_(t.length ? t : '(없음)') +
+    '</dd>' +
+    '<dt>내용</dt><dd class="sp-stu-remark-detail__body">' +
+    escapeHtmlText_(b.length ? b : '—') +
+    '</dd>' +
+    (u.length
+      ? '<dt>기록 시각</dt><dd>' + escapeHtmlText_(u) + '</dd>'
+      : '') +
+    '</dl></div>';
+  bodyEl.innerHTML = bodyHtml;
+}
+
+/**
  * @param {string} prodKey
  * @param {string} enrollFilter 빈 값 = 전체(총원)
  * @param {number} n
@@ -983,7 +1050,20 @@ function renderMemberEditorRows_(mount) {
     const stOv = normalizeMemberStatus_(String(r.statusOverride || ''));
     const stFinal = normalizeMemberStatus_(String(r.statusFinal || ''));
     const remarks = parseRemarks_(r.remarksJson);
-    const remarkList = remarks.slice(0, 3).map((x) => `<div class="sp-stu-remark__item">${String(x.title || '')}</div>`).join('');
+    const remarkList =
+      remarks.length === 0
+        ? ''
+        : remarks
+            .slice(0, 3)
+            .map(function (x, idx) {
+              const titleRaw = String(x.title || '').trim();
+              const label = titleRaw.length ? titleRaw : '제목 없음';
+              return (
+                `<button type="button" class="sp-stu-remark__item sp-stu-remark__item--open" data-member-code="${escapeAttr_(mc)}" data-remark-index="${idx}">` +
+                `${escapeHtmlText_(label)}</button>`
+              );
+            })
+            .join('');
     tr.setAttribute('data-member-code', mc);
     tr.innerHTML =
       `<td><strong>${String(r.name || '')}</strong><div class="sp-muted">#${mc}</div></td>` +
@@ -1057,6 +1137,17 @@ function wireMemberRowEvents_(mount) {
       const body = ta ? String(ta.value || '') : '';
       if (ta) ta.value = '';
       void appendMemberRemark_(mount, mc, body);
+    };
+  });
+  const remarkOpens = Array.from(root.querySelectorAll('.sp-stu-remark__item--open'));
+  remarkOpens.forEach((b) => {
+    if (!(b instanceof HTMLButtonElement)) {
+      return;
+    }
+    b.onclick = function () {
+      const mc0 = String(b.getAttribute('data-member-code') || '');
+      const ix = parseInt(String(b.getAttribute('data-remark-index') || '0'), 10);
+      openMemberRemarkDetailModal_(mc0, ix);
     };
   });
 }
