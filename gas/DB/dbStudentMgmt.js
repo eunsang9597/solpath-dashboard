@@ -480,9 +480,11 @@ function dbStuBuildFixedManualRows_(preserve, nowIso, batchId) {
 }
 
 /**
- * 수강 시작/종료일 편집 목록: `order_item_code`별 1행(동일 코드 중복 시 order_time 최신).
- * 같은 멤버·같은 internal_category라도 월호 등 별도 주문이면 모두 표시.
- * 종료일이 현재 기준 14일 초과 지난 건은 제외.
+ * 수강 시작/종료일 편집 목록 (멤버별):
+ * 1) 오늘(서울 일자)이 상품 종료일(날짜) 이전·당일인 주문 — 만료 전인 **모두** 포함.
+ * 2) 1)에 해당하는 주문이 하나도 없으면, 멤버 **최종 상태**가 이탈이 아닌 경우에 한해
+ *    그 멤버 주문 중 **종료일(ymd)이 가장 늦은** 1건(동률이면 order_item_code).
+ * `order_item_code` 중복 시 order_time 최신 1행만 후보에 둠. 환불·jasoseo 제외.
  * @return {{ ok: true, data: { rows: Object[] } }|{ ok: false, error: { code: string, message: string } }}
  */
 function dbStudentMgmtDateEditorList_() {
@@ -497,7 +499,9 @@ function dbStudentMgmtDateEditorList_() {
   }
   var evIdx = dbStuHeaderIndexMap_(shEv, DB_STUDENT_ORDER_EVENT_HEADERS);
   var rows = shEv.getRange(2, 1, shEv.getLastRow() - 1, DB_STUDENT_ORDER_EVENT_HEADERS.length).getValues();
+  var todayYmd = Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM-dd');
   var nameByMemberCode = {};
+  var finalStatusByMc = {};
   if (shM && shM.getLastRow() >= 2) {
     var mIdx = dbStuHeaderIndexMap_(shM, DB_STUDENT_MEMBER_HEADERS);
     var mVals = shM.getRange(2, 1, shM.getLastRow() - 1, DB_STUDENT_MEMBER_HEADERS.length).getValues();
@@ -512,11 +516,16 @@ function dbStudentMgmtDateEditorList_() {
       if (nm.length) {
         nameByMemberCode[mc] = nm;
       }
+      if (mIdx.member_status >= 0) {
+        finalStatusByMc[mc] = dbStuNormalizeMemberStatusCell_(String(mr[mIdx.member_status] != null ? mr[mIdx.member_status] : ''));
+      } else {
+        finalStatusByMc[mc] = '';
+      }
     }
   }
-  var cutoff = new Date();
-  cutoff.setDate(cutoff.getDate() - 14);
-  var bestByKey = {};
+
+  /** @type {Object<string, { r: Array<*>, memberCode: string, itemCode: string, cat: string, endYmd: string, otKey: string }>} */
+  var bestByItem = {};
   var i;
   for (i = 0; i < rows.length; i++) {
     var r = rows[i] || [];
@@ -531,49 +540,114 @@ function dbStudentMgmtDateEditorList_() {
     if (claimStatus === 'cancel') {
       continue;
     }
-    var endRaw = r[evIdx.product_end_date];
-    if (String(endRaw != null ? endRaw : '').trim().length) {
-      var endDt = dbStuDateFromAny_(endRaw);
-      if (endDt && endDt.getTime() < cutoff.getTime()) {
-        continue;
-      }
-    }
     var memberCode = String(r[evIdx.member_code] != null ? r[evIdx.member_code] : '').trim();
     var itemCode = String(r[evIdx.order_item_code] != null ? r[evIdx.order_item_code] : '').trim();
     if (!itemCode.length) {
       continue;
     }
-    /** 멤버+카테고리 최신 1건이면 4월·5월호처럼 늦게 결제한 월호만 남음 → 주문항목 코드 단위 */
-    var key = itemCode;
+    var endYmd = dbStuNormalizeYmd_(r[evIdx.product_end_date] != null ? String(r[evIdx.product_end_date]) : '');
+    if (!endYmd.length) {
+      continue;
+    }
     var ot = String(r[evIdx.order_time] != null ? r[evIdx.order_time] : '').trim();
-    var otKey = dbStuNormalizeYmd_(ot) + '|' + ot;
-    var prev = bestByKey[key];
-    if (!prev || otKey > prev.orderTimeKey || (otKey === prev.orderTimeKey && itemCode > prev.orderItemCode)) {
-      var nm0 = memberCode.length && nameByMemberCode[memberCode] ? nameByMemberCode[memberCode] : '';
-      if (!nm0.length) {
-        nm0 = memberCode.length ? memberCode + '(비회원)' : '비회원';
-      }
-      bestByKey[key] = {
-        orderItemCode: itemCode,
+    var otKey = dbStuNormalizeYmd_(ot) + '\t' + ot + '\t' + itemCode;
+    var prev = bestByItem[itemCode];
+    if (!prev || otKey > prev.otKey) {
+      bestByItem[itemCode] = {
+        r: r,
         memberCode: memberCode,
-        memberName: nm0,
-        internalCategory: cat,
-        orderTime: ot,
-        productStartDate: String(r[evIdx.product_start_date] != null ? r[evIdx.product_start_date] : ''),
-        productEndDate: String(r[evIdx.product_end_date] != null ? r[evIdx.product_end_date] : ''),
-        updatedAt: String(evIdx.updated_at >= 0 && r[evIdx.updated_at] != null ? r[evIdx.updated_at] : ''),
-        prodName: String(r[evIdx.prod_name] != null ? r[evIdx.prod_name] : ''),
-        orderTimeKey: otKey
+        itemCode: itemCode,
+        cat: cat,
+        endYmd: endYmd,
+        otKey: otKey
       };
     }
   }
-  var out = [];
-  var keys = Object.keys(bestByKey);
+
+  /** 멤버별 후보 배열 (회원코드 없음: 주문항목당 단독 그룹) */
+  /** @type {Object<string, Array<{ r: Array<*>, memberCode: string, itemCode: string, cat: string, endYmd: string }>>} */
+  var byMc = {};
+  var itemKeys = Object.keys(bestByItem);
   var ki;
-  for (ki = 0; ki < keys.length; ki++) {
-    var it = bestByKey[keys[ki]];
-    delete it.orderTimeKey;
-    out.push(it);
+  for (ki = 0; ki < itemKeys.length; ki++) {
+    var pack = bestByItem[itemKeys[ki]];
+    var mc2 = pack.memberCode;
+    var gk = mc2.length ? mc2 : '__single__\t' + pack.itemCode;
+    if (!byMc[gk]) {
+      byMc[gk] = [];
+    }
+    byMc[gk].push({
+      r: pack.r,
+      memberCode: pack.memberCode,
+      itemCode: pack.itemCode,
+      cat: pack.cat,
+      endYmd: pack.endYmd
+    });
+  }
+
+  /** @type {Object<string, boolean>} */
+  var picked = {};
+  var gks = Object.keys(byMc);
+  var gj;
+  for (gj = 0; gj < gks.length; gj++) {
+    var gkey = gks[gj];
+    var listMc = byMc[gkey];
+    var rule1 = [];
+    var rx;
+    for (rx = 0; rx < listMc.length; rx++) {
+      if (listMc[rx].endYmd >= todayYmd) {
+        rule1.push(listMc[rx]);
+      }
+    }
+    if (rule1.length > 0) {
+      for (rx = 0; rx < rule1.length; rx++) {
+        picked[rule1[rx].itemCode] = true;
+      }
+      continue;
+    }
+    var mcReal = listMc.length ? listMc[0].memberCode : '';
+    var stFin = mcReal.length ? finalStatusByMc[mcReal] || '' : '';
+    if (stFin === '이탈') {
+      continue;
+    }
+    var best = listMc[0];
+    for (rx = 1; rx < listMc.length; rx++) {
+      var cand = listMc[rx];
+      if (cand.endYmd > best.endYmd) {
+        best = cand;
+      } else if (cand.endYmd === best.endYmd && cand.itemCode > best.itemCode) {
+        best = cand;
+      }
+    }
+    picked[best.itemCode] = true;
+  }
+
+  var out = [];
+  var pk = Object.keys(picked);
+  var pi;
+  for (pi = 0; pi < pk.length; pi++) {
+    var ic = pk[pi];
+    var b = bestByItem[ic];
+    if (!b) {
+      continue;
+    }
+    var rr = b.r;
+    var mcOut = b.memberCode;
+    var nm0 = mcOut.length && nameByMemberCode[mcOut] ? nameByMemberCode[mcOut] : '';
+    if (!nm0.length) {
+      nm0 = mcOut.length ? mcOut + '(비회원)' : '비회원';
+    }
+    out.push({
+      orderItemCode: ic,
+      memberCode: mcOut,
+      memberName: nm0,
+      internalCategory: b.cat,
+      orderTime: String(rr[evIdx.order_time] != null ? rr[evIdx.order_time] : '').trim(),
+      productStartDate: String(rr[evIdx.product_start_date] != null ? rr[evIdx.product_start_date] : ''),
+      productEndDate: String(rr[evIdx.product_end_date] != null ? rr[evIdx.product_end_date] : ''),
+      updatedAt: String(evIdx.updated_at >= 0 && rr[evIdx.updated_at] != null ? rr[evIdx.updated_at] : ''),
+      prodName: String(rr[evIdx.prod_name] != null ? rr[evIdx.prod_name] : '')
+    });
   }
   out.sort(function (a, b) {
     var an = String(a.memberName || '');

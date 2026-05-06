@@ -504,7 +504,8 @@ export const SYNC_PAGE_SHELL_HTML = `<div class="app-shell app-shell--v9">
               <details class="sp-stu-date-editor" id="sp-stu-dateEditor">
                 <summary class="sp-stu-date-editor__summary">수강 시작일, 종료일 설정</summary>
                 <p class="sp-stu-date-editor__lede">
-                  주문 항목(<code>order_item_code</code>)마다 한 줄씩 보입니다. 같은 멤버·솔루틴도 월호가 다르면 모두 나옵니다. 종료일이 현재 기준 2주(14일) 초과 지난 건은 숨깁니다.
+                  멤버별로 <strong>오늘 기준 아직 만료 전인 주문은 모두</strong> 보이고, 그런 주문이 없으면 <strong>최종 상태가 이탈이 아닌 경우</strong> 그 멤버의 주문 중
+                  <strong>종료일이 가장 늦은 1건</strong>(주문일이 아님)만 냅니다.
                 </p>
                 <div class="sp-stu-date-editor__toolbar">
                   <div class="sp-stu-date-editor__toolbar-left">
