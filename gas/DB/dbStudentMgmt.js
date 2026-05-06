@@ -480,7 +480,8 @@ function dbStuBuildFixedManualRows_(preserve, nowIso, batchId) {
 }
 
 /**
- * 수강 시작/종료일 편집 목록: (member_code, category)별 최신 1건만 반환.
+ * 수강 시작/종료일 편집 목록: `order_item_code`별 1행(동일 코드 중복 시 order_time 최신).
+ * 같은 멤버·같은 internal_category라도 월호 등 별도 주문이면 모두 표시.
  * 종료일이 현재 기준 14일 초과 지난 건은 제외.
  * @return {{ ok: true, data: { rows: Object[] } }|{ ok: false, error: { code: string, message: string } }}
  */
@@ -542,7 +543,8 @@ function dbStudentMgmtDateEditorList_() {
     if (!itemCode.length) {
       continue;
     }
-    var key = (memberCode.length ? memberCode : '__guest__' + itemCode) + '|' + cat;
+    /** 멤버+카테고리 최신 1건이면 4월·5월호처럼 늦게 결제한 월호만 남음 → 주문항목 코드 단위 */
+    var key = itemCode;
     var ot = String(r[evIdx.order_time] != null ? r[evIdx.order_time] : '').trim();
     var otKey = dbStuNormalizeYmd_(ot) + '|' + ot;
     var prev = bestByKey[key];

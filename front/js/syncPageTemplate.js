@@ -504,7 +504,7 @@ export const SYNC_PAGE_SHELL_HTML = `<div class="app-shell app-shell--v9">
               <details class="sp-stu-date-editor" id="sp-stu-dateEditor">
                 <summary class="sp-stu-date-editor__summary">수강 시작일, 종료일 설정</summary>
                 <p class="sp-stu-date-editor__lede">
-                  멤버·카테고리별 최신 주문만 보입니다. 종료일이 현재 기준 2주(14일) 초과 지난 건은 숨깁니다.
+                  주문 항목(<code>order_item_code</code>)마다 한 줄씩 보입니다. 같은 멤버·솔루틴도 월호가 다르면 모두 나옵니다. 종료일이 현재 기준 2주(14일) 초과 지난 건은 숨깁니다.
                 </p>
                 <div class="sp-stu-date-editor__toolbar">
                   <div class="sp-stu-date-editor__toolbar-left">
