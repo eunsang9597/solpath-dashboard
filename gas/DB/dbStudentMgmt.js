@@ -480,11 +480,42 @@ function dbStuBuildFixedManualRows_(preserve, nowIso, batchId) {
 }
 
 /**
+ * `dbStuBuildManualFixedEventRows_` 로 시트에 넣은 보정 행 — 원천 주문이 아니므로
+ * 수강 기간 편집 UI·저장에서 제외한다.
+ * @param {Array<*>} r
+ * @param {Object} evIdx
+ * @return {boolean}
+ */
+function dbStuOrderEventIsManualFixedSynthetic_(r, evIdx) {
+  r = r || [];
+  var ic = String(r[evIdx.order_item_code] != null ? r[evIdx.order_item_code] : '').trim().toLowerCase();
+  if (ic.indexOf('manual_fixed_') === 0) {
+    return true;
+  }
+  if (evIdx.row_json == null || evIdx.row_json < 0) {
+    return false;
+  }
+  var rj = String(r[evIdx.row_json] != null ? r[evIdx.row_json] : '').trim();
+  if (!rj.length) {
+    return false;
+  }
+  try {
+    var j = JSON.parse(rj);
+    if (j && String(j.source || '') === 'manual_fixed') {
+      return true;
+    }
+  } catch (e0) {
+    return false;
+  }
+  return false;
+}
+
+/**
  * 수강 시작/종료일 편집 목록 (멤버별):
  * 1) 오늘(서울 일자)이 상품 종료일(날짜) 이전·당일인 주문 — 만료 전인 **모두** 포함.
  * 2) 1)에 해당하는 주문이 하나도 없으면, 멤버 **최종 상태**가 이탈이 아닌 경우에 한해
  *    그 멤버 주문 중 **종료일(ymd)이 가장 늦은** 1건(동률이면 order_item_code).
- * `order_item_code` 중복 시 order_time 최신 1행만 후보에 둠. 환불·jasoseo 제외.
+ * `order_item_code` 중복 시 order_time 최신 1행만 후보에 둠. 환불·jasoseo·`manual_fixed` 보정 행 제외.
  * @return {{ ok: true, data: { rows: Object[] } }|{ ok: false, error: { code: string, message: string } }}
  */
 function dbStudentMgmtDateEditorList_() {
@@ -529,6 +560,9 @@ function dbStudentMgmtDateEditorList_() {
   var i;
   for (i = 0; i < rows.length; i++) {
     var r = rows[i] || [];
+    if (dbStuOrderEventIsManualFixedSynthetic_(r, evIdx)) {
+      continue;
+    }
     var cat = String(r[evIdx.internal_category] != null ? r[evIdx.internal_category] : '').trim().toLowerCase();
     if (!dbStuIsAllowedCategory_(cat)) {
       continue;
@@ -698,6 +732,12 @@ function dbStudentMgmtDateEditorSave_(payload) {
   }
   if (rowNo < 2 || !found) {
     return { ok: false, error: { code: 'NOT_FOUND', message: '수정할 주문 항목을 찾지 못했습니다.' } };
+  }
+  if (dbStuOrderEventIsManualFixedSynthetic_(found, idx)) {
+    return {
+      ok: false,
+      error: { code: 'NOT_EDITABLE', message: '수동 보정(manual_fixed) 행은 이 화면에서 수정할 수 없습니다.' }
+    };
   }
   var changedStart = Boolean(payload.changedStart);
   var changedEnd = Boolean(payload.changedEnd);
