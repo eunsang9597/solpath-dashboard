@@ -86,6 +86,33 @@ function ymdFromDateTime_(v) {
 }
 
 /**
+ * 재등록 기준일 기본값: 종료일 7일 전(시작일보다 앞이면 시작일)
+ * @param {string} startYmd
+ * @param {string} endYmd
+ * @returns {string}
+ */
+function defaultReregReminderYmd_(startYmd, endYmd) {
+  const e = ymdFromDateTime_(String(endYmd || ''));
+  const s = ymdFromDateTime_(String(startYmd || ''));
+  if (!e.length) {
+    return '';
+  }
+  const d = new Date(`${e}T12:00:00`);
+  if (Number.isNaN(d.getTime())) {
+    return '';
+  }
+  d.setDate(d.getDate() - 7);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  let out = `${y}-${m}-${day}`;
+  if (s.length && out < s) {
+    out = s;
+  }
+  return out;
+}
+
+/**
  * 브라우저 로컬 날짜 기준 yyyy-MM-dd (일자별 수강 인원 기본값)
  * @returns {string}
  */
@@ -1343,16 +1370,19 @@ function renderDateEditorRows_(mount) {
     const orderItemCode = String(r.orderItemCode || '');
     const startYmd = ymdFromDateTime_(String(r.productStartDate || ''));
     const endYmd = ymdFromDateTime_(String(r.productEndDate || ''));
+    const reregRaw = ymdFromDateTime_(String(r.reregReminderDate || ''));
+    const reregYmd = reregRaw.length ? reregRaw : defaultReregReminderYmd_(startYmd, endYmd);
     tr.setAttribute('data-order-item-code', orderItemCode);
     tr.setAttribute('data-orig-start', startYmd);
     tr.setAttribute('data-orig-end', endYmd);
+    tr.setAttribute('data-orig-rereg', reregYmd);
     tr.innerHTML =
       `<td>${String(r.memberName || '')}</td>` +
       `<td><span class="sp-stu-cat-badge sp-stu-cat-badge--${String(r.internalCategory || '').trim().toLowerCase()}">${stuCatLabel_(String(r.internalCategory || ''))}</span></td>` +
       `<td>${String(r.prodName || '')}</td>` +
-      `<td class="sp-stu-date-order-time">${String(r.orderTime || '')}</td>` +
       `<td><input type="date" class="sp-stu-date-start" value="${startYmd}" /></td>` +
       `<td><input type="date" class="sp-stu-date-end" value="${endYmd}" /></td>` +
+      `<td><input type="date" class="sp-stu-date-rereg" value="${reregYmd}" /></td>` +
       `<td class="sp-stu-date-updated">${String(r.updatedAt || '')}</td>`;
     tbody.appendChild(tr);
   });
@@ -1408,25 +1438,31 @@ function collectDateEditorChangedRows_(mount) {
     }
     const startInput = /** @type {HTMLInputElement|null} */ (row.querySelector('.sp-stu-date-start'));
     const endInput = /** @type {HTMLInputElement|null} */ (row.querySelector('.sp-stu-date-end'));
+    const reregInput = /** @type {HTMLInputElement|null} */ (row.querySelector('.sp-stu-date-rereg'));
     const orderItemCode = String(row.getAttribute('data-order-item-code') || '');
     if (!orderItemCode.length) {
       return;
     }
     const origStart = String(row.getAttribute('data-orig-start') || '');
     const origEnd = String(row.getAttribute('data-orig-end') || '');
+    const origRereg = String(row.getAttribute('data-orig-rereg') || '');
     const nextStart = startInput ? String(startInput.value || '').trim() : '';
     const nextEnd = endInput ? String(endInput.value || '').trim() : '';
+    const nextRereg = reregInput ? String(reregInput.value || '').trim() : '';
     const changedStart = nextStart !== origStart;
     const changedEnd = nextEnd !== origEnd;
-    if (!changedStart && !changedEnd) {
+    const changedRereg = nextRereg !== origRereg;
+    if (!changedStart && !changedEnd && !changedRereg) {
       return;
     }
     out.push({
       orderItemCode: orderItemCode,
       productStartDate: nextStart,
       productEndDate: nextEnd,
+      reregReminderDate: nextRereg,
       changedStart: changedStart,
-      changedEnd: changedEnd
+      changedEnd: changedEnd,
+      changedRereg: changedRereg
     });
   });
   return out;
@@ -1452,16 +1488,23 @@ function applyDateEditorSavedRows_(mount, savedRows) {
     }
     const startInput = /** @type {HTMLInputElement|null} */ (tr.querySelector('.sp-stu-date-start'));
     const endInput = /** @type {HTMLInputElement|null} */ (tr.querySelector('.sp-stu-date-end'));
+    const reregInput = /** @type {HTMLInputElement|null} */ (tr.querySelector('.sp-stu-date-rereg'));
     const savedStart = ymdFromDateTime_(String(d.productStartDate || ''));
     const savedEnd = ymdFromDateTime_(String(d.productEndDate || ''));
+    const savedReregRaw = ymdFromDateTime_(String(d.reregReminderDate || ''));
+    const savedRereg = savedReregRaw.length ? savedReregRaw : defaultReregReminderYmd_(savedStart, savedEnd);
     if (startInput) {
       startInput.value = savedStart;
     }
     if (endInput) {
       endInput.value = savedEnd;
     }
+    if (reregInput) {
+      reregInput.value = savedRereg;
+    }
     tr.setAttribute('data-orig-start', savedStart);
     tr.setAttribute('data-orig-end', savedEnd);
+    tr.setAttribute('data-orig-rereg', savedRereg);
     const up = tr.querySelector('.sp-stu-date-updated');
     if (up) {
       up.textContent = String(d.updatedAt || '');
@@ -1475,6 +1518,7 @@ function applyDateEditorSavedRows_(mount, savedRows) {
         ...x,
         productStartDate: String(d.productStartDate || x.productStartDate || ''),
         productEndDate: String(d.productEndDate || x.productEndDate || ''),
+        reregReminderDate: String(d.reregReminderDate != null ? d.reregReminderDate : x.reregReminderDate || ''),
         updatedAt: String(d.updatedAt || x.updatedAt || '')
       };
     });

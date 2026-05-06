@@ -162,15 +162,16 @@
 | `product_start_date` | §6 규칙 + 프론트 수정 |
 | `product_end_date` | §6 규칙 + 프론트 수정 |
 | `enroll_status` | 주문 이벤트 기준 상태 (`신규`/`재등록`/`다시옴`) |
-| `rereg_base_date` | 재등록 판정 기준일(`yyyy-MM-dd`) |
+| `rereg_base_date` | 직전 수강 **종료일**(`yyyy-MM-dd`) — `enroll_status` 산정용(동기화 시 덮어씀). UI 편집 대상 아님. |
+| `rereg_reminder_date` | 운영 **재등록 기준일**(`yyyy-MM-dd`). 기본: 종료일 7일 전(그보다 시작일이 늦으면 시작일). 수강 기간 편집·동기화로 채움·보존. |
 
 ### 8.4 권장 1행 헤더 순서 (확정안)
 
 식별·조인·기간·상태·상품·메타 순.
 
-`order_item_code`, `order_no`, `member_code`, `order_time`, `internal_category`, `lifecycle`, `product_start_date`, `product_end_date`, `enroll_status`, `rereg_base_date`, `order_status`, `section_status`, `claim_status`, `claim_type`, `claim_event_time`, `prod_no`, `prod_name`, `options_raw`, `options_count`, `row_json`, `updated_at`, `fetched_at`, `source_sync_id`
+`order_item_code`, `order_no`, `member_code`, `order_time`, `internal_category`, `lifecycle`, `product_start_date`, `product_end_date`, `enroll_status`, `rereg_base_date`, `rereg_reminder_date`, `order_status`, `section_status`, `claim_status`, `claim_type`, `claim_event_time`, `prod_no`, `prod_name`, `options_raw`, `options_count`, `row_json`, `updated_at`, `fetched_at`, `source_sync_id`
 
-- `updated_at`: 프론트의 “수강 시작일, 종료일 설정”에서 시작/종료를 저장한 시각(ISO). 날짜 미수정 행은 빈 값일 수 있다.
+- `updated_at`: 프론트의 “수강 시작일, 종료일 설정”에서 시작·종료·재등록일을 저장한 시각(ISO). 날짜 미수정 행은 빈 값일 수 있다.
 
 ### 8.5 키
 
@@ -190,6 +191,7 @@
 
 | 시점 | 내용 |
 |------|------|
+| 추가 | 이벤트 `rereg_reminder_date`(운영 재등록 기준일); `rereg_base_date`는 enroll 산정용 직전 종료일로 문서 정리 |
 | 확정 | 파일명 `솔루션편입_수강생_마스터`, 탭 `student_member_*`, 교재 제외, 자소서 포함, textbook-only 추적 제거 |
 | 확정 | 이벤트에 `internal_category`, `lifecycle`, `member_code`, `order_time`, `product_start_date`, `product_end_date` |
 | 확정 | 구매자 제외: 관리자·테스트 그룹·주문자명 솔루션편입 (전화번호 제외 규칙 없음) |

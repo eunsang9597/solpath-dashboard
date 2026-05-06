@@ -111,6 +111,8 @@ var DB_STUDENT_ORDER_EVENT_HEADERS = [
   'product_end_date',
   'enroll_status',
   'rereg_base_date',
+  /** 운영 재등록 기준일 yyyy-MM-dd (기본 종료 7일 전·동기화 시 자동). */
+  'rereg_reminder_date',
   'order_status',
   'section_status',
   'claim_status',

@@ -505,7 +505,7 @@ export const SYNC_PAGE_SHELL_HTML = `<div class="app-shell app-shell--v9">
                 <summary class="sp-stu-date-editor__summary">수강 시작일, 종료일 설정</summary>
                 <p class="sp-stu-date-editor__lede">
                   멤버별로 <strong>오늘 기준 아직 만료 전인 주문은 모두</strong> 보이고, 그런 주문이 없으면 <strong>최종 상태가 이탈이 아닌 경우</strong> 그 멤버의 주문 중
-                  <strong>종료일이 가장 늦은 1건</strong>(주문일이 아님)만 냅니다.
+                  <strong>종료일이 가장 늦은 1건</strong>만 냅니다. <strong>재등록일</strong>은 비어 있으면 종료일 7일 전(시작일보다 앞이면 시작일)을 기본으로 보여 주며, 시작·종료만 바꿔 저장할 때 칸이 비어 있으면 같은 규칙으로 채웁니다.
                 </p>
                 <div class="sp-stu-date-editor__toolbar">
                   <div class="sp-stu-date-editor__toolbar-left">
@@ -530,7 +530,6 @@ export const SYNC_PAGE_SHELL_HTML = `<div class="app-shell app-shell--v9">
                         <th>멤버</th>
                         <th>카테고리</th>
                         <th>상품</th>
-                        <th>주문일</th>
                         <th>
                           <button type="button" class="sp-stu-sort-btn" data-sort-key="start">
                             시작일 <span class="sp-stu-sort-btn__dir" data-sort-dir-for="start">-</span>
@@ -541,6 +540,7 @@ export const SYNC_PAGE_SHELL_HTML = `<div class="app-shell app-shell--v9">
                             종료일 <span class="sp-stu-sort-btn__dir" data-sort-dir-for="end">-</span>
                           </button>
                         </th>
+                        <th>재등록일</th>
                         <th>수정일</th>
                       </tr>
                     </thead>

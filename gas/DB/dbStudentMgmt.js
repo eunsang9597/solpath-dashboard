@@ -253,7 +253,7 @@ function dbStudentStateFields_() {
 /**
  * 기존 이벤트 시트에서 `product_start_date`·`product_end_date` 만 보존 (order_item_code 키)
  * @param {GoogleAppsScript.Spreadsheet.Sheet} shE
- * @return {Object<string, {start: *, end: *, updated: *}>}
+ * @return {Object<string, {start: *, end: *, updated: *, reregReminder: *}>}
  */
 function dbStuReadPreserveDates_(shE) {
   var out = {};
@@ -266,6 +266,7 @@ function dbStuReadPreserveDates_(shE) {
   var ixStart = -1;
   var ixEnd = -1;
   var ixUpdated = -1;
+  var ixReregRm = -1;
   var i;
   for (i = 0; i < hdr.length; i++) {
     var h = String(hdr[i] != null ? hdr[i] : '').trim();
@@ -280,6 +281,9 @@ function dbStuReadPreserveDates_(shE) {
     }
     if (h === 'updated_at') {
       ixUpdated = i;
+    }
+    if (h === 'rereg_reminder_date') {
+      ixReregRm = i;
     }
   }
   if (ixCode < 0) {
@@ -297,7 +301,8 @@ function dbStuReadPreserveDates_(shE) {
     out[code] = {
       start: ixStart >= 0 ? row[ixStart] : '',
       end: ixEnd >= 0 ? row[ixEnd] : '',
-      updated: ixUpdated >= 0 ? row[ixUpdated] : ''
+      updated: ixUpdated >= 0 ? row[ixUpdated] : '',
+      reregReminder: ixReregRm >= 0 ? row[ixReregRm] : ''
     };
   }
   return out;
@@ -395,6 +400,48 @@ function dbStuIsoFromYmdNoTime_(ymd) {
 }
 
 /**
+ * yyyy-MM-dd ± 일수
+ * @param {string} ymd
+ * @param {number} deltaDays
+ * @return {string}
+ */
+function dbStuYmdAddDays_(ymd, deltaDays) {
+  var t = dbStuNormalizeYmd_(ymd);
+  if (!t.length) {
+    return '';
+  }
+  var d = dbStuDateFromAny_(t);
+  if (!d) {
+    return '';
+  }
+  d.setHours(12, 0, 0, 0);
+  d.setDate(d.getDate() + (deltaDays | 0));
+  var y = d.getFullYear();
+  var m = ('0' + (d.getMonth() + 1)).slice(-2);
+  var day = ('0' + d.getDate()).slice(-2);
+  return y + '-' + m + '-' + day;
+}
+
+/**
+ * 재등록 기준일 기본값: 종료일 7일 전(수강 시작일보다 앞이면 시작일)
+ * @param {string} startYmd
+ * @param {string} endYmd
+ * @return {string}
+ */
+function dbStuDefaultReregReminderYmd_(startYmd, endYmd) {
+  var e = dbStuNormalizeYmd_(endYmd);
+  var s = dbStuNormalizeYmd_(startYmd);
+  if (!e.length) {
+    return '';
+  }
+  var cand = dbStuYmdAddDays_(e, -7);
+  if (s.length && cand.length && cand < s) {
+    return s;
+  }
+  return cand;
+}
+
+/**
  * @param {GoogleAppsScript.Spreadsheet.Sheet} sh
  * @param {string[]} headers
  * @return {Object}
@@ -433,6 +480,9 @@ function dbStuBuildFixedManualRows_(preserve, nowIso, batchId) {
     }
     var pStart = dbStuNormalizeManualDateTime_(m.product_start_date, false);
     var pEnd = dbStuNormalizeManualDateTime_(m.product_end_date, true);
+    var psYm = dbStuNormalizeYmd_(pStart);
+    var peYm = dbStuNormalizeYmd_(pEnd);
+    var reregRmMan = dbStuDefaultReregReminderYmd_(psYm, peYm);
     var rowEv = [
       itemCode,
       'manual_' + String(i + 1),
@@ -444,6 +494,7 @@ function dbStuBuildFixedManualRows_(preserve, nowIso, batchId) {
       pEnd,
       '',
       '',
+      reregRmMan,
       String(m.order_status != null ? m.order_status : '').trim() || 'closed',
       String(m.section_status != null ? m.section_status : '').trim() || 'PURCHASE_CONFIRMATION',
       '',
@@ -470,8 +521,13 @@ function dbStuBuildFixedManualRows_(preserve, nowIso, batchId) {
       if (prev.end !== '' && prev.end != null) {
         rowEv[7] = prev.end;
       }
-      if (prev.updated !== '' && prev.updated != null) {
-        rowEv[20] = prev.updated;
+      var ixRm = DB_STUDENT_ORDER_EVENT_HEADERS.indexOf('rereg_reminder_date');
+      if (ixRm >= 0 && prev.reregReminder !== '' && prev.reregReminder != null) {
+        rowEv[ixRm] = prev.reregReminder;
+      }
+      var ixUpM = DB_STUDENT_ORDER_EVENT_HEADERS.indexOf('updated_at');
+      if (ixUpM >= 0 && prev.updated !== '' && prev.updated != null) {
+        rowEv[ixUpM] = prev.updated;
       }
     }
     rows.push(rowEv);
@@ -671,14 +727,20 @@ function dbStudentMgmtDateEditorList_() {
     if (!nm0.length) {
       nm0 = mcOut.length ? mcOut + '(비회원)' : '비회원';
     }
+    var reregRmRaw =
+      evIdx.rereg_reminder_date >= 0 ? String(rr[evIdx.rereg_reminder_date] != null ? rr[evIdx.rereg_reminder_date] : '') : '';
+    var reregRmStored = dbStuNormalizeYmd_(reregRmRaw);
+    var endNormList = dbStuNormalizeYmd_(String(rr[evIdx.product_end_date] != null ? String(rr[evIdx.product_end_date]) : ''));
+    var startNormList = dbStuNormalizeYmd_(String(rr[evIdx.product_start_date] != null ? String(rr[evIdx.product_start_date]) : ''));
+    var reregDisp = reregRmStored.length ? reregRmStored : dbStuDefaultReregReminderYmd_(startNormList, endNormList);
     out.push({
       orderItemCode: ic,
       memberCode: mcOut,
       memberName: nm0,
       internalCategory: b.cat,
-      orderTime: String(rr[evIdx.order_time] != null ? rr[evIdx.order_time] : '').trim(),
       productStartDate: String(rr[evIdx.product_start_date] != null ? rr[evIdx.product_start_date] : ''),
       productEndDate: String(rr[evIdx.product_end_date] != null ? rr[evIdx.product_end_date] : ''),
+      reregReminderDate: reregDisp,
       updatedAt: String(evIdx.updated_at >= 0 && rr[evIdx.updated_at] != null ? rr[evIdx.updated_at] : ''),
       prodName: String(rr[evIdx.prod_name] != null ? rr[evIdx.prod_name] : '')
     });
@@ -694,14 +756,14 @@ function dbStudentMgmtDateEditorList_() {
     if (ac !== bc) {
       return ac.localeCompare(bc);
     }
-    return String(b.orderTime || '').localeCompare(String(a.orderTime || ''));
+    return String(b.productStartDate || '').localeCompare(String(a.productStartDate || ''));
   });
   return { ok: true, data: { rows: out } };
 }
 
 /**
  * @param {Object} payload
- * @return {{ ok: true, data: { orderItemCode: string, productStartDate: string, productEndDate: string, updatedAt: string } }|{ ok: false, error: { code: string, message: string } }}
+ * @return {{ ok: true, data: { orderItemCode: string, productStartDate: string, productEndDate: string, reregReminderDate: string, updatedAt: string } }|{ ok: false, error: { code: string, message: string } }}
  */
 function dbStudentMgmtDateEditorSave_(payload) {
   payload = payload || {};
@@ -741,14 +803,13 @@ function dbStudentMgmtDateEditorSave_(payload) {
   }
   var changedStart = Boolean(payload.changedStart);
   var changedEnd = Boolean(payload.changedEnd);
-  if (!changedStart && !changedEnd) {
+  var changedRereg = Boolean(payload.changedRereg);
+  if (!changedStart && !changedEnd && !changedRereg) {
     return { ok: false, error: { code: 'BAD_REQUEST', message: '변경된 값이 없습니다.' } };
   }
   var cat = String(found[idx.internal_category] != null ? found[idx.internal_category] : '').trim().toLowerCase();
-  var startCurrent = String(found[idx.product_start_date] != null ? found[idx.product_start_date] : '');
-  var endCurrent = String(found[idx.product_end_date] != null ? found[idx.product_end_date] : '');
-  var startOut = startCurrent;
-  var endOut = endCurrent;
+  var startOut = String(found[idx.product_start_date] != null ? found[idx.product_start_date] : '');
+  var endOut = String(found[idx.product_end_date] != null ? found[idx.product_end_date] : '');
   if (changedStart) {
     var startYmd = dbStuNormalizeYmd_(payload.productStartDate != null ? String(payload.productStartDate) : '');
     if (!startYmd) {
@@ -775,9 +836,33 @@ function dbStudentMgmtDateEditorSave_(payload) {
       return { ok: false, error: { code: 'BAD_REQUEST', message: '종료일은 시작일보다 빠를 수 없습니다.' } };
     }
   }
+  var reregIx = idx.rereg_reminder_date;
+  var reregStored = reregIx >= 0 ? dbStuNormalizeYmd_(String(found[reregIx] != null ? found[reregIx] : '')) : '';
+  var reregOut = reregStored;
+  if (changedRereg && reregIx >= 0) {
+    reregOut = dbStuNormalizeYmd_(payload.reregReminderDate != null ? String(payload.reregReminderDate) : '');
+  }
+  var startYmdFinal = dbStuNormalizeYmd_(startOut);
+  var endYmdFinal = dbStuNormalizeYmd_(endOut);
+  if (changedRereg && reregOut.length && cat !== 'jasoseo' && endYmdFinal.length) {
+    if (startYmdFinal.length && (reregOut < startYmdFinal || reregOut > endYmdFinal)) {
+      return { ok: false, error: { code: 'BAD_REQUEST', message: '재등록일은 수강 시작일과 종료일 사이여야 합니다.' } };
+    }
+    if (!startYmdFinal.length && reregOut > endYmdFinal) {
+      return { ok: false, error: { code: 'BAD_REQUEST', message: '재등록일은 종료일을 넘을 수 없습니다.' } };
+    }
+  }
   var nowIso = new Date().toISOString();
   shEv.getRange(rowNo, idx.product_start_date + 1, 1, 1).setValue(startOut);
   shEv.getRange(rowNo, idx.product_end_date + 1, 1, 1).setValue(endOut);
+  if (reregIx >= 0) {
+    if (changedRereg) {
+      shEv.getRange(rowNo, reregIx + 1, 1, 1).setValue(reregOut);
+    } else if ((changedStart || changedEnd) && !reregStored.length && endYmdFinal.length && cat !== 'jasoseo') {
+      reregOut = dbStuDefaultReregReminderYmd_(startYmdFinal, endYmdFinal);
+      shEv.getRange(rowNo, reregIx + 1, 1, 1).setValue(reregOut);
+    }
+  }
   if (idx.updated_at >= 0) {
     shEv.getRange(rowNo, idx.updated_at + 1, 1, 1).setValue(nowIso);
   }
@@ -787,6 +872,7 @@ function dbStudentMgmtDateEditorSave_(payload) {
       orderItemCode: orderItemCode,
       productStartDate: startOut,
       productEndDate: endOut,
+      reregReminderDate: reregIx >= 0 ? reregOut : '',
       updatedAt: nowIso
     }
   };
@@ -1814,6 +1900,7 @@ function dbStudentMgmtRebuildFromMaster_() {
   var ixEvEnd = evHeaders.indexOf('product_end_date');
   var ixEvStatus = evHeaders.indexOf('enroll_status');
   var ixEvBase = evHeaders.indexOf('rereg_base_date');
+  var ixEvReminder = evHeaders.indexOf('rereg_reminder_date');
   var ixEvUpdated = evHeaders.indexOf('updated_at');
 
   var outEv = [];
@@ -1872,6 +1959,13 @@ function dbStudentMgmtRebuildFromMaster_() {
       pEnd = dbStuEndDateFromStartYmd_(pStart, nd);
     }
 
+    var pStartY = dbStuNormalizeYmd_(pStart);
+    var pEndY = dbStuNormalizeYmd_(pEnd);
+    var reregRm = '';
+    if (catLo !== 'jasoseo' && pEndY.length) {
+      reregRm = dbStuDefaultReregReminderYmd_(pStartY, pEndY);
+    }
+
     var rowEv = [
       L[1],
       ordNo,
@@ -1883,6 +1977,7 @@ function dbStudentMgmtRebuildFromMaster_() {
       pEnd,
       '',
       '',
+      reregRm,
       L[3],
       L[4],
       L[5],
@@ -1909,6 +2004,9 @@ function dbStudentMgmtRebuildFromMaster_() {
       }
       if (prev.updated !== '' && prev.updated != null) {
         rowEv[ixEvUpdated] = prev.updated;
+      }
+      if (prev.reregReminder !== '' && prev.reregReminder != null && ixEvReminder >= 0) {
+        rowEv[ixEvReminder] = prev.reregReminder;
       }
     }
     if (catLo === 'jasoseo') {
@@ -2038,6 +2136,9 @@ function dbStudentMgmtRebuildFromMaster_() {
     shEv.getRange(2, 7, nEv, 2).setNumberFormat('@');
     if (ixEvBase >= 0) {
       shEv.getRange(2, ixEvBase + 1, nEv, 1).setNumberFormat('@');
+    }
+    if (ixEvReminder >= 0) {
+      shEv.getRange(2, ixEvReminder + 1, nEv, 1).setNumberFormat('@');
     }
     shEv.getRange(2, evHeaders.indexOf('claim_event_time') + 1, nEv, 1).setNumberFormat('@');
   }
