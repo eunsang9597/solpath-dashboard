@@ -395,6 +395,7 @@ export function initStudentMgmt(mount) {
   const btnMemberLoad = /** @type {HTMLButtonElement | null} */ (mount && mount.querySelector('#sp-stu-btnMemberLoad'));
   const memberSearch = /** @type {HTMLInputElement | null} */ (mount && mount.querySelector('#sp-stu-memberSearch'));
   const memberFilterCat = /** @type {HTMLSelectElement | null} */ (mount && mount.querySelector('#sp-stu-memberFilterCat'));
+  const memberFilterStatus = /** @type {HTMLSelectElement | null} */ (mount && mount.querySelector('#sp-stu-memberFilterStatus'));
   const tabMemberActive = /** @type {HTMLButtonElement | null} */ (mount && mount.querySelector('#sp-stu-tabMemberActive'));
   const tabMemberChurn = /** @type {HTMLButtonElement | null} */ (mount && mount.querySelector('#sp-stu-tabMemberChurn'));
   const btnWarnToggle = /** @type {HTMLButtonElement | null} */ (mount && mount.querySelector('#sp-stu-btnWarnToggle'));
@@ -467,6 +468,11 @@ export function initStudentMgmt(mount) {
   }
   if (memberFilterCat) {
     memberFilterCat.addEventListener('change', function () {
+      renderMemberEditorRows_(mount);
+    });
+  }
+  if (memberFilterStatus) {
+    memberFilterStatus.addEventListener('change', function () {
       renderMemberEditorRows_(mount);
     });
   }
@@ -1021,8 +1027,10 @@ function renderWarnBox_(mount) {
 function getMemberViewRows_(mount) {
   const qEl = /** @type {HTMLInputElement | null} */ (mount && mount.querySelector('#sp-stu-memberSearch'));
   const catEl = /** @type {HTMLSelectElement | null} */ (mount && mount.querySelector('#sp-stu-memberFilterCat'));
+  const statusEl = /** @type {HTMLSelectElement | null} */ (mount && mount.querySelector('#sp-stu-memberFilterStatus'));
   const q = qEl ? String(qEl.value || '').trim().toLowerCase() : '';
   const catFilter = catEl ? String(catEl.value || '').trim().toLowerCase() : '';
+  const statusFilter = statusEl ? normalizeMemberStatus_(String(statusEl.value || '')) : '';
   let rows = _memberRows.slice();
   rows = rows.filter((r) => {
     const st = memberEffectiveStatus_(r);
@@ -1031,6 +1039,9 @@ function getMemberViewRows_(mount) {
     }
     return st !== '이탈';
   });
+  if (statusFilter.length && _memberTab === 'active') {
+    rows = rows.filter((r) => memberEffectiveStatus_(r) === statusFilter);
+  }
   if (catFilter) {
     rows = rows.filter((r) => {
       const sub = String(r.subjects || '')

@@ -502,7 +502,7 @@ export const SYNC_PAGE_SHELL_HTML = `<div class="app-shell app-shell--v9">
               <p class="sp-pm__hint" id="sp-stu-hint" hidden></p>
               <p class="actions-note" id="sp-stu-status" role="status" aria-live="polite"></p>
               <details class="sp-stu-date-editor" id="sp-stu-dateEditor">
-                <summary class="sp-stu-date-editor__summary">수강 시작일, 종료일 설정</summary>
+                <summary class="sp-stu-date-editor__summary">수강 시작일, 종료일, 재등록일 설정</summary>
                 <p class="sp-stu-date-editor__lede">
                   멤버별로 <strong>오늘 기준 아직 만료 전인 주문은 모두</strong> 보이고, 그런 주문이 없으면 <strong>최종 상태가 이탈이 아닌 경우</strong> 그 멤버의 주문 중
                   <strong>종료일이 가장 늦은 1건</strong>만 냅니다. <strong>재등록일</strong>은 비어 있으면 종료일 7일 전(시작일보다 앞이면 시작일)을 기본으로 보여 주며, 시작·종료만 바꿔 저장할 때 칸이 비어 있으면 같은 규칙으로 채웁니다.
@@ -663,6 +663,15 @@ export const SYNC_PAGE_SHELL_HTML = `<div class="app-shell app-shell--v9">
                         <option value="solpass">솔패스</option>
                         <option value="solutine">솔루틴</option>
                         <option value="challenge">챌린지</option>
+                      </select>
+                    </label>
+                    <label class="sp-stu-member-editor__filter">
+                      <span>상태</span>
+                      <select id="sp-stu-memberFilterStatus" title="수강·관리 탭에서만 적용(이탈 탭은 목록이 이탈만)">
+                        <option value="">전체</option>
+                        <option value="수강중">수강중</option>
+                        <option value="주의 필요">주의 필요</option>
+                        <option value="복귀 예정">복귀 예정</option>
                       </select>
                     </label>
                   </div>
