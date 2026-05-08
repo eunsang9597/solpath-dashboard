@@ -263,7 +263,7 @@ let _dateSortEnd = 'none';
 
 /** @type {Array<any>} */
 let _memberRows = [];
-/** @type {'active'|'churn'} */
+/** @type {'active'|'churn'|'plan'} */
 let _memberTab = 'active';
 let _warnRows = [];
 let _warnListOpen = false;
@@ -400,6 +400,7 @@ export function initStudentMgmt(mount) {
   const memberFilterStatus = /** @type {HTMLSelectElement | null} */ (mount && mount.querySelector('#sp-stu-memberFilterStatus'));
   const tabMemberActive = /** @type {HTMLButtonElement | null} */ (mount && mount.querySelector('#sp-stu-tabMemberActive'));
   const tabMemberChurn = /** @type {HTMLButtonElement | null} */ (mount && mount.querySelector('#sp-stu-tabMemberChurn'));
+  const tabMemberPlan = /** @type {HTMLButtonElement | null} */ (mount && mount.querySelector('#sp-stu-tabMemberPlan'));
   const btnWarnToggle = /** @type {HTMLButtonElement | null} */ (mount && mount.querySelector('#sp-stu-btnWarnToggle'));
   const dailyDate = /** @type {HTMLInputElement | null} */ (mount && mount.querySelector('#sp-stu-dailyDate'));
   const btnDailyLoad = /** @type {HTMLButtonElement | null} */ (mount && mount.querySelector('#sp-stu-btnDailyLoad'));
@@ -491,6 +492,10 @@ export function initStudentMgmt(mount) {
       tabMemberChurn.classList.toggle('is-active', _memberTab === 'churn');
       tabMemberChurn.setAttribute('aria-selected', _memberTab === 'churn' ? 'true' : 'false');
     }
+    if (tabMemberPlan) {
+      tabMemberPlan.classList.toggle('is-active', _memberTab === 'plan');
+      tabMemberPlan.setAttribute('aria-selected', _memberTab === 'plan' ? 'true' : 'false');
+    }
   };
   if (tabMemberActive) {
     tabMemberActive.addEventListener('click', function () {
@@ -502,6 +507,13 @@ export function initStudentMgmt(mount) {
   if (tabMemberChurn) {
     tabMemberChurn.addEventListener('click', function () {
       _memberTab = 'churn';
+      setMemberTabUi_();
+      renderMemberEditorRows_(mount);
+    });
+  }
+  if (tabMemberPlan) {
+    tabMemberPlan.addEventListener('click', function () {
+      _memberTab = 'plan';
       setMemberTabUi_();
       renderMemberEditorRows_(mount);
     });
@@ -1232,7 +1244,10 @@ function getMemberViewRows_(mount) {
     if (_memberTab === 'churn') {
       return st === '이탈';
     }
-    return st !== '이탈';
+    if (_memberTab === 'plan') {
+      return st === '복귀 예정';
+    }
+    return st !== '이탈' && st !== '복귀 예정';
   });
   if (statusFilter.length && _memberTab === 'active') {
     rows = rows.filter((r) => memberEffectiveStatus_(r) === statusFilter);
@@ -1267,11 +1282,16 @@ function getMemberViewRows_(mount) {
 /**
  * @param {HTMLElement | null} mount
  */
-function updateMemberChurnCount_(mount) {
-  const n = _memberRows.filter((r) => memberEffectiveStatus_(r) === '이탈').length;
-  const el = /** @type {HTMLElement | null} */ (mount && mount.querySelector('#sp-stu-memberChurnCount'));
-  if (el) {
-    el.textContent = String(n);
+function updateMemberTabCounts_(mount) {
+  const nChurn = _memberRows.filter((r) => memberEffectiveStatus_(r) === '이탈').length;
+  const nPlan = _memberRows.filter((r) => memberEffectiveStatus_(r) === '복귀 예정').length;
+  const churnEl = /** @type {HTMLElement | null} */ (mount && mount.querySelector('#sp-stu-memberChurnCount'));
+  const planEl = /** @type {HTMLElement | null} */ (mount && mount.querySelector('#sp-stu-memberPlanCount'));
+  if (churnEl) {
+    churnEl.textContent = String(nChurn);
+  }
+  if (planEl) {
+    planEl.textContent = String(nPlan);
   }
 }
 
@@ -1284,7 +1304,11 @@ function renderMemberEditorRows_(mount) {
   const rows = getMemberViewRows_(mount);
   if (!rows.length) {
     const emptyMsg =
-      _memberTab === 'churn' ? '이탈 학생이 없습니다.' : '표시할 항목이 없습니다. (필터·검색을 확인해 주세요.)';
+      _memberTab === 'churn'
+        ? '이탈 학생이 없습니다.'
+        : _memberTab === 'plan'
+          ? '복귀 예정 학생이 없습니다.'
+          : '표시할 항목이 없습니다. (필터·검색을 확인해 주세요.)';
     tbody.innerHTML = `<tr><td colspan="4" class="sp-stu-member-editor__empty">${emptyMsg}</td></tr>`;
     return;
   }
@@ -1418,7 +1442,7 @@ async function loadMemberEditorList_(mount) {
       _memberRows = [];
       _warnRows = [];
       renderWarnBox_(mount);
-      updateMemberChurnCount_(mount);
+      updateMemberTabCounts_(mount);
       renderMemberEditorRows_(mount);
       return;
     }
@@ -1428,7 +1452,7 @@ async function loadMemberEditorList_(mount) {
     _warnRows = rawWarn.map((x) => mapWarnApiRow_(/** @type {Record<string, unknown>} */ (x)));
     _warnListOpen = false;
     renderWarnBox_(mount);
-    updateMemberChurnCount_(mount);
+    updateMemberTabCounts_(mount);
     renderMemberEditorRows_(mount);
   } catch (e) {
     setMemberEditorHint_(mount, e && e.message != null ? String(e.message) : '요청 실패', true);

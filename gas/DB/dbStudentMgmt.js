@@ -423,21 +423,17 @@ function dbStuYmdAddDays_(ymd, deltaDays) {
 }
 
 /**
- * 재등록 기준일 기본값: 종료일 7일 전(수강 시작일보다 앞이면 시작일)
+ * 재등록 기준일 기본값: 종료일 7일 전
  * @param {string} startYmd
  * @param {string} endYmd
  * @return {string}
  */
 function dbStuDefaultReregReminderYmd_(startYmd, endYmd) {
   var e = dbStuNormalizeYmd_(endYmd);
-  var s = dbStuNormalizeYmd_(startYmd);
   if (!e.length) {
     return '';
   }
   var cand = dbStuYmdAddDays_(e, -7);
-  if (s.length && cand.length && cand < s) {
-    return s;
-  }
   return cand;
 }
 
@@ -857,14 +853,6 @@ function dbStudentMgmtDateEditorSave_(payload) {
   }
   var startYmdFinal = dbStuNormalizeYmd_(startOut);
   var endYmdFinal = dbStuNormalizeYmd_(endOut);
-  if (changedRereg && reregOut.length && cat !== 'jasoseo' && endYmdFinal.length) {
-    if (startYmdFinal.length && (reregOut < startYmdFinal || reregOut > endYmdFinal)) {
-      return { ok: false, error: { code: 'BAD_REQUEST', message: '재등록일은 수강 시작일과 종료일 사이여야 합니다.' } };
-    }
-    if (!startYmdFinal.length && reregOut > endYmdFinal) {
-      return { ok: false, error: { code: 'BAD_REQUEST', message: '재등록일은 종료일을 넘을 수 없습니다.' } };
-    }
-  }
   var nowIso = new Date().toISOString();
   shEv.getRange(rowNo, idx.product_start_date + 1, 1, 1).setValue(startOut);
   shEv.getRange(rowNo, idx.product_end_date + 1, 1, 1).setValue(endOut);
@@ -1007,13 +995,9 @@ function dbStuBuildMemberStatusAutoMap_(rows, idx) {
     if (!mc.length || cat === 'jasoseo') {
       continue;
     }
-    var rmYmd =
-      idx.reregReminder != null && idx.reregReminder >= 0
-        ? dbStuNormalizeYmd_(r[idx.reregReminder] != null ? String(r[idx.reregReminder]) : '')
-        : '';
     var endYmd = dbStuNormalizeYmd_(r[idx.end] != null ? String(r[idx.end]) : '');
     var startYmd = dbStuNormalizeYmd_(r[idx.start] != null ? String(r[idx.start]) : '');
-    var baseYmd = rmYmd || endYmd || startYmd;
+    var baseYmd = endYmd || startYmd;
     if (!baseYmd.length) {
       continue;
     }
@@ -1691,7 +1675,7 @@ function dbStudentMgmtDailyPeopleProductMembers_(payload) {
  * 재등록 현황(오늘 기준) — 상품명 기준
  * 정의(우선순위 적용):
  * - total(총원): status != 이탈 AND (해당 상품 현재 수강/관리 윈도우 내)
- * - drop(등록X): status == 이탈 (해당 상품 이력 존재)
+ * - drop(등록X): status == 이탈 또는 복귀 예정 (등록 관점에서 동일 취급; 해당 상품 이력 존재)
  * - re(재등록): total 후보 중, exit(=base+14) 이후 시작하는 동일 상품 주문이 존재
  * - planned(등록예정): total 후보 중, 재등록 아님 AND rereg_reminder_date가 오늘~3일 이내
  * - contact(연락필요): total 후보 중, 재등록/등록예정 아님 AND status == 주의 필요
@@ -1781,7 +1765,7 @@ function dbStudentMgmtRenewalStatusReport_(payload) {
     var startYmd = dbStuNormalizeYmd_(r[eIdx.product_start_date] != null ? String(r[eIdx.product_start_date]) : '');
     var endYmd = dbStuNormalizeYmd_(r[eIdx.product_end_date] != null ? String(r[eIdx.product_end_date]) : '');
     var rmYmd = eIdx.rereg_reminder_date >= 0 ? dbStuNormalizeYmd_(r[eIdx.rereg_reminder_date]) : '';
-    var baseYmd = rmYmd || endYmd || startYmd;
+    var baseYmd = endYmd || startYmd;
     if (!baseYmd.length) continue;
     var exitYmd = dbStuExitYmdFromBaseYmd_(baseYmd);
     var gk = mc + '\t' + prodKey;
@@ -1810,7 +1794,7 @@ function dbStudentMgmtRenewalStatusReport_(payload) {
     var mc2 = arr[0].memberCode;
     var pk2 = arr[0].prodKey;
     var stFin = statusByMc[mc2] || '';
-    if (stFin === '이탈') {
+    if (stFin === '이탈' || stFin === '복귀 예정') {
       byProd[pk2].drop += 1;
       continue;
     }
@@ -1982,7 +1966,7 @@ function dbStudentMgmtRenewalStatusProductMembers_(payload) {
     var startYmd = dbStuNormalizeYmd_(r[eIdx.product_start_date] != null ? String(r[eIdx.product_start_date]) : '');
     var endYmd = dbStuNormalizeYmd_(r[eIdx.product_end_date] != null ? String(r[eIdx.product_end_date]) : '');
     var rmYmd = eIdx.rereg_reminder_date >= 0 ? dbStuNormalizeYmd_(r[eIdx.rereg_reminder_date]) : '';
-    var baseYmd = rmYmd || endYmd || startYmd;
+    var baseYmd = endYmd || startYmd;
     if (!baseYmd.length) continue;
     var exitYmd = dbStuExitYmdFromBaseYmd_(baseYmd);
     var gk = mc + '\t' + prodKey;
@@ -2004,12 +1988,12 @@ function dbStudentMgmtRenewalStatusProductMembers_(payload) {
     var stFin = statusByMc[mc2] || '';
 
     if (bucket === 'drop') {
-      if (stFin === '이탈') {
+      if (stFin === '이탈' || stFin === '복귀 예정') {
         pickedMc[mc2] = 1;
       }
       continue;
     }
-    if (stFin === '이탈') {
+    if (stFin === '이탈' || stFin === '복귀 예정') {
       continue;
     }
 

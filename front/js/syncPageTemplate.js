@@ -686,6 +686,14 @@ export const SYNC_PAGE_SHELL_HTML = `<div class="app-shell app-shell--v9">
                         aria-selected="false"
                         data-member-tab="churn"
                       >이탈 학생 <span class="sp-stu-record__tab-count" id="sp-stu-memberChurnCount">0</span></button>
+                      <button
+                        type="button"
+                        class="sp-stu-record__tab"
+                        id="sp-stu-tabMemberPlan"
+                        role="tab"
+                        aria-selected="false"
+                        data-member-tab="plan"
+                      >복귀 예정 <span class="sp-stu-record__tab-count" id="sp-stu-memberPlanCount">0</span></button>
                     </div>
                     <label class="sp-stu-member-editor__filter">
                       <span>과목</span>
@@ -698,11 +706,10 @@ export const SYNC_PAGE_SHELL_HTML = `<div class="app-shell app-shell--v9">
                     </label>
                     <label class="sp-stu-member-editor__filter">
                       <span>상태</span>
-                      <select id="sp-stu-memberFilterStatus" title="수강·관리 탭에서만 적용(이탈 탭은 목록이 이탈만)">
+                      <select id="sp-stu-memberFilterStatus" title="수강·관리 탭에서만 적용(이탈·복귀 예정 탭은 각각 해당 상태만)">
                         <option value="">전체</option>
                         <option value="수강중">수강중</option>
                         <option value="주의 필요">주의 필요</option>
-                        <option value="복귀 예정">복귀 예정</option>
                       </select>
                     </label>
                   </div>
