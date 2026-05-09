@@ -9,7 +9,9 @@ var DB_ANALYTICS_EXPORT_TYPE_FOLDER = {
   viz_daily_sales: '일별순매출표',
   people_daily_count: '구매건수_일별상품표',
   people_year_matrix: '구매건수_연도월합계표',
-  analytics_bundle: '통합리포트'
+  analytics_bundle: '통합리포트',
+  student_daily_people: '수강생_일자별수강인원',
+  student_renewal_status: '수강생_재등록현황'
 };
 
 /**

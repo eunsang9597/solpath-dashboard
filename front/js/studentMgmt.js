@@ -404,7 +404,9 @@ export function initStudentMgmt(mount) {
   const btnWarnToggle = /** @type {HTMLButtonElement | null} */ (mount && mount.querySelector('#sp-stu-btnWarnToggle'));
   const dailyDate = /** @type {HTMLInputElement | null} */ (mount && mount.querySelector('#sp-stu-dailyDate'));
   const btnDailyLoad = /** @type {HTMLButtonElement | null} */ (mount && mount.querySelector('#sp-stu-btnDailyLoad'));
+  const btnDailyExport = /** @type {HTMLButtonElement | null} */ (mount && mount.querySelector('#sp-stu-btnDailyExport'));
   const btnRenewLoad = /** @type {HTMLButtonElement | null} */ (mount && mount.querySelector('#sp-stu-btnRenewLoad'));
+  const btnRenewExport = /** @type {HTMLButtonElement | null} */ (mount && mount.querySelector('#sp-stu-btnRenewExport'));
   const modal = /** @type {HTMLElement | null} */ (document.querySelector('#sp-stu-modal'));
   const modalBackdrop = /** @type {HTMLElement | null} */ (document.querySelector('#sp-stu-modalBackdrop'));
   const modalClose = /** @type {HTMLButtonElement | null} */ (document.querySelector('#sp-stu-modalClose'));
@@ -434,6 +436,12 @@ export function initStudentMgmt(mount) {
     }
     if (btnRenewLoad) {
       btnRenewLoad.disabled = true;
+    }
+    if (btnDailyExport) {
+      btnDailyExport.disabled = true;
+    }
+    if (btnRenewExport) {
+      btnRenewExport.disabled = true;
     }
     applyStudentMgmtStateFromData(mount, {});
     return;
@@ -536,6 +544,18 @@ export function initStudentMgmt(mount) {
   if (btnRenewLoad) {
     btnRenewLoad.addEventListener('click', function () {
       void loadRenewalStatusReport_(mount);
+    });
+  }
+  if (btnDailyExport) {
+    btnDailyExport.disabled = false;
+    btnDailyExport.addEventListener('click', function () {
+      void exportDailyPeopleSheet_(mount);
+    });
+  }
+  if (btnRenewExport) {
+    btnRenewExport.disabled = false;
+    btnRenewExport.addEventListener('click', function () {
+      void exportRenewalStatusSheet_(mount);
     });
   }
   const closeModal = function () {
@@ -1164,6 +1184,94 @@ async function loadDailyPeopleReport_(mount, ymd) {
     setDailyHint_(mount, `기준일: ${_dailyLastYmd}`, true);
   } catch (e) {
     setDailyHint_(mount, e && e.message != null ? String(e.message) : '요청 실패', true);
+  }
+}
+
+/**
+ * 일자별 수강 인원 — 서버에서 리포트 재계산 후 구글 시트 저장
+ * @param {HTMLElement | null} mount
+ */
+async function exportDailyPeopleSheet_(mount) {
+  const url = String(GAS_BASE_URL).trim();
+  if (!url || !mount) return;
+  const dailyDate = /** @type {HTMLInputElement | null} */ (mount.querySelector('#sp-stu-dailyDate'));
+  const ymd = dailyDate ? String(dailyDate.value || '').trim() : '';
+  if (!ymd) {
+    setDailyHint_(mount, '날짜를 선택해 주세요.', true);
+    return;
+  }
+  setDailyHint_(mount, '시트 저장 중…', true);
+  try {
+    const r = await gasJsonpWithParams_(
+      url,
+      'studentMgmtExportDailyPeopleSheet',
+      { payload: JSON.stringify({ ymd }) },
+      180000
+    );
+    if (!r || !r.ok) {
+      const em =
+        r && r.error && r.error.message
+          ? String(r.error.message)
+          : r && r.message
+            ? String(r.message)
+            : '시트를 만들지 못했습니다.';
+      setDailyHint_(mount, em, true);
+      return;
+    }
+    const d = (r.data && r.data) || {};
+    const sheetUrl = d.spreadsheetUrl != null ? String(d.spreadsheetUrl) : '';
+    const folderUrl = d.folderUrl != null ? String(d.folderUrl) : '';
+    setDailyHint_(
+      mount,
+      sheetUrl
+        ? '시트를 만들었습니다. 파일: ' + sheetUrl + (folderUrl ? ' · 폴더: ' + folderUrl : '')
+        : '시트를 만들었습니다.',
+      true
+    );
+  } catch (e) {
+    setDailyHint_(mount, e && e.message != null ? String(e.message) : '요청 실패', true);
+  }
+}
+
+/**
+ * 재등록 현황 — 서버에서 리포트 재계산 후 구글 시트 저장 (표를 안 불러왔으면 오늘 기준)
+ * @param {HTMLElement | null} mount
+ */
+async function exportRenewalStatusSheet_(mount) {
+  const url = String(GAS_BASE_URL).trim();
+  if (!url || !mount) return;
+  const payloadObj =
+    _renewLastYmd && String(_renewLastYmd).trim().length ? { ymd: String(_renewLastYmd).trim() } : {};
+  setRenewHint_(mount, '시트 저장 중…', true);
+  try {
+    const r = await gasJsonpWithParams_(
+      url,
+      'studentMgmtExportRenewalStatusSheet',
+      { payload: JSON.stringify(payloadObj) },
+      180000
+    );
+    if (!r || !r.ok) {
+      const em =
+        r && r.error && r.error.message
+          ? String(r.error.message)
+          : r && r.message
+            ? String(r.message)
+            : '시트를 만들지 못했습니다.';
+      setRenewHint_(mount, em, true);
+      return;
+    }
+    const d = (r.data && r.data) || {};
+    const sheetUrl = d.spreadsheetUrl != null ? String(d.spreadsheetUrl) : '';
+    const folderUrl = d.folderUrl != null ? String(d.folderUrl) : '';
+    setRenewHint_(
+      mount,
+      sheetUrl
+        ? '시트를 만들었습니다. 파일: ' + sheetUrl + (folderUrl ? ' · 폴더: ' + folderUrl : '')
+        : '시트를 만들었습니다.',
+      true
+    );
+  } catch (e) {
+    setRenewHint_(mount, e && e.message != null ? String(e.message) : '요청 실패', true);
   }
 }
 

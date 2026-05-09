@@ -585,6 +585,7 @@ export const SYNC_PAGE_SHELL_HTML = `<div class="app-shell app-shell--v9">
                         <input type="date" id="sp-stu-dailyDate" />
                       </label>
                       <button type="button" class="btn btn--secondary" id="sp-stu-btnDailyLoad">표 만들기</button>
+                      <button type="button" class="btn btn--secondary" id="sp-stu-btnDailyExport">시트 저장</button>
                     </div>
                   </div>
                   <p class="sp-pm__hint" id="sp-stu-dailyHint" hidden></p>
@@ -629,6 +630,7 @@ export const SYNC_PAGE_SHELL_HTML = `<div class="app-shell app-shell--v9">
                     <div class="sp-stu-daily__title">재등록 현황 (오늘 기준)</div>
                     <div class="sp-stu-daily__controls">
                       <button type="button" class="btn btn--secondary" id="sp-stu-btnRenewLoad">표 만들기</button>
+                      <button type="button" class="btn btn--secondary" id="sp-stu-btnRenewExport">시트 저장</button>
                     </div>
                   </div>
                   <p class="sp-pm__hint" id="sp-stu-renewHint" hidden></p>

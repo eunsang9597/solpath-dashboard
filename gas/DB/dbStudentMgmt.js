@@ -1750,7 +1750,7 @@ function dbStudentMgmtDailyPeopleProductMembers_(payload) {
  * 재등록 현황(오늘 기준) — 상품명 기준
  * 정의(우선순위 적용):
  * - total(총원): status != 이탈 AND (해당 상품 현재 수강/관리 윈도우 내)
- * - drop(등록X): status == 이탈 또는 복귀 예정 (등록 관점에서 동일 취급; 해당 상품 이력 존재)
+ * - drop(등록X): total과 동일하게 cur(관리 윈도우)가 있을 때만, status == 이탈 또는 복귀 예정
  * - re(재등록): total 후보 중, exit(=base+14) 이후 시작하는 동일 상품 주문이 존재
  * - planned(등록예정): total 후보 중, 재등록 아님 AND rereg_reminder_date가 오늘~3일 이내
  * - contact(연락필요): total 후보 중, 재등록/등록예정 아님 AND status == 주의 필요
@@ -1869,12 +1869,8 @@ function dbStudentMgmtRenewalStatusReport_(payload) {
     var mc2 = arr[0].memberCode;
     var pk2 = arr[0].prodKey;
     var stFin = statusByMc[mc2] || '';
-    if (stFin === '이탈' || stFin === '복귀 예정') {
-      byProd[pk2].drop += 1;
-      continue;
-    }
 
-    /** current: 오늘이 exitYmd 이내인 것 중 시작일 최신 */
+    /** current: 오늘이 exitYmd 이내인 것 중 시작일 최신 — 총원·등록X 동일 조건 */
     var cur = null;
     var j;
     for (j = 0; j < arr.length; j++) {
@@ -1889,6 +1885,12 @@ function dbStudentMgmtRenewalStatusReport_(payload) {
     if (!cur) {
       continue;
     }
+
+    if (stFin === '이탈' || stFin === '복귀 예정') {
+      byProd[pk2].drop += 1;
+      continue;
+    }
+
     byProd[pk2].total += 1;
 
     /** re: exit 이후 시작하는 이벤트 존재 */
@@ -2062,27 +2064,30 @@ function dbStudentMgmtRenewalStatusProductMembers_(payload) {
     var mc2 = arr[0].memberCode;
     var stFin = statusByMc[mc2] || '';
 
-    if (bucket === 'drop') {
-      if (stFin === '이탈' || stFin === '복귀 예정') {
-        pickedMc[mc2] = 1;
-      }
-      continue;
-    }
-    if (stFin === '이탈' || stFin === '복귀 예정') {
-      continue;
-    }
-
     var cur = null;
     var j;
     for (j = 0; j < arr.length; j++) {
       var it = arr[j];
-      if (!it.exitYmd) continue;
+      if (!String(it.exitYmd || '').length) continue;
       if (ymd <= it.exitYmd) {
         if (!cur || String(it.startYmd || '') > String(cur.startYmd || '')) {
           cur = it;
         }
       }
     }
+
+    if (bucket === 'drop') {
+      if (cur && (stFin === '이탈' || stFin === '복귀 예정')) {
+        pickedMc[mc2] = 1;
+        pickedMeta[mc2] = { product_end_date: cur.endYmd || '', rereg_reminder_date: cur.reregYmd || '' };
+      }
+      continue;
+    }
+
+    if (stFin === '이탈' || stFin === '복귀 예정') {
+      continue;
+    }
+
     if (!cur) continue;
 
     var hasNext = false;
@@ -2147,6 +2152,101 @@ function dbStudentMgmtRenewalStatusProductMembers_(payload) {
       members: members
     }
   };
+}
+
+/**
+ * 일자별 수강 인원 — 리포트 API와 동일 데이터로 구글 시트 생성
+ * payload: { ymd: yyyy-MM-dd } — `dbStudentMgmtDailyPeopleReport_`와 동일
+ * @param {Object} payload
+ * @return {{ ok: true, data: { spreadsheetId: string, spreadsheetUrl: string, fileName: string, folderId: string, folderUrl: string } }|{ ok: false, error: { code: string, message: string } }}
+ */
+function dbStudentMgmtExportDailyPeopleSheet_(payload) {
+  var rep = dbStudentMgmtDailyPeopleReport_(payload || {});
+  if (!rep || !rep.ok) {
+    return rep;
+  }
+  var d = rep.data || {};
+  var ymd = String(d.ymd != null ? d.ymd : '');
+  var rowsArr = Array.isArray(d.rows) ? d.rows : [];
+  var tot = d.totals || {};
+  var uniq = d.uniqueTotals || {};
+  /** @type {string[][]} */
+  var rows = [];
+  rows.push(['수강반', '총원', '신규', '재등록', '다시옴']);
+  var i;
+  for (i = 0; i < rowsArr.length; i++) {
+    var r = rowsArr[i] || {};
+    rows.push([
+      String(r.prodName != null ? r.prodName : ''),
+      String(r.total != null ? r.total : 0),
+      String(r['신규'] != null ? r['신규'] : 0),
+      String(r['재등록'] != null ? r['재등록'] : 0),
+      String(r['다시옴'] != null ? r['다시옴'] : 0)
+    ]);
+  }
+  rows.push([
+    '합계(상품)',
+    String(tot.total != null ? tot.total : 0),
+    String(tot['신규'] != null ? tot['신규'] : 0),
+    String(tot['재등록'] != null ? tot['재등록'] : 0),
+    String(tot['다시옴'] != null ? tot['다시옴'] : 0)
+  ]);
+  rows.push([
+    '회원별 총합(유니크)',
+    String(uniq.total != null ? uniq.total : 0),
+    String(uniq['신규'] != null ? uniq['신규'] : 0),
+    String(uniq['재등록'] != null ? uniq['재등록'] : 0),
+    String(uniq['다시옴'] != null ? uniq['다시옴'] : 0)
+  ]);
+  var title = ymd.length ? '기준일_' + ymd : '일자별수강인원';
+  return dbAnalyticsExportTableToSheet_({
+    tableType: 'student_daily_people',
+    title: title,
+    rows: rows,
+    merges: []
+  });
+}
+
+/**
+ * 재등록 현황 — 리포트 API와 동일 데이터로 구글 시트 생성
+ * payload: `dbStudentMgmtRenewalStatusReport_`와 동일 (ymd 생략 시 오늘 서울)
+ * @param {Object} payload
+ * @return {{ ok: true, data: { spreadsheetId: string, spreadsheetUrl: string, fileName: string, folderId: string, folderUrl: string } }|{ ok: false, error: { code: string, message: string } }}
+ */
+function dbStudentMgmtExportRenewalStatusSheet_(payload) {
+  var rep = dbStudentMgmtRenewalStatusReport_(payload || {});
+  if (!rep || !rep.ok) {
+    return rep;
+  }
+  var d = rep.data || {};
+  var ymd = String(d.ymd != null ? d.ymd : '');
+  var rowsArr = Array.isArray(d.rows) ? d.rows : [];
+  /** @type {string[][]} */
+  var rows = [];
+  rows.push(['수강반', '총원', '재등록', '등록예정', '등록X', '연락필요', '재등록률', '예상재등록률']);
+  var i;
+  for (i = 0; i < rowsArr.length; i++) {
+    var r = rowsArr[i] || {};
+    var rate = r.rate != null ? Number(r.rate) : 0;
+    var exp = r.expected != null ? Number(r.expected) : 0;
+    rows.push([
+      String(r.prodName != null ? r.prodName : ''),
+      String(r.total != null ? r.total : 0),
+      String(r.re != null ? r.re : 0),
+      String(r.planned != null ? r.planned : 0),
+      String(r.drop != null ? r.drop : 0),
+      String(r.contact != null ? r.contact : 0),
+      String(Math.round(rate * 100) / 100) + '%',
+      String(Math.round(exp * 100) / 100) + '%'
+    ]);
+  }
+  var title = ymd.length ? '기준일_' + ymd : '재등록현황';
+  return dbAnalyticsExportTableToSheet_({
+    tableType: 'student_renewal_status',
+    title: title,
+    rows: rows,
+    merges: []
+  });
 }
 
 /**
