@@ -120,8 +120,7 @@ function openSyncAllowedActions_() {
     'studentMgmtDailyPeopleProductMembers',
     'studentMgmtRenewalStatusReport',
     'studentMgmtRenewalStatusProductMembers',
-    'studentMgmtExportDailyPeopleSheet',
-    'studentMgmtExportRenewalStatusSheet',
+    'studentMgmtExportReportsBundle',
     'analyticsExportStagingPut',
     'analyticsTableExportFromStaging'
   ];
@@ -381,16 +380,12 @@ function openSyncRouteAction_(action, e) {
     }
     return dbStudentMgmtRenewalStatusProductMembers_(pStuRenM);
   }
-  if (action === 'studentMgmtExportDailyPeopleSheet') {
-    var pStuExDaily = openSyncExtractPayloadJson_(e);
-    if (!pStuExDaily) {
+  if (action === 'studentMgmtExportReportsBundle') {
+    var pStuBundle = openSyncExtractPayloadJson_(e);
+    if (!pStuBundle) {
       return { ok: false, error: { code: 'BAD_REQUEST', message: 'payload 없음' } };
     }
-    return dbStudentMgmtExportDailyPeopleSheet_(pStuExDaily);
-  }
-  if (action === 'studentMgmtExportRenewalStatusSheet') {
-    var pStuExRen = openSyncExtractPayloadJson_(e) || {};
-    return dbStudentMgmtExportRenewalStatusSheet_(pStuExRen);
+    return dbStudentMgmtExportReportsBundle_(pStuBundle);
   }
   return { ok: false, error: 'UNKNOWN_ACTION', allowed: openSyncAllowedActions_() };
 }

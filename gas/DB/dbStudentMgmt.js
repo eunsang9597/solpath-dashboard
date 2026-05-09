@@ -1813,11 +1813,13 @@ function dbStudentMgmtDailyPeopleProductMembers_(payload) {
 /**
  * 재등록 현황(오늘 기준) — 상품명 기준
  * 정의(우선순위 적용):
- * - total(총원): status != 이탈 AND (해당 상품 현재 수강/관리 윈도우 내)
- * - drop(등록X): total과 동일하게 cur(관리 윈도우)가 있을 때만, status == 이탈 또는 복귀 예정
- * - re(재등록): total 후보 중, exit(=base+14) 이후 시작하는 동일 상품 주문이 존재
- * - planned(등록예정): total 후보 중, 재등록 아님 AND rereg_reminder_date가 오늘~3일 이내
- * - contact(연락필요): total 후보 중, 재등록/등록예정 아님 AND status == 주의 필요
+ * - total(총원): cur(관리 윈도우) 있는 멤버×상품 전원 — 등록X(이탈·복귀 예정) 포함
+ * - drop(등록X): cur 있음 AND status == 이탈 또는 복귀 예정 (total과 중복 집계)
+ * - re(재등록): cur 있고 비(이탈·복귀) 중, exit(=base+14) 이후 시작하는 동일 상품 주문 존재
+ * - planned(등록예정): 위 재등록 아님 AND rereg_reminder_date가 오늘~3일 이내
+ * - contact(연락필요): 재등록·등록예정 아님 AND status == 주의 필요
+ *
+ * 관리 윈도우 exit: baseYmd = 종료일 없으면 시작일, exit = base+14 (재등록일은 planned·자동상태 등에서만 사용)
  *
  * rate(재등록률)=re/total, expected=(re+planned)/total (0이면 0)
  *
@@ -1950,12 +1952,12 @@ function dbStudentMgmtRenewalStatusReport_(payload) {
       continue;
     }
 
+    byProd[pk2].total += 1;
+
     if (stFin === '이탈' || stFin === '복귀 예정') {
       byProd[pk2].drop += 1;
       continue;
     }
-
-    byProd[pk2].total += 1;
 
     /** re: exit 이후 시작하는 이벤트 존재 */
     var hasNext = false;
@@ -2148,6 +2150,14 @@ function dbStudentMgmtRenewalStatusProductMembers_(payload) {
       continue;
     }
 
+    if (bucket === 'total') {
+      if (cur) {
+        pickedMc[mc2] = 1;
+        pickedMeta[mc2] = { product_end_date: cur.endYmd || '', rereg_reminder_date: cur.reregYmd || '' };
+      }
+      continue;
+    }
+
     if (stFin === '이탈' || stFin === '복귀 예정') {
       continue;
     }
@@ -2175,11 +2185,7 @@ function dbStudentMgmtRenewalStatusProductMembers_(payload) {
     }
     var isContact = !hasNext && !isPlanned && stFin === '주의 필요';
 
-    var ok =
-      bucket === 'total' ||
-      (bucket === 're' && hasNext) ||
-      (bucket === 'planned' && isPlanned) ||
-      (bucket === 'contact' && isContact);
+    var ok = (bucket === 're' && hasNext) || (bucket === 'planned' && isPlanned) || (bucket === 'contact' && isContact);
     if (!ok) continue;
     pickedMc[mc2] = 1;
     pickedMeta[mc2] = { product_end_date: cur.endYmd || '', rereg_reminder_date: cur.reregYmd || '' };
@@ -2219,18 +2225,11 @@ function dbStudentMgmtRenewalStatusProductMembers_(payload) {
 }
 
 /**
- * 일자별 수강 인원 — 리포트 API와 동일 데이터로 구글 시트 생성
- * payload: { ymd: yyyy-MM-dd } — `dbStudentMgmtDailyPeopleReport_`와 동일
- * @param {Object} payload
- * @return {{ ok: true, data: { spreadsheetId: string, spreadsheetUrl: string, fileName: string, folderId: string, folderUrl: string } }|{ ok: false, error: { code: string, message: string } }}
+ * @param {Object} d `dbStudentMgmtDailyPeopleReport_` 의 data
+ * @return {string[][]}
  */
-function dbStudentMgmtExportDailyPeopleSheet_(payload) {
-  var rep = dbStudentMgmtDailyPeopleReport_(payload || {});
-  if (!rep || !rep.ok) {
-    return rep;
-  }
-  var d = rep.data || {};
-  var ymd = String(d.ymd != null ? d.ymd : '');
+function dbStudentMgmtDailyPeopleRowsForSheet_(d) {
+  d = d || {};
   var rowsArr = Array.isArray(d.rows) ? d.rows : [];
   var tot = d.totals || {};
   var uniq = d.uniqueTotals || {};
@@ -2262,28 +2261,15 @@ function dbStudentMgmtExportDailyPeopleSheet_(payload) {
     String(uniq['재등록'] != null ? uniq['재등록'] : 0),
     String(uniq['다시옴'] != null ? uniq['다시옴'] : 0)
   ]);
-  var title = ymd.length ? '기준일_' + ymd : '일자별수강인원';
-  return dbAnalyticsExportTableToSheet_({
-    tableType: 'student_daily_people',
-    title: title,
-    rows: rows,
-    merges: []
-  });
+  return rows;
 }
 
 /**
- * 재등록 현황 — 리포트 API와 동일 데이터로 구글 시트 생성
- * payload: `dbStudentMgmtRenewalStatusReport_`와 동일 (ymd 생략 시 오늘 서울)
- * @param {Object} payload
- * @return {{ ok: true, data: { spreadsheetId: string, spreadsheetUrl: string, fileName: string, folderId: string, folderUrl: string } }|{ ok: false, error: { code: string, message: string } }}
+ * @param {Object} d `dbStudentMgmtRenewalStatusReport_` 의 data
+ * @return {string[][]}
  */
-function dbStudentMgmtExportRenewalStatusSheet_(payload) {
-  var rep = dbStudentMgmtRenewalStatusReport_(payload || {});
-  if (!rep || !rep.ok) {
-    return rep;
-  }
-  var d = rep.data || {};
-  var ymd = String(d.ymd != null ? d.ymd : '');
+function dbStudentMgmtRenewalRowsForSheet_(d) {
+  d = d || {};
   var rowsArr = Array.isArray(d.rows) ? d.rows : [];
   /** @type {string[][]} */
   var rows = [];
@@ -2304,12 +2290,50 @@ function dbStudentMgmtExportRenewalStatusSheet_(payload) {
       String(Math.round(exp * 100) / 100) + '%'
     ]);
   }
-  var title = ymd.length ? '기준일_' + ymd : '재등록현황';
-  return dbAnalyticsExportTableToSheet_({
-    tableType: 'student_renewal_status',
-    title: title,
-    rows: rows,
-    merges: []
+  return rows;
+}
+
+/**
+ * 일자별 수강 인원 + 재등록 현황 — 한 파일·시트 탭 분리(요약 + 2표)
+ * payload:
+ * - dailyYmd: yyyy-MM-dd (필수)
+ * - renewYmd: 선택, 없으면 오늘(서울)
+ * @param {Object} payload
+ * @return {{ ok: true, data: { spreadsheetId: string, spreadsheetUrl: string, fileName: string, folderId: string, folderUrl: string } }|{ ok: false, error: { code: string, message: string } }}
+ */
+function dbStudentMgmtExportReportsBundle_(payload) {
+  payload = payload || {};
+  var dailyYmd = payload.dailyYmd != null ? dbStuNormalizeYmd_(String(payload.dailyYmd)) : '';
+  if (!dailyYmd.length) {
+    return { ok: false, error: { code: 'BAD_REQUEST', message: 'dailyYmd가 필요합니다.' } };
+  }
+  var renewYmd = payload.renewYmd != null ? dbStuNormalizeYmd_(String(payload.renewYmd)) : '';
+  if (!renewYmd.length) {
+    renewYmd = Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM-dd');
+  }
+  var dailyRep = dbStudentMgmtDailyPeopleReport_({ ymd: dailyYmd });
+  if (!dailyRep || !dailyRep.ok) {
+    return dailyRep;
+  }
+  var renewRep = dbStudentMgmtRenewalStatusReport_({ ymd: renewYmd });
+  if (!renewRep || !renewRep.ok) {
+    return renewRep;
+  }
+  var dailyRows = dbStudentMgmtDailyPeopleRowsForSheet_(dailyRep.data);
+  var renewRows = dbStudentMgmtRenewalRowsForSheet_(renewRep.data);
+  var summaryRows = [
+    ['항목', '값'],
+    ['일자별 수강 인원 기준일', dailyYmd],
+    ['재등록 현황 기준일', renewYmd]
+  ];
+  return dbAnalyticsExportBundleToSheet_({
+    exportFolderType: 'student_mgmt_bundle',
+    title: '수강생_' + dailyYmd + '_' + renewYmd,
+    summaryRows: summaryRows,
+    tables: [
+      { name: '일자별수강인원', rows: dailyRows },
+      { name: '재등록현황', rows: renewRows }
+    ]
   });
 }
 

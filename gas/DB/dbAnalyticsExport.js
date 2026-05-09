@@ -11,7 +11,8 @@ var DB_ANALYTICS_EXPORT_TYPE_FOLDER = {
   people_year_matrix: '구매건수_연도월합계표',
   analytics_bundle: '통합리포트',
   student_daily_people: '수강생_일자별수강인원',
-  student_renewal_status: '수강생_재등록현황'
+  student_renewal_status: '수강생_재등록현황',
+  student_mgmt_bundle: '수강생_일자별및재등록'
 };
 
 /**
@@ -95,18 +96,22 @@ function dbAnalyticsExportTableToSheet_(payload) {
 }
 
 function dbAnalyticsExportBundleToSheet_(payload) {
-  var tableType = 'analytics_bundle';
+  payload = payload || {};
+  var folderType = payload.exportFolderType != null ? String(payload.exportFolderType).trim() : '';
+  if (!folderType.length || !DB_ANALYTICS_EXPORT_TYPE_FOLDER[folderType]) {
+    folderType = 'analytics_bundle';
+  }
   var title = payload.title != null ? String(payload.title).trim() : '';
   var summaryRows = Array.isArray(payload.summaryRows) ? payload.summaryRows : [];
   var tables = Array.isArray(payload.tables) ? payload.tables : [];
   if (!tables.length) {
     return { ok: false, error: { code: 'BAD_REQUEST', message: 'tables 배열이 필요합니다.' } };
   }
-  var folderInfo = dbAnalyticsEnsureExportTypeFolder_(tableType);
+  var folderInfo = dbAnalyticsEnsureExportTypeFolder_(folderType);
   if (!folderInfo || !folderInfo.id) {
     return { ok: false, error: { code: 'NO_EXPORT_FOLDER', message: '내보내기 폴더를 만들지 못했습니다.' } };
   }
-  var fileName = dbAnalyticsBuildExportFileName_(tableType, title);
+  var fileName = dbAnalyticsBuildExportFileName_(folderType, title);
   var ss = dbAnalyticsCreateSpreadsheetInFolder_(fileName, folderInfo.id);
   if (!ss) {
     return { ok: false, error: { code: 'EXPORT_CREATE_FAILED', message: '시트 파일 생성에 실패했습니다.' } };
