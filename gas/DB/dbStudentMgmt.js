@@ -1451,11 +1451,6 @@ function dbStudentMgmtDailyPeopleReport_(payload) {
   var tot = { total: 0, 신규: 0, 재등록: 0, 다시옴: 0 };
   for (i = 0; i < prodKeys.length; i++) {
     var pr = byProd[prodKeys[i]];
-    var ms0 = minStartByProdKey[pr.prodKey];
-    /** 이벤트가 없거나, 전 코호트 시작이 보고일보다 늦으면 행 제외 */
-    if (!ms0 || ms0 > ymd) {
-      continue;
-    }
     outRows.push({
       prodKey: pr.prodKey,
       prodName: pr.prodName,
@@ -2696,6 +2691,7 @@ function dbStudentMgmtMemberList_() {
  * - statusOverride (선택: '', '수강중', '주의 필요', '이탈', '복귀 예정')
  * - appendRemark (선택: boolean)
  * - remarkBody (선택: string; 비어도 appendRemark면 저장됨)
+ * - deleteRemarkIndex (선택: number; 0 이상이면 해당 인덱스 메모 삭제)
  * @param {Object} payload
  * @return {{ ok: true, data: { memberCode: string } }|{ ok: false, error: { code: string, message: string } }}
  */
@@ -2738,11 +2734,22 @@ function dbStudentMgmtMemberSave_(payload) {
     payload.statusOverride != null ? dbStuNormalizeMemberStatusOverride_(String(payload.statusOverride)) : null;
   var appendRemark = Boolean(payload.appendRemark);
   var remarkBody = payload.remarkBody != null ? String(payload.remarkBody) : '';
+  var deleteRemarkIndex = payload.deleteRemarkIndex != null ? Number(payload.deleteRemarkIndex) : NaN;
 
   var nowIso = new Date().toISOString();
 
   if (nextOverride !== null && idx.member_status_override != null && idx.member_status_override >= 0) {
     shM.getRange(rowNo, idx.member_status_override + 1, 1, 1).setValue(nextOverride);
+  }
+
+  /** 최종 상태 즉시 반영: override가 있으면 override, 없으면 auto */
+  if (nextOverride !== null && idx.member_status != null && idx.member_status >= 0) {
+    var auto0 =
+      idx.member_status_auto != null && idx.member_status_auto >= 0
+        ? dbStuNormalizeMemberStatusCell_(String(found[idx.member_status_auto] != null ? found[idx.member_status_auto] : ''))
+        : '';
+    var final0 = nextOverride && String(nextOverride).trim().length ? String(nextOverride).trim() : auto0;
+    shM.getRange(rowNo, idx.member_status + 1, 1, 1).setValue(final0);
   }
 
   if (appendRemark && idx.remarks_json != null && idx.remarks_json >= 0) {
@@ -2755,6 +2762,16 @@ function dbStudentMgmtMemberSave_(payload) {
       items = items.slice(0, 50);
     }
     shM.getRange(rowNo, idx.remarks_json + 1, 1, 1).setValue(dbStuStringifyRemarksJson_(items));
+  }
+
+  if (isFinite(deleteRemarkIndex) && deleteRemarkIndex >= 0 && idx.remarks_json != null && idx.remarks_json >= 0) {
+    var curRaw2 = found[idx.remarks_json] != null ? String(found[idx.remarks_json]) : '';
+    var items2 = dbStuParseRemarksJson_(curRaw2);
+    var ix = Math.floor(deleteRemarkIndex);
+    if (ix >= 0 && ix < items2.length) {
+      items2.splice(ix, 1);
+      shM.getRange(rowNo, idx.remarks_json + 1, 1, 1).setValue(dbStuStringifyRemarksJson_(items2));
+    }
   }
 
   return { ok: true, data: { memberCode: mc } };

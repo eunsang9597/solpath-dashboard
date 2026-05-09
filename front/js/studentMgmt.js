@@ -784,6 +784,10 @@ function openMemberRemarkDetailModal_(memberCode, remarkIndex) {
   const t = String(item.title || '').trim();
   const b = String(item.body || '');
   const u = String(item.updatedAt || '').trim();
+  const delBtn =
+    `<div class="sp-stu-remark-detail__actions">` +
+    `<button type="button" class="btn btn--secondary sp-stu-remark-detail__delete" data-member-code="${escapeAttr_(mc)}" data-remark-index="${String(ix)}">이 메모 삭제</button>` +
+    `</div>`;
   const bodyHtml =
     '<div class="sp-stu-remark-detail">' +
     '<dl class="sp-stu-remark-detail__dl">' +
@@ -796,8 +800,72 @@ function openMemberRemarkDetailModal_(memberCode, remarkIndex) {
     (u.length
       ? '<dt>기록 시각</dt><dd>' + escapeHtmlText_(u) + '</dd>'
       : '') +
-    '</dl></div>';
+    '</dl>' +
+    delBtn +
+    '</div>';
   bodyEl.innerHTML = bodyHtml;
+  wireRemarkDetailDeleteButton_(mc, ix);
+}
+
+/**
+ * @param {string} memberCode
+ * @param {number} remarkIndex
+ */
+function wireRemarkDetailDeleteButton_(memberCode, remarkIndex) {
+  const btn = /** @type {HTMLButtonElement | null} */ (
+    document.querySelector('.sp-stu-remark-detail__delete')
+  );
+  if (!btn) return;
+  btn.onclick = function () {
+    const ok = window.confirm('이 메모를 삭제할까요?');
+    if (!ok) return;
+    void deleteMemberRemark_(memberCode, remarkIndex);
+  };
+}
+
+/**
+ * @param {string} memberCode
+ * @param {number} remarkIndex
+ */
+async function deleteMemberRemark_(memberCode, remarkIndex) {
+  const url = String(GAS_BASE_URL).trim();
+  const modal = /** @type {HTMLElement | null} */ (document.querySelector('#sp-stu-modal'));
+  const subEl = /** @type {HTMLElement | null} */ (document.querySelector('#sp-stu-modalSub'));
+  const bodyEl = /** @type {HTMLElement | null} */ (document.querySelector('#sp-stu-modalBody'));
+  if (!url) return;
+  const mc = String(memberCode || '').trim();
+  const ix = Number(remarkIndex);
+  if (!mc.length || !Number.isFinite(ix) || ix < 0) return;
+  if (subEl) subEl.textContent = '삭제 중…';
+  if (bodyEl) bodyEl.setAttribute('aria-busy', 'true');
+  try {
+    const r = await gasJsonpWithParams_(
+      url,
+      'studentMgmtMemberSave',
+      { payload: JSON.stringify({ memberCode: mc, deleteRemarkIndex: ix }) },
+      120000
+    );
+    if (!r || !r.ok) {
+      const em =
+        r && r.error && r.error.message
+          ? String(r.error.message)
+          : r && r.message
+            ? String(r.message)
+            : '삭제하지 못했습니다.';
+      if (subEl) subEl.textContent = em;
+      return;
+    }
+    const mount = /** @type {HTMLElement | null} */ (document.getElementById('solpath-root'));
+    await loadMemberEditorList_(mount);
+    if (modal) {
+      modal.setAttribute('hidden', '');
+      modal.setAttribute('aria-hidden', 'true');
+    }
+  } catch (e) {
+    if (subEl) subEl.textContent = e && e.message != null ? String(e.message) : '요청 실패';
+  } finally {
+    if (bodyEl) bodyEl.removeAttribute('aria-busy');
+  }
 }
 
 /**
