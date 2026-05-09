@@ -570,8 +570,7 @@ export const SYNC_PAGE_SHELL_HTML = `<div class="app-shell app-shell--v9">
                     </div>
                   </div>
                   <p class="sp-stu-member-warn__note" id="sp-stu-warnNote">
-                    아래는 멤버 <strong>상태</strong>가 「주의 필요」인 경우입니다. 자동 판정: 멤버별 <strong>가장 늦은 수강 완료일(종료일)</strong> 기준
-                    <strong>다음 날부터</strong> 같은 완료일 기준 <strong>+14일(이탈 기준일)까지</strong> 주의 필요로 표시됩니다. <strong>이탈</strong>은 그 다음 날부터입니다.
+                    아래는 멤버 <strong>상태</strong>가 「주의 필요」인 경우입니다. 자동 판정: 라인마다 <strong>재등록 기준일</strong>이 있으면 그날을, 없으면 <strong>수강 종료일</strong>, 그것도 없으면 <strong>시작일</strong>을 기준일로 씁니다. 멤버별로 여러 라인 중 <strong>가장 늦은 기준일</strong> 하나로 묶어, 그날까지는 <strong>수강중</strong>, <strong>다음 날부터 그날+14일까지</strong> 주의 필요, <strong>그 다음 날부터</strong> 이탈입니다.
                     표에서 수동으로 상태를 저장하면 그 값이 <strong>상태</strong>에 반영됩니다.
                   </p>
                   <div class="sp-stu-member-warn__list" id="sp-stu-warnList" hidden></div>
