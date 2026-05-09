@@ -2455,6 +2455,11 @@ input.sp-confirm:disabled {
   color: #4b1a22;
 }
 
+/* display:grid가 [hidden] 기본 display:none보다 우선해 접기가 안 되는 것 방지 */
+.sp-stu-member-warn__list[hidden] {
+  display: none !important;
+}
+
 .sp-stu-member-warn__item {
   display: flex;
   align-items: baseline;
