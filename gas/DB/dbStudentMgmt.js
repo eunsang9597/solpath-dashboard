@@ -1163,6 +1163,70 @@ function dbStuMemberLatestOrderIsRefundChurn_(rows, idx) {
 }
 
 /**
+ * 멤버별 order_time 최신 행·최신 비환불 행의 상품명 — 특이사항 목록에서 이탈/복귀/환불 시 과목 칸 보조
+ * @param {Array<Array<*>>} eVals
+ * @param {Object} eIdx
+ * @return {{ latestIsRefund: Object<string, boolean>, latestRefundProd: Object<string, string>, lastPurchaseProd: Object<string, string> }}
+ */
+function dbStuMemberProductDisplayByLatestOrder_(eVals, eIdx) {
+  var latestIsRefund = {};
+  var latestRefundProd = {};
+  var lastPurchaseProd = {};
+  if (!eVals || !eIdx || eIdx.member_code < 0 || eIdx.order_time < 0) {
+    return { latestIsRefund: latestIsRefund, latestRefundProd: latestRefundProd, lastPurchaseProd: lastPurchaseProd };
+  }
+  /** mc → { sk, prod, cancel } */
+  var bestAny = {};
+  /** mc → { sk, prod } 비환불만 */
+  var bestBuy = {};
+  var i;
+  for (i = 0; i < eVals.length; i++) {
+    var r = eVals[i] || [];
+    var mc = String(r[eIdx.member_code] != null ? r[eIdx.member_code] : '').trim();
+    if (!mc.length) {
+      continue;
+    }
+    var cat = String(r[eIdx.internal_category] != null ? r[eIdx.internal_category] : '').trim().toLowerCase();
+    if (!cat.length || cat === 'jasoseo' || cat === 'textbook' || cat === 'unmapped') {
+      continue;
+    }
+    if (!dbStuIsAllowedCategory_(cat)) {
+      continue;
+    }
+    var ot = String(r[eIdx.order_time] != null ? r[eIdx.order_time] : '').trim();
+    var itemCode =
+      eIdx.order_item_code >= 0 ? String(r[eIdx.order_item_code] != null ? r[eIdx.order_item_code] : '').trim() : '';
+    var sk = dbStuNormalizeYmd_(ot) + '\t' + ot + '\t' + itemCode;
+    var claimLo = eIdx.claim_status >= 0 ? String(r[eIdx.claim_status] != null ? r[eIdx.claim_status] : '').trim().toLowerCase() : '';
+    var isCancel = claimLo === 'cancel';
+    var pnm = eIdx.prod_name >= 0 ? String(r[eIdx.prod_name] != null ? r[eIdx.prod_name] : '').trim() : '';
+    if (!bestAny[mc] || sk > bestAny[mc].sk) {
+      bestAny[mc] = { sk: sk, prod: pnm, cancel: isCancel };
+    }
+    if (!isCancel && (!bestBuy[mc] || sk > bestBuy[mc].sk)) {
+      bestBuy[mc] = { sk: sk, prod: pnm };
+    }
+  }
+  var mcs = Object.keys(bestAny);
+  for (i = 0; i < mcs.length; i++) {
+    var c = mcs[i];
+    var a = bestAny[c];
+    if (a && a.cancel) {
+      latestIsRefund[c] = true;
+      if (a.prod.length) {
+        latestRefundProd[c] = a.prod;
+      }
+    }
+    if (bestBuy[c] && String(bestBuy[c].prod || '').length) {
+      lastPurchaseProd[c] = bestBuy[c].prod;
+    } else if (a && String(a.prod || '').length) {
+      lastPurchaseProd[c] = a.prod;
+    }
+  }
+  return { latestIsRefund: latestIsRefund, latestRefundProd: latestRefundProd, lastPurchaseProd: lastPurchaseProd };
+}
+
+/**
  * 시트 셀에서 읽은 상태 문자열 정규화 (NBSP·제로폭·연속 공백 제거)
  * @param {string} s
  * @return {string}
@@ -2754,10 +2818,13 @@ function dbStudentMgmtMemberList_() {
   var mVals = shM.getRange(2, 1, shM.getLastRow() - 1, wM).getValues();
 
   var subjectsByMember = {};
+  /** 이탈·복귀·환불 시 과목 칸에 prod_name 보조 표시 */
+  var productDisp = { latestIsRefund: {}, latestRefundProd: {}, lastPurchaseProd: {} };
   if (shE && shE.getLastRow() >= 2) {
     var wE = DB_STUDENT_ORDER_EVENT_HEADERS.length;
     var eIdx = dbStuHeaderIndexMap_(shE, DB_STUDENT_ORDER_EVENT_HEADERS);
     var eVals = shE.getRange(2, 1, shE.getLastRow() - 1, wE).getValues();
+    productDisp = dbStuMemberProductDisplayByLatestOrder_(eVals, eIdx);
     var today = new Date();
     today.setHours(0, 0, 0, 0);
     /** 멤버·카테고리별 가장 최신 주문 1건이 환불이면 과목 표시에서 제외 */
@@ -2841,10 +2908,18 @@ function dbStudentMgmtMemberList_() {
     subKeys.sort();
     var subjects = subKeys.join(', ');
 
+    var subjectsDisplay = '';
+    if (productDisp.latestIsRefund[mc0]) {
+      subjectsDisplay = String(productDisp.latestRefundProd[mc0] != null ? productDisp.latestRefundProd[mc0] : '').trim();
+    } else if ((stFinal === '이탈' || stFinal === '복귀 예정') && !subjects.length) {
+      subjectsDisplay = String(productDisp.lastPurchaseProd[mc0] != null ? productDisp.lastPurchaseProd[mc0] : '').trim();
+    }
+
     var rec = {
       memberCode: mc0,
       name: name0,
       subjects: subjects,
+      subjectsDisplay: subjectsDisplay,
       statusAuto: stAuto,
       statusOverride: stOv,
       statusFinal: stFinal,
@@ -2852,7 +2927,7 @@ function dbStudentMgmtMemberList_() {
     };
     out.push(rec);
     if (stFinal === '주의 필요') {
-      warn.push({ memberCode: mc0, name: name0, subjects: subjects });
+      warn.push({ memberCode: mc0, name: name0, subjects: subjects, subjectsDisplay: subjectsDisplay });
     }
   }
   out.sort(function (a, b) {

@@ -162,6 +162,7 @@ function mapMemberApiRow_(r) {
     memberCode: pickMemberFieldStr_(r.memberCode, r.member_code),
     name: pickMemberFieldStr_(r.name, r.member_name),
     subjects: r.subjects != null ? String(r.subjects) : '',
+    subjectsDisplay: pickMemberFieldStr_(r.subjectsDisplay, r.subjects_display),
     statusAuto: pickMemberFieldStr_(r.statusAuto, r.status_auto),
     statusOverride: pickMemberFieldStr_(r.statusOverride, r.status_override),
     statusFinal: pickMemberFieldStr_(r.statusFinal, r.status_final),
@@ -171,16 +172,17 @@ function mapMemberApiRow_(r) {
 
 /**
  * @param {Record<string, unknown>} w
- * @returns {{ memberCode: string, name: string, subjects: string }}
+ * @returns {{ memberCode: string, name: string, subjects: string, subjectsDisplay: string }}
  */
 function mapWarnApiRow_(w) {
   if (!w || typeof w !== 'object') {
-    return { memberCode: '', name: '', subjects: '' };
+    return { memberCode: '', name: '', subjects: '', subjectsDisplay: '' };
   }
   return {
     memberCode: pickMemberFieldStr_(w.memberCode, w.member_code),
     name: pickMemberFieldStr_(w.name, w.member_name),
-    subjects: pickMemberFieldStr_(w.subjects, w.subjects)
+    subjects: pickMemberFieldStr_(w.subjects, w.subjects),
+    subjectsDisplay: pickMemberFieldStr_(w.subjectsDisplay, w.subjects_display)
   };
 }
 
@@ -296,6 +298,31 @@ function formatSubjectsCell_(subjects) {
     .map((x) => stuCatLabel_(x.trim()))
     .filter(Boolean)
     .join(', ');
+}
+
+/**
+ * 특이사항 표 과목 칸 — API `subjectsDisplay`(상품명) 우선, 없으면 카테고리 토큰
+ * @param {Record<string, unknown>} r
+ * @returns {string}
+ */
+function formatMemberSubjectsCell_(r) {
+  const d = r.subjectsDisplay != null ? String(r.subjectsDisplay).trim() : '';
+  if (d.length) {
+    return escapeHtmlText_(d);
+  }
+  return formatSubjectsCell_(String(r.subjects != null ? r.subjects : ''));
+}
+
+/**
+ * @param {{ subjects?: string, subjectsDisplay?: string }} r
+ * @returns {string}
+ */
+function formatWarnSubjectsLine_(r) {
+  const d = r.subjectsDisplay != null ? String(r.subjectsDisplay).trim() : '';
+  if (d.length) {
+    return escapeHtmlText_(d);
+  }
+  return formatSubjectsCell_(String(r.subjects != null ? r.subjects : ''));
 }
 
 /**
@@ -1401,7 +1428,7 @@ function renderWarnBox_(mount) {
     el.className = 'sp-stu-member-warn__item';
     el.innerHTML =
       `<div class="sp-stu-member-warn__item-name">${String(r.name || '')}</div>` +
-      `<div class="sp-stu-member-warn__item-subjects">${String(r.subjects || '') || '-'}</div>`;
+      `<div class="sp-stu-member-warn__item-subjects">${formatWarnSubjectsLine_(r)}</div>`;
     listEl.appendChild(el);
   });
 }
@@ -1445,7 +1472,8 @@ function getMemberViewRows_(mount) {
     rows = rows.filter((r) => {
       const nm = String(r.name || '').toLowerCase();
       const mc = String(r.memberCode || '').toLowerCase();
-      return nm.includes(q) || mc.includes(q);
+      const sd = String(r.subjectsDisplay || '').toLowerCase();
+      return nm.includes(q) || mc.includes(q) || sd.includes(q);
     });
   }
   rows.sort((a, b) => {
@@ -1515,7 +1543,7 @@ function renderMemberEditorRows_(mount) {
     tr.setAttribute('data-member-code', mc);
     tr.innerHTML =
       `<td><strong>${String(r.name || '')}</strong><div class="sp-muted">#${mc}</div></td>` +
-      `<td>${formatSubjectsCell_(String(r.subjects || ''))}</td>` +
+      `<td>${formatMemberSubjectsCell_(r)}</td>` +
       `<td class="sp-stu-member-status-cell">` +
       `<div class="sp-stu-member-status-cell__display"><span class="${statusBadgeClass_(displaySt)}">${memberStatusDisplayLabel_(displaySt)}</span></div>` +
       `${renderOverrideSelectHtml_(mc, stOv)}` +
