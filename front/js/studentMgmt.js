@@ -940,7 +940,9 @@ function renderDailyReport_(mount) {
 function wireDailyPeopleTableButtons_(mount) {
   const root = mount;
   if (!root) return;
-  const btns = Array.from(root.querySelectorAll('.sp-stu-daily__cell-btn'));
+  /** 일자별 표만 — 재등록 현황과 동일 클래스를 쓰므로 테이블로 한정하지 않으면 onclick이 서로 덮어씀 */
+  const dailyTable = root.querySelector('#sp-stu-dailyTable');
+  const btns = Array.from((dailyTable || root).querySelectorAll('.sp-stu-daily__cell-btn'));
   btns.forEach(function (b) {
     if (!(b instanceof HTMLButtonElement)) return;
     b.onclick = function () {
@@ -1024,7 +1026,8 @@ function renderRenewalStatusReport_(mount) {
 function wireRenewButtons_(mount) {
   const root = mount;
   if (!root) return;
-  const btns = Array.from(root.querySelectorAll('.sp-stu-daily__cell-btn[data-renew-prod-key]'));
+  const renewTable = root.querySelector('#sp-stu-renewTable');
+  const btns = Array.from((renewTable || root).querySelectorAll('.sp-stu-daily__cell-btn[data-renew-prod-key]'));
   btns.forEach(function (b) {
     if (!(b instanceof HTMLButtonElement)) return;
     b.onclick = function () {
