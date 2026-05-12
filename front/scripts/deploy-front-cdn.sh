@@ -63,7 +63,7 @@ bash "$META/front/scripts/apply-solpath-cdn-pin.sh"
 
 echo "--- 5) [메타] add pin + IMWEB, commit, push ---"
 git add front/SOLPATH_CDN_COMMIT
-for f in front/IMWEB_SNIPPET_INJECT.html front/IMWEB_SNIPPET.html; do
+for f in front/IMWEB_SNIPPET_INJECT.html front/IMWEB_SNIPPET.html front/IMWEB_SNIPPET_PLAN.html; do
   [[ -f "$f" ]] && git add -- "$f" || true
 done
 if [[ -f .gitignore ]]; then

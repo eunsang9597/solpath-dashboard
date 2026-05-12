@@ -31,6 +31,20 @@ function ensureShell() {
 }
 
 /**
+ * jsDelivr URL은 7자 짧은 SHA만 200인 경우가 있어 모듈 URL과 스니펫 풀 SHA를 구분한다.
+ * @param {string} a
+ * @param {string} b
+ */
+function sameCdnCommitRef_(a, b) {
+  const x = String(a || '').toLowerCase();
+  const y = String(b || '').toLowerCase();
+  if (!x || !y) return false;
+  const px = x.length >= 7 ? x.slice(0, 7) : x;
+  const py = y.length >= 7 ? y.slice(0, 7) : y;
+  return px === py;
+}
+
+/**
  * 임웹: 표시·검증은 **실제로 로드된** 번들(이 파일 URL)이 정본. 스니펫 `cdnCommit`는 보조.
  * @returns {{ full: string, fromModule: string, fromSnippet: string, mismatch: boolean }}
  */
@@ -52,9 +66,12 @@ function resolveCdnBuildMeta_() {
   if (typeof window !== 'undefined' && window.__SOLPATH__ && window.__SOLPATH__.cdnCommit) {
     fromSnippet = String(window.__SOLPATH__.cdnCommit).toLowerCase();
   }
-  const full = fromModule || fromSnippet;
+  const full =
+    fromSnippet && fromModule && fromSnippet.length > fromModule.length
+      ? fromSnippet
+      : fromModule || fromSnippet;
   const mismatch = Boolean(
-    fromModule && fromSnippet && fromModule !== fromSnippet
+    fromModule && fromSnippet && !sameCdnCommitRef_(fromModule, fromSnippet)
   );
   return { full, fromModule, fromSnippet, mismatch };
 }
