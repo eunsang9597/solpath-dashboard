@@ -16,6 +16,7 @@ front/*
 !front/SOLPATH_CDN_COMMIT
 !front/IMWEB_SNIPPET_INJECT.html
 !front/IMWEB_SNIPPET.html
+!front/IMWEB_SNIPPET_PLAN.html
 !front/README.md
 !front/index.html
 !front/js/
