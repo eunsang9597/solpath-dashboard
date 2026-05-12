@@ -47,6 +47,481 @@ function dbPlannerPhoneFromSegments_(segs) {
 }
 
 /**
+ * members.callnum 등 → 숫자만 (플래너 매칭용). 10~11자리만 허용.
+ * @param {unknown} raw
+ * @return {string}
+ */
+function dbPlannerNormalizePhoneFromCallnum_(raw) {
+  var d = String(raw != null ? raw : '').replace(/\D/g, '');
+  if (d.length === 10 || d.length === 11) {
+    return d;
+  }
+  return '';
+}
+
+/**
+ * 원천 마스터 `order_items` + `product_mapping`에서 **솔패스** 구매 이력이 있는 회원만 모아 `planner_registry`를 덮어쓴다.
+ * 제외 규칙은 `dbStudentMgmtRebuildFromMaster_`와 동일(구매자 이름·`dbAnOrderLineSkipForAnalytics_` 등), 단 **internal_category === solpass** 인 라인만 집계한다.
+ *
+ * @return {{ ok: true, data: { written: number, skippedLines: number, skippedNoPhone: number } }|{ ok: false, error: { code: string, message: string } }}
+ */
+function dbPlannerRebuildRegistryFromMaster_() {
+  var master;
+  try {
+    master = dbOpenMaster_();
+  } catch (e0) {
+    return {
+      ok: false,
+      error: {
+        code: 'NO_SHEETS_MASTER',
+        message: '원천 DB(SHEETS_MASTER_ID)를 열 수 없습니다.'
+      }
+    };
+  }
+  var ssPl = dbPlannerOpenMaster_();
+  if (!ssPl) {
+    return {
+      ok: false,
+      error: {
+        code: 'PLANNER_NOT_CONFIGURED',
+        message: '플래너 마스터(SHEETS_PLANNER_MASTER_ID)가 없습니다. run_Planner_InitMaster 먼저 실행하세요.'
+      }
+    };
+  }
+
+  var shI = master.getSheetByName(DB_SHEET_ORDER_ITEMS);
+  if (!shI || shI.getLastRow() < 2) {
+    return { ok: false, error: { code: 'NO_ORDER_DATA', message: 'order_items가 비어 있습니다. 먼저 주문을 동기화하세요.' } };
+  }
+
+  var shO = master.getSheetByName(DB_SHEET_ORDERS);
+  var orderMap = {};
+  var orderToMember = {};
+  var ordererNameMap = {};
+  var ordererNameByMemberCode = {};
+  if (shO && shO.getLastRow() >= 2) {
+    var oLr = shO.getLastRow();
+    var ov = shO.getRange(2, 1, oLr - 1, 5).getValues();
+    var oi;
+    for (oi = 0; oi < ov.length; oi++) {
+      var ol = ov[oi] || [];
+      var on0 = String(ol[0] != null ? ol[0] : '').trim();
+      if (on0) {
+        orderMap[on0] = ol[1];
+        var mcOrd = String(ol[2] != null ? ol[2] : '').trim();
+        orderToMember[on0] = mcOrd;
+        ordererNameMap[on0] = ol[3];
+        if (mcOrd.length && ol[3] != null && String(ol[3]).trim().length) {
+          ordererNameByMemberCode[mcOrd] = String(ol[3]).trim();
+        }
+      }
+    }
+  }
+
+  var memberToGroupTitles = {};
+  var memberRowByCode = {};
+  var shMem = master.getSheetByName(DB_SHEET_MEMBERS);
+  if (shMem && shMem.getLastRow() >= 2) {
+    var mLr = shMem.getLastRow();
+    var mW = DB_MEMBERS_HEADERS.length;
+    var mVals = shMem.getRange(2, 1, mLr - 1, mW).getValues();
+    var ixMc = DB_MEMBERS_HEADERS.indexOf('member_code');
+    var ixName = DB_MEMBERS_HEADERS.indexOf('name');
+    var ixCall = DB_MEMBERS_HEADERS.indexOf('callnum');
+    var ixGt = DB_MEMBERS_HEADERS.indexOf('group_titles');
+    var mx;
+    for (mx = 0; mx < mVals.length; mx++) {
+      var mRow = mVals[mx] || [];
+      var mcode = String(mRow[ixMc] != null ? mRow[ixMc] : '').trim();
+      if (!mcode.length) {
+        continue;
+      }
+      memberToGroupTitles[mcode] = dbAnParseGroupTitlesCell_(ixGt >= 0 ? mRow[ixGt] : '');
+      memberRowByCode[mcode] = {
+        name: ixName >= 0 ? mRow[ixName] : '',
+        callnum: ixCall >= 0 ? mRow[ixCall] : ''
+      };
+    }
+  }
+
+  var pmMap = dbPmReadMappingMap_();
+  var wI = DB_ORDER_ITEMS_HEADERS.length;
+  var iLr = shI.getLastRow();
+  var iVals = shI.getRange(2, 1, iLr - 1, wI).getValues();
+
+  /** @type {Object<string, boolean>} */
+  var forceSkip = typeof DB_STU_FORCE_SKIP_ORDER_ITEM_CODES_ !== 'undefined' ? DB_STU_FORCE_SKIP_ORDER_ITEM_CODES_ : {};
+
+  /** member_code -> { ts: string, item: string } (order_time 문자열 사전순 최소) */
+  var firstSol = {};
+  var skipped = 0;
+  var j;
+  for (j = 0; j < iVals.length; j++) {
+    var L = iVals[j] || [];
+    var itemSkip = String(L[1] != null ? L[1] : '').trim();
+    if (itemSkip && forceSkip[itemSkip]) {
+      skipped++;
+      continue;
+    }
+    var ordNo = String(L[2] != null ? L[2] : '').trim();
+    var pkey = dbPmRowKey_(L[8]);
+    var cat = 'unmapped';
+    var life = 'active';
+    if (pkey && pmMap[pkey]) {
+      cat = String(pmMap[pkey].internal_category || 'unmapped').trim() || 'unmapped';
+      life = String(pmMap[pkey].lifecycle || 'active').trim() || 'active';
+    }
+    if (String(cat).trim().toLowerCase() !== 'solpass') {
+      skipped++;
+      continue;
+    }
+    var memCode = ordNo && orderToMember[ordNo] != null ? String(orderToMember[ordNo]).trim() : '';
+    var gTitles = memCode.length && memberToGroupTitles[memCode] ? memberToGroupTitles[memCode] : [];
+
+    if (dbStuSkipByPurchaser_(ordNo, ordererNameMap)) {
+      skipped++;
+      continue;
+    }
+    if (cat === 'unmapped' || cat === 'textbook') {
+      skipped++;
+      continue;
+    }
+    if (dbAnOrderLineSkipForAnalytics_(life, gTitles)) {
+      skipped++;
+      continue;
+    }
+    if (!memCode.length) {
+      skipped++;
+      continue;
+    }
+
+    var orderTimeStr = orderMap[ordNo] != null ? String(orderMap[ordNo]) : '';
+    var itemCode = String(L[1] != null ? L[1] : '').trim();
+    if (!firstSol[memCode] || String(orderTimeStr).localeCompare(firstSol[memCode].ts) < 0) {
+      firstSol[memCode] = { ts: orderTimeStr, item: itemCode };
+    }
+  }
+
+  var nowIso = Utilities.formatDate(new Date(), 'Asia/Seoul', "yyyy-MM-dd'T'HH:mm:ss");
+  var out = [];
+  var skippedNoPhone = 0;
+  var codes = Object.keys(firstSol);
+  codes.sort();
+  var ci;
+  for (ci = 0; ci < codes.length; ci++) {
+    var mc = codes[ci];
+    var phone = '';
+    var disp = '';
+    var mr = memberRowByCode[mc];
+    if (mr) {
+      phone = dbPlannerNormalizePhoneFromCallnum_(mr.callnum);
+      disp = String(mr.name != null ? mr.name : '').trim();
+    }
+    if (!disp.length && ordererNameByMemberCode[mc]) {
+      disp = String(ordererNameByMemberCode[mc]).trim();
+    }
+    if (!phone.length) {
+      skippedNoPhone++;
+      continue;
+    }
+    out.push([mc, phone, disp, firstSol[mc].item || '', nowIso]);
+  }
+
+  var shReg = dbGetOrCreateSheetWithHeaders_(ssPl, DB_SHEET_PLANNER_REGISTRY, DB_PLANNER_REGISTRY_HEADERS);
+  var nCol = DB_PLANNER_REGISTRY_HEADERS.length;
+  dbClearDataRows2Plus_(shReg, nCol);
+  if (out.length) {
+    dbSetValuesFromRow2_(shReg, out, nCol);
+  }
+
+  var prov = dbPlannerProvisionStudentsFromRegistry_(ssPl);
+  return {
+    ok: true,
+    data: {
+      written: out.length,
+      skippedLines: skipped,
+      skippedNoPhone: skippedNoPhone,
+      provisioned: prov.provisioned,
+      reusedStudentFiles: prov.reused,
+      trashedBrokenLinks: prov.trashedBroken,
+      trashedOrphanLinks: prov.trashedOrphans,
+      provisionErrors: prov.provisionErrors
+    }
+  };
+}
+
+/**
+ * @param {string} fileId
+ */
+function dbPlannerTrashFileBestEffort_(fileId) {
+  var s = fileId != null ? String(fileId).trim() : '';
+  if (!s.length) {
+    return;
+  }
+  try {
+    DriveApp.getFileById(s).setTrashed(true);
+  } catch (e) {
+    Logger.log('dbPlannerTrashFileBestEffort_: ' + s + ' ' + (e && e.message != null ? e.message : String(e)));
+  }
+}
+
+/**
+ * 플래너 마스터 파일이 들어 있는 Drive 폴더(첫 부모).
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} ss
+ * @return {string}
+ */
+function dbPlannerMasterParentFolderId_(ss) {
+  try {
+    var it = DriveApp.getFileById(ss.getId()).getParents();
+    if (it.hasNext()) {
+      return String(it.next().getId()).trim();
+    }
+  } catch (e) {
+    Logger.log('dbPlannerMasterParentFolderId_: ' + (e && e.message != null ? e.message : String(e)));
+  }
+  return '';
+}
+
+/**
+ * @param {string} memberCode
+ * @return {string}
+ */
+function dbPlannerSanitizeMemberCodeForFileName_(memberCode) {
+  var raw = String(memberCode != null ? memberCode : '').trim();
+  if (!raw.length) {
+    return 'unknown';
+  }
+  var t = raw.replace(/[^a-zA-Z0-9._-]+/g, '_');
+  if (t.length > 64) {
+    t = t.slice(0, 64);
+  }
+  return t.length ? t : 'unknown';
+}
+
+/**
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} ss
+ */
+function dbPlannerEnsurePersonalTodoSheet_(ss) {
+  dbGetOrCreateSheetWithHeaders_(ss, DB_SHEET_PLANNER_PERSONAL_TODOS, DB_PLANNER_PERSONAL_TODO_HEADERS);
+  dbDeleteOrphanDefaultSheetIfAny_(ss);
+}
+
+/**
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} masterSs
+ * @param {string} memberCode
+ * @return {string} 새 스프레드시트 ID 또는 실패 시 ''
+ */
+function dbPlannerCreateStudentPlannerSpreadsheet_(masterSs, memberCode) {
+  var folderId = dbPlannerMasterParentFolderId_(masterSs);
+  if (!folderId) {
+    folderId = dbPmGetMasterParentFolderId_();
+  }
+  if (!folderId) {
+    var base = dbResolveMasterParentFolderId_();
+    if (base) {
+      folderId = dbGetOrCreateDbSubfolder_(base) || '';
+    }
+  }
+  if (!folderId) {
+    Logger.log('dbPlannerCreateStudentPlannerSpreadsheet_: no folder');
+    return '';
+  }
+  var title = DB_PLANNER_STUDENT_FILE_TITLE_PREFIX + dbPlannerSanitizeMemberCodeForFileName_(memberCode);
+  var file = dbDriveCreateSpreadsheetInFolder_(title, folderId);
+  if (!file || !file.id) {
+    return '';
+  }
+  var id = String(file.id).trim();
+  var ss = dbOpenNewSpreadsheetByIdWithRetry_(id);
+  if (!ss) {
+    return '';
+  }
+  dbPlannerEnsurePersonalTodoSheet_(ss);
+  return id;
+}
+
+/**
+ * `planner_registry`에 있는 `member_code`마다 학생 파일이 있게 맞춘다. 레지스트리에 없는 링크 행은 제거하고 해당 파일은 휴지통으로 보낸다.
+ *
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} masterSs
+ * @return {{ provisioned: number, reused: number, trashedBroken: number, trashedOrphans: number, provisionErrors: number, error?: { code: string, message: string } }}
+ */
+function dbPlannerProvisionStudentsFromRegistry_(masterSs) {
+  var nowIso = Utilities.formatDate(new Date(), 'Asia/Seoul', "yyyy-MM-dd'T'HH:mm:ss");
+  var out = {
+    provisioned: 0,
+    reused: 0,
+    trashedBroken: 0,
+    trashedOrphans: 0,
+    provisionErrors: 0
+  };
+  var shLinks = dbGetOrCreateSheetWithHeaders_(masterSs, DB_SHEET_PLANNER_STUDENT_LINKS, DB_PLANNER_STUDENT_LINK_HEADERS);
+  var wL = DB_PLANNER_STUDENT_LINK_HEADERS.length;
+
+  var regCodes = dbPlannerReadRegistryMemberCodesOrdered_(masterSs);
+  var regSet = {};
+  var ri;
+  for (ri = 0; ri < regCodes.length; ri++) {
+    regSet[regCodes[ri]] = true;
+  }
+
+  /** @type {Object<string, { sid: string, prov: string }>} */
+  var linkByMc = {};
+  if (shLinks.getLastRow() >= 2) {
+    var lr0 = shLinks.getLastRow();
+    var n0 = lr0 - 2 + 1;
+    var lv = shLinks.getRange(2, 1, n0, wL).getValues();
+    var li;
+    for (li = 0; li < lv.length; li++) {
+      var rowL = lv[li] || [];
+      var mc0 = String(rowL[0] != null ? rowL[0] : '').trim();
+      if (!mc0.length) {
+        continue;
+      }
+      linkByMc[mc0] = {
+        sid: String(rowL[1] != null ? rowL[1] : '').trim(),
+        prov: String(rowL[2] != null ? rowL[2] : '').trim()
+      };
+    }
+  }
+
+  var mcOrphan;
+  for (mcOrphan in linkByMc) {
+    if (!Object.prototype.hasOwnProperty.call(linkByMc, mcOrphan)) {
+      continue;
+    }
+    if (regSet[mcOrphan]) {
+      continue;
+    }
+    var sidO = linkByMc[mcOrphan].sid;
+    if (sidO) {
+      dbPlannerTrashFileBestEffort_(sidO);
+      out.trashedOrphans++;
+    }
+  }
+
+  var newRows = [];
+  var ci;
+  for (ci = 0; ci < regCodes.length; ci++) {
+    var mc = regCodes[ci];
+    var prev = linkByMc[mc];
+    var sid = prev && prev.sid ? prev.sid : '';
+    var provOld = prev && prev.prov ? prev.prov : '';
+    var usable = sid.length > 0 && dbDriveSpreadsheetIdIsUsableNow_(sid);
+    if (usable) {
+      try {
+        var ssSt = SpreadsheetApp.openById(sid);
+        dbPlannerEnsurePersonalTodoSheet_(ssSt);
+        newRows.push([mc, sid, provOld.length ? provOld : nowIso]);
+        out.reused++;
+        continue;
+      } catch (e1) {
+        Logger.log('dbPlannerProvisionStudentsFromRegistry_: open fail ' + sid + ' ' + (e1 && e1.message != null ? e1.message : String(e1)));
+        usable = false;
+      }
+    }
+    if (sid.length) {
+      dbPlannerTrashFileBestEffort_(sid);
+      out.trashedBroken++;
+    }
+    var nid = dbPlannerCreateStudentPlannerSpreadsheet_(masterSs, mc);
+    if (!nid.length) {
+      out.provisionErrors++;
+      continue;
+    }
+    newRows.push([mc, nid, nowIso]);
+    out.provisioned++;
+  }
+
+  dbClearDataRows2Plus_(shLinks, wL);
+  if (newRows.length) {
+    dbSetValuesFromRow2_(shLinks, newRows, wL);
+  }
+  return out;
+}
+
+/**
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} ss
+ * @return {string[]}
+ */
+function dbPlannerReadRegistryMemberCodesOrdered_(ss) {
+  var sh = ss.getSheetByName(DB_SHEET_PLANNER_REGISTRY);
+  if (!sh || sh.getLastRow() < 2) {
+    return [];
+  }
+  var lr = sh.getLastRow();
+  var n = lr - 2 + 1;
+  var vals = sh.getRange(2, 1, n, 1).getValues();
+  var out = [];
+  var seen = {};
+  var i;
+  for (i = 0; i < vals.length; i++) {
+    var mc = String(vals[i][0] != null ? vals[i][0] : '').trim();
+    if (!mc.length || seen[mc]) {
+      continue;
+    }
+    seen[mc] = true;
+    out.push(mc);
+  }
+  return out;
+}
+
+/**
+ * 제작용: 연결된 **모든** 학생 플래너 스프레드시트를 휴지통으로 보내고, 마스터의 `planner_registry`·`planner_member_records`·`planner_student_links` 본문(2행~)을 비운다.
+ *
+ * @return {{ ok: true, data: { trashedStudentFiles: number, clearedTabs: string[] } }|{ ok: false, error: { code: string, message: string } }}
+ */
+function dbPlannerDevFullReset_() {
+  var initR = dbInitPlannerMasterSheets_();
+  if (initR && initR.error) {
+    return { ok: false, error: { code: initR.error.code, message: initR.error.message } };
+  }
+  var ss = dbPlannerOpenMaster_();
+  if (!ss) {
+    return {
+      ok: false,
+      error: { code: 'PLANNER_NOT_CONFIGURED', message: '플래너 마스터를 열 수 없습니다.' }
+    };
+  }
+  var shLinks = ss.getSheetByName(DB_SHEET_PLANNER_STUDENT_LINKS);
+  var trashed = 0;
+  if (shLinks && shLinks.getLastRow() >= 2) {
+    var lrL = shLinks.getLastRow();
+    var nL = lrL - 2 + 1;
+    var lv = shLinks.getRange(2, 2, nL, 2).getValues();
+    var seen = {};
+    var lj;
+    for (lj = 0; lj < lv.length; lj++) {
+      var sid = String(lv[lj][0] != null ? lv[lj][0] : '').trim();
+      if (!sid.length || seen[sid]) {
+        continue;
+      }
+      seen[sid] = true;
+      dbPlannerTrashFileBestEffort_(sid);
+      trashed++;
+    }
+  }
+  var shReg = ss.getSheetByName(DB_SHEET_PLANNER_REGISTRY);
+  if (shReg) {
+    dbClearDataRows2Plus_(shReg, DB_PLANNER_REGISTRY_HEADERS.length);
+  }
+  var shMr = ss.getSheetByName(DB_SHEET_PLANNER_MEMBER_RECORDS);
+  if (shMr) {
+    dbClearDataRows2Plus_(shMr, DB_PLANNER_MEMBER_RECORD_HEADERS.length);
+  }
+  if (shLinks) {
+    dbClearDataRows2Plus_(shLinks, DB_PLANNER_STUDENT_LINK_HEADERS.length);
+  }
+  return {
+    ok: true,
+    data: {
+      trashedStudentFiles: trashed,
+      clearedTabs: [DB_SHEET_PLANNER_REGISTRY, DB_SHEET_PLANNER_MEMBER_RECORDS, DB_SHEET_PLANNER_STUDENT_LINKS]
+    }
+  };
+}
+
+/**
  * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} ss
  * @return {{ member_code: string, phone_normalized: string, display_name: string }[]}
  */
@@ -171,14 +646,63 @@ function dbPlannerStudentSpreadsheetId_(ss, memberCode) {
 
 /**
  * @param {string} spreadsheetId
- * @return {unknown[]}
+ * @return {{ title: string, start_date: string, end_date: string, sort_key: number }[]}
  */
 function dbPlannerReadPersonalStub_(spreadsheetId) {
   var sid = String(spreadsheetId != null ? spreadsheetId : '').trim();
-  if (!sid.length) {
+  if (!sid.length || !dbDriveSpreadsheetIdIsUsableNow_(sid)) {
     return [];
   }
-  return [];
+  try {
+    var ss = SpreadsheetApp.openById(sid);
+    var sh = ss.getSheetByName(DB_SHEET_PLANNER_PERSONAL_TODOS);
+    if (!sh || sh.getLastRow() < 2) {
+      return [];
+    }
+    var lr = sh.getLastRow();
+    var nCols = DB_PLANNER_PERSONAL_TODO_HEADERS.length;
+    var n = lr - 2 + 1;
+    var vals = sh.getRange(2, 1, n, nCols).getValues();
+    var ixTitle = DB_PLANNER_PERSONAL_TODO_HEADERS.indexOf('title');
+    var ixDue = DB_PLANNER_PERSONAL_TODO_HEADERS.indexOf('due_date');
+    var ixStart = DB_PLANNER_PERSONAL_TODO_HEADERS.indexOf('start_date');
+    var ixSort = DB_PLANNER_PERSONAL_TODO_HEADERS.indexOf('sort_key');
+    var out = [];
+    var i;
+    for (i = 0; i < vals.length; i++) {
+      var row = vals[i] || [];
+      var title = String(row[ixTitle] != null ? row[ixTitle] : '').trim();
+      if (!title.length) {
+        title = '(제목 없음)';
+      }
+      var due = ixDue >= 0 ? String(row[ixDue] != null ? row[ixDue] : '').trim() : '';
+      var start = ixStart >= 0 ? String(row[ixStart] != null ? row[ixStart] : '').trim() : '';
+      var sd = due.length ? due : start;
+      var sk = row[ixSort];
+      var skn = sk != null && String(sk).trim() !== '' ? Number(sk) : 0;
+      if (!isFinite(skn)) {
+        skn = 0;
+      }
+      out.push({
+        title: title,
+        start_date: sd,
+        end_date: '',
+        sort_key: skn
+      });
+    }
+    out.sort(function (a, b) {
+      var da = String(a.start_date || '');
+      var db = String(b.start_date || '');
+      if (da !== db) {
+        return da < db ? -1 : da > db ? 1 : 0;
+      }
+      return (Number(a.sort_key) || 0) - (Number(b.sort_key) || 0);
+    });
+    return out;
+  } catch (e) {
+    Logger.log('dbPlannerReadPersonalStub_: ' + (e && e.message != null ? e.message : String(e)));
+    return [];
+  }
 }
 
 /**

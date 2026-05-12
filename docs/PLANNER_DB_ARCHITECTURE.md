@@ -80,7 +80,7 @@
 
 ## 7. 학생별 DB 안에 둘 것 (개별)
 
-- **회원 전용:** 할 일(todo)·완료·메모 등.
+- **회원 전용:** 할 일(todo)·완료·메모 등. 탭명 **`planner_personal_todos`** — 헤더는 아래 §10.5와 `gas/DB/dbSchema.js`의 `DB_PLANNER_PERSONAL_TODO_HEADERS`와 동일.
 - 공통 일정은 복제하지 않고 마스터에서 읽어 합성.
 
 ---
@@ -102,7 +102,7 @@
 
 - Web App **할당량·남용 방지**(분당 호출 상한 등) 구체 수치.
 - `planner_member_records.phone_normalized` **평문 vs 해시** 저장 전환 시점.
-- 학생별 파일 **자동 생성 트리거**(첫 매칭 vs 배치).
+- 학생별 파일 **자동 생성 트리거:** `plannerRegistryRebuild` 직후, `planner_registry`에 있는 `member_code`마다 일괄 프로비저닝(링크 없음·깨진 링크는 새 파일 생성, 레지스트리에 없는 링크는 파일 휴지통 후 행 제거).
 
 ---
 
@@ -149,6 +149,23 @@
 | `category` | `live` \| `deadline` \| `holiday` \| `other` (필터·색용). |
 | `sort_key` | 같은 날 정렬용 정수(기본 `0`). |
 
+### 10.5 학생별 파일 — `planner_personal_todos` (탭명 고정)
+
+| 컬럼 | 설명 |
+|------|------|
+| `task_id` | 고유 ID(예: `pt_` + UUID hex). |
+| `title` | 할 일 제목. |
+| `description` | 상세·메모. |
+| `status` | `todo` \| `doing` \| `done` \| `cancelled` 등(구현·UI에서 고정 집합으로 쓴다). |
+| `priority` | `low` \| `normal` \| `high` 또는 숫자(팀 합의). |
+| `due_date` | `YYYY-MM-DD` (달력 정렬 우선). |
+| `start_date` | (선택) `YYYY-MM-DD`. |
+| `category` | 짧은 태그 문자열. |
+| `sort_key` | 같은 날짜 내 정렬 정수. |
+| `completed_at` | 완료 시각 ISO(서울), 없으면 빈 값. |
+| `created_at` | 생성 시각. |
+| `updated_at` | 수정 시각. |
+
 ---
 
 ## 11. `event_id` 규칙 (공통 일정)
@@ -161,8 +178,8 @@
 ## 12. Web App — 엔드포인트·전송·응답
 
 - **배포:** 플래너 API는 **지금 쓰는 것과 동일한 GAS 프로젝트·동일 Web App `/exec` URL**에 둔다 (`window.__SOLPATH__.gasBaseUrl`와 동일 엔드포인트). 별도 배포 URL로 쪼개지 않는다.
-- **전송:** `POST`, `Content-Type: application/json`, 본문 JSON. **`plannerMatch` / `plannerBootstrap` 모두 이 방식만 쓴다.** 전화·이름 등 민감값은 **쿼리스트링·JSONP GET에 넣지 않는다** (대시보드 일부 액션은 기존대로 JSONP일 수 있으나, 플래너 전용 액션은 POST로만).
-- **라우팅:** 기존 `HttpOpenSync.js` `doPost`와 동일하게 `JSON.parse(postData.contents)` 후 **`action` 필드**로 분기한다. `openSyncAllowedActions_()`(및 실제 `doPost` 분기)에 `plannerMatch`, `plannerBootstrap`을 추가한다.
+- **전송:** `POST`, `Content-Type: application/json` 또는 **`text/plain` + JSON 문자열**. **`plannerMatch` / `plannerBootstrap` / `initPlannerMasterSheets` / `plannerRegistryRebuild` / `plannerDevFullReset`** 는 이 방식으로 호출한다. 전화·이름 등 민감값은 **쿼리스트링·JSONP GET에 넣지 않는다.**
+- **라우팅:** 기존 `HttpOpenSync.js` `doPost`와 동일하게 본문 파싱 후 **`action` 필드**로 분기한다. `openSyncAllowedActions_()`에 위 액션 이름을 포함한다.
 
 **요청 본문 초안**
 
@@ -211,7 +228,31 @@
 |------|------|------|
 | `role` | `"member"` \| `"guest"` | 매칭 성공 여부에 따른 분기. |
 | `common` | array | `planner_common_calendar`에서 읽은 이벤트 객체 배열 (`event_id`, `start_date`, `end_date`, `title`, `description`, `category`, `sort_key`). |
-| `personal` | array \| null | **`member`만** 학생별 시트에서 읽은 일정/todo 등(초기엔 빈 배열 가능). **`guest`는 항상 `null`**. |
+| `personal` | array \| null | **`member`만** 학생 파일 `planner_personal_todos`에서 읽은 항목 배열(제목·날짜 등; 초기엔 빈 배열). **`guest`는 항상 `null`**. |
+
+### 12.3 `plannerRegistryRebuild` — 레지스트리 동기화
+
+원천 마스터(`order_items`·`orders`·`members`·`product_mapping`)를 읽어, **솔패스(`internal_category === solpass`)** 구매 이력이 있고 수강생 DB 재구축과 **동일한 제외 규칙**(구매자 이름 `솔루션편입` 제외, `dbAnOrderLineSkipForAnalytics_` 등)을 통과한 회원만 `planner_registry`에 **한 줄씩** 덮어쓴다. `members.callnum`을 숫자만 10~11자리로 정규화한 뒤 비어 있으면 해당 회원은 **행에서 제외**(`skippedNoPhone`).
+
+```json
+{ "action": "plannerRegistryRebuild" }
+```
+
+**응답 `data`:** `written`, `skippedLines`, `skippedNoPhone`에 더해 **`provisioned`**(신규 학생 파일 수), **`reusedStudentFiles`**, **`trashedBrokenLinks`**, **`trashedOrphanLinks`**, **`provisionErrors`**(Drive 생성 실패 건수).
+
+GAS 편집기 [실행]: `run_Planner_RebuildRegistry`.
+
+### 12.4 `plannerDevFullReset` — 제작용 전체 초기화
+
+`dbInitPlannerMasterSheets_()`로 마스터 탭을 보장한 뒤, `planner_student_links`에 연결된 **모든** 학생용 스프레드시트 ID를 **휴지통**으로 보내고(중복 ID는 한 번만), 마스터의 **`planner_registry` / `planner_member_records` / `planner_student_links`** 본문(2행~)을 비운다. **`planner_common_calendar`는 건드리지 않는다.**
+
+```json
+{ "action": "plannerDevFullReset" }
+```
+
+**응답 `data`:** `trashedStudentFiles`(휴지통 시도한 고유 파일 수), `clearedTabs`(탭 이름 배열).
+
+GAS 편집기 [실행]: `run_Planner_DevFullReset`.
 
 ---
 

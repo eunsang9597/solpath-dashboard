@@ -138,6 +138,11 @@ var DB_SHEET_PLANNER_REGISTRY = 'planner_registry';
 var DB_SHEET_PLANNER_MEMBER_RECORDS = 'planner_member_records';
 var DB_SHEET_PLANNER_STUDENT_LINKS = 'planner_student_links';
 var DB_SHEET_PLANNER_COMMON_CALENDAR = 'planner_common_calendar';
+/** 학생별 플래너 스프레드시트 안의 개인 할 일 탭 (마스터가 아님) */
+var DB_SHEET_PLANNER_PERSONAL_TODOS = 'planner_personal_todos';
+
+/** 학생별 파일 표시 이름 접두 (뒤에 `member_code` 안전 토큰) */
+var DB_PLANNER_STUDENT_FILE_TITLE_PREFIX = '솔루션편입_플래너_학생_';
 
 /** @type {string[]} */
 var DB_PLANNER_REGISTRY_HEADERS = [
@@ -160,6 +165,22 @@ var DB_PLANNER_MEMBER_RECORD_HEADERS = [
 
 /** @type {string[]} */
 var DB_PLANNER_STUDENT_LINK_HEADERS = ['member_code', 'student_spreadsheet_id', 'provisioned_at'];
+
+/** 학생별 `planner_personal_todos` 1행 헤더 */
+var DB_PLANNER_PERSONAL_TODO_HEADERS = [
+  'task_id',
+  'title',
+  'description',
+  'status',
+  'priority',
+  'due_date',
+  'start_date',
+  'category',
+  'sort_key',
+  'completed_at',
+  'created_at',
+  'updated_at'
+];
 
 /** @type {string[]} */
 var DB_PLANNER_COMMON_CALENDAR_HEADERS = [

@@ -50,6 +50,13 @@ async function plannerPost_(payload) {
   return j;
 }
 
+const PLAN_DEV_HTML = `<div class="sp-plan-devbar" id="sp-plan-devbar" role="region" aria-label="제작용 도구">
+  <span class="sp-plan-devbar__label">제작용</span>
+  <button type="button" class="btn btn--ghost sp-plan-devbar__btn" id="sp-plan-dev-reset">DB 초기화(학생파일 포함)</button>
+  <button type="button" class="btn btn--ghost sp-plan-devbar__btn" id="sp-plan-dev-sync">동기화(레지스트리+학생파일)</button>
+  <span class="sp-plan-devbar__msg" id="sp-plan-dev-msg" aria-live="polite"></span>
+</div>`;
+
 const PLAN_APP_HTML = `<div class="app-shell app-shell--plan">
   <header class="app-header">
     <div class="brand">
@@ -137,7 +144,9 @@ function renderCalendar_(root, boot) {
       ? personal
           .map(function (ev) {
             const t = esc(ev && ev.title != null ? ev.title : '일정');
-            return `<li><span class="sp-plan-ev__title">${t}</span></li>`;
+            const d0 = esc(String((ev && ev.start_date) || ''));
+            const datePart = d0 ? `<span class="sp-plan-ev__date">${d0}</span> ` : '';
+            return `<li>${datePart}<span class="sp-plan-ev__title">${t}</span></li>`;
           })
           .join('')
       : '';
@@ -149,8 +158,8 @@ function renderCalendar_(root, boot) {
       </section>
       ${
         role === 'member'
-          ? `<section class="sp-plan-calsec" aria-label="나의 일정"><div class="sp-plan-calsec__h" role="heading" aria-level="3">나의 일정</div>${
-              pLines.length ? `<ul class="sp-plan-evlist">${pLines}</ul>` : '<p class="sp-plan-empty">개인 일정은 아직 없습니다.</p>'
+          ? `<section class="sp-plan-calsec" aria-label="나의 할 일"><div class="sp-plan-calsec__h" role="heading" aria-level="3">나의 할 일</div>${
+              pLines.length ? `<ul class="sp-plan-evlist">${pLines}</ul>` : '<p class="sp-plan-empty">등록된 할 일이 없습니다.</p>'
             }</section>`
           : ''
       }
@@ -231,10 +240,63 @@ function wireGate_(root) {
   });
 }
 
+/**
+ * @param {HTMLElement} root
+ */
+function wirePlanDevBar_(root) {
+  const msg = root.querySelector('#sp-plan-dev-msg');
+  const resetBtn = root.querySelector('#sp-plan-dev-reset');
+  const syncBtn = root.querySelector('#sp-plan-dev-sync');
+  if (!resetBtn || !syncBtn) return;
+
+  function showDevMsg(text) {
+    if (msg) msg.textContent = text || '';
+  }
+
+  resetBtn.addEventListener('click', async function () {
+    showDevMsg('');
+    if (
+      !confirm(
+        '플래너 마스터에서 레지스트리·방문 기록·학생 링크(2행~)을 비우고, 연결된 학생용 스프레드시트를 모두 휴지통으로 보냅니다. 계속할까요?'
+      )
+    ) {
+      return;
+    }
+    const r = await plannerPost_({ action: 'plannerDevFullReset' });
+    if (!r || !r.ok) {
+      const m = r && r.error && r.error.message != null ? String(r.error.message) : '초기화에 실패했습니다.';
+      showDevMsg(m);
+      return;
+    }
+    const d = /** @type {{ trashedStudentFiles?: number }} */ (r.data || {});
+    showDevMsg('완료: 학생 파일 휴지통 ' + (d.trashedStudentFiles != null ? d.trashedStudentFiles : 0) + '개.');
+  });
+
+  syncBtn.addEventListener('click', async function () {
+    showDevMsg('');
+    const r = await plannerPost_({ action: 'plannerRegistryRebuild' });
+    if (!r || !r.ok) {
+      const m = r && r.error && r.error.message != null ? String(r.error.message) : '동기화에 실패했습니다.';
+      showDevMsg(m);
+      return;
+    }
+    const d = /** @type {Record<string, number>} */ (r.data || {});
+    showDevMsg(
+      '레지스트리 ' +
+        (d.written != null ? d.written : 0) +
+        '행, 신규 학생파일 ' +
+        (d.provisioned != null ? d.provisioned : 0) +
+        ', 재사용 ' +
+        (d.reusedStudentFiles != null ? d.reusedStudentFiles : 0) +
+        (d.provisionErrors ? ', 생성 실패 ' + d.provisionErrors : '')
+    );
+  });
+}
+
 function main() {
   const el = document.getElementById(MOUNT_ID);
   if (!el) return;
-  el.innerHTML = `<div class="sp-plan-rootinner">${GATE_HTML}${PLAN_APP_HTML}</div>`;
+  el.innerHTML = `<div class="sp-plan-rootinner">${PLAN_DEV_HTML}${GATE_HTML}${PLAN_APP_HTML}</div>`;
   const app = el.querySelector('.app-shell--plan');
   if (app) app.setAttribute('hidden', 'hidden');
   if (GAS_MODE.useMock) {
@@ -246,6 +308,7 @@ function main() {
     return;
   }
   wireGate_(el);
+  wirePlanDevBar_(el);
 }
 
 main();

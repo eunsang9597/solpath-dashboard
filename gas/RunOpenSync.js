@@ -27,3 +27,13 @@ function run_OpenSync_All() {
 function run_Planner_InitMaster() {
   return dbInitPlannerMasterSheets_();
 }
+
+/** 원천 마스터 기준으로 `planner_registry` 채움 + 레지스트리 행마다 학생용 스프레드시트·`planner_personal_todos` 보장. */
+function run_Planner_RebuildRegistry() {
+  return dbPlannerRebuildRegistryFromMaster_();
+}
+
+/** 제작용: 연결된 학생 플래너 파일 전부 휴지통 + 마스터 레지스트리·방문기록·링크 본문 삭제. */
+function run_Planner_DevFullReset() {
+  return dbPlannerDevFullReset_();
+}

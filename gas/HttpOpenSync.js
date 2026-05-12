@@ -125,7 +125,9 @@ function openSyncAllowedActions_() {
     'analyticsTableExportFromStaging',
     'plannerMatch',
     'plannerBootstrap',
-    'initPlannerMasterSheets'
+    'initPlannerMasterSheets',
+    'plannerRegistryRebuild',
+    'plannerDevFullReset'
   ];
 }
 
@@ -137,7 +139,7 @@ function openSyncAllowedActions_() {
 function openSyncRouteAction_(action, e) {
   e = e || { parameter: {} };
   if (action === 'ping') {
-    return { ok: true, data: { name: 'openSync', version: 13, actions: openSyncAllowedActions_() } };
+    return { ok: true, data: { name: 'openSync', version: 14, actions: openSyncAllowedActions_() } };
   }
   if (action === 'syncOpenFull') {
     try {
@@ -636,6 +638,12 @@ function doPost(e) {
         createdNew: rPl0.createdNew
       }
     });
+  }
+  if (jBody && jBody.action === 'plannerRegistryRebuild') {
+    return openSyncTextOutputJson_(dbPlannerRebuildRegistryFromMaster_());
+  }
+  if (jBody && jBody.action === 'plannerDevFullReset') {
+    return openSyncTextOutputJson_(dbPlannerDevFullReset_());
   }
   if (jBody && jBody.action === 'productMappingApply' && jBody.rows && jBody.rows.length) {
     return openSyncTextOutputJson_(dbProductMappingApply_(jBody.rows));

@@ -2976,6 +2976,37 @@ button.sp-stu-remark__item--open:hover {
   max-width: 100%;
 }
 
+#solpath-plan-root .sp-plan-devbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  margin-bottom: 0.75rem;
+  padding: 0.5rem 0.65rem;
+  border-radius: 8px;
+  background: #fff8e1;
+  border: 1px solid #ffe082;
+  font-size: calc(0.75rem + var(--sp-text-bump));
+}
+
+#solpath-plan-root .sp-plan-devbar__label {
+  font-weight: 600;
+  color: #e65100;
+  margin-right: 0.25rem;
+}
+
+#solpath-plan-root .sp-plan-devbar__btn {
+  font-size: inherit;
+  padding: 0.35rem 0.6rem;
+}
+
+#solpath-plan-root .sp-plan-devbar__msg {
+  flex: 1 1 12rem;
+  min-width: 0;
+  color: #5d4037;
+  line-height: 1.35;
+}
+
 #solpath-plan-root .sp-plan-gate {
   padding: 1rem 0 1.25rem;
   max-width: 22rem;
