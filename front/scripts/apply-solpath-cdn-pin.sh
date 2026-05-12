@@ -16,8 +16,8 @@ if [[ -z "$NEW" ]]; then
   echo "SOLPATH_CDN_COMMIT에서 7~40자 16진 커밋 1줄을 찾지 못함 (주석 # 줄은 무시됨)" >&2
   exit 1
 fi
-# jsDelivr gh: 풀 SHA(40자) URL이 404로 떨어지는 경우가 있어, **URL만** 짧은 SHA(7자) 사용.
-# cdnCommit·SOLPATH_PIN 주석은 풀 SHA 유지(배포·대조용).
+# jsDelivr gh URL: **풀 SHA(40자)** — solpath-labs-dev 등에서 7자 짧은 ref가 404로 떨어지는 사례가 있음.
+# cdnCommit·SOLPATH_PIN 주석도 동일 풀 SHA.
 NEW_SHORT="${NEW:0:7}"
 export NEW
 export NEW_SHORT
@@ -30,10 +30,10 @@ for f in \
     exit 1
   fi
   perl -i -pe '
-    s/(eunsang9597\/solpath-dashboard@)[0-9a-fA-F]+/${1}$ENV{NEW_SHORT}/g;
-    s/(solpath-labs-dev\/solpath-dashboard@)[0-9a-fA-F]+/${1}$ENV{NEW_SHORT}/g;
-    s/(eunsang9597\/solpath-dashboard-front@)[0-9a-fA-F]+/${1}$ENV{NEW_SHORT}/g;
-    s/(solpath-labs-dev\/solpath-dashboard-front@)[0-9a-fA-F]+/${1}$ENV{NEW_SHORT}/g;
+    s/(eunsang9597\/solpath-dashboard@)[0-9a-fA-F]+/${1}$ENV{NEW}/g;
+    s/(solpath-labs-dev\/solpath-dashboard@)[0-9a-fA-F]+/${1}$ENV{NEW}/g;
+    s/(eunsang9597\/solpath-dashboard-front@)[0-9a-fA-F]+/${1}$ENV{NEW}/g;
+    s/(solpath-labs-dev\/solpath-dashboard-front@)[0-9a-fA-F]+/${1}$ENV{NEW}/g;
     s/(cdnCommit:\s*")([0-9a-fA-F]+)"/$1$ENV{NEW}"/g;
     s/(<!--\s*SOLPATH_PIN:\s*)[0-9a-fA-F]+/${1}$ENV{NEW}/g;
     s/(<!--\s*SOLPATH_PIN\(iframe\):\s*)[0-9a-fA-F]+/${1}$ENV{NEW}/g;
@@ -41,6 +41,6 @@ for f in \
     echo "perl 치환 실패: $f" >&2
     exit 1
   }
-  echo "OK $f  →  jsDelivr @$NEW_SHORT (commit $NEW)"
+  echo "OK $f  →  jsDelivr @$NEW (짧은 ref ${NEW_SHORT} = 대조용)"
 done
-echo "끝. SOLPATH·cdnCommit·주석=풀 SHA, jsDelivr URL=@${NEW_SHORT} (40자 URL 404 회피)."
+echo "끝. jsDelivr·cdnCommit·SOLPATH_PIN 주석 모두 풀 SHA $NEW"

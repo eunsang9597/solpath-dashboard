@@ -1,7 +1,39 @@
 /**
  * 플래너 임웹 전용 — 전화 확인 후 공통·개인 일정 표시 (드라이브 링크 없음).
+ * `config.js`를 import하지 않음: CDN·임웹에서 `plan.js`만 로드되어도 동작하고, 2차 모듈 요청 404를 피함.
+ * 스니펫에서 먼저 `window.__SOLPATH__ = { gasBaseUrl: "…/exec", … }` 를 둔다.
  */
-import { GAS_BASE_URL, GAS_MODE } from './config.js';
+function spReadPlanInjected_() {
+  if (typeof globalThis === 'undefined') {
+    return { url: '' };
+  }
+  const o = globalThis.__SOLPATH__;
+  if (!o || typeof o !== 'object') {
+    return { url: '' };
+  }
+  return {
+    url: String(
+      o.gasBaseUrl != null
+        ? o.gasBaseUrl
+        : o.GAS_BASE_URL != null
+          ? o.GAS_BASE_URL
+          : o.execUrl != null
+            ? o.execUrl
+            : ''
+    ).trim()
+  };
+}
+
+const _planInj = spReadPlanInjected_();
+const GAS_BASE_URL = _planInj.url || '';
+const GAS_MODE = {
+  get useMock() {
+    return !String(GAS_BASE_URL).trim();
+  },
+  get canSync() {
+    return Boolean(String(GAS_BASE_URL).trim());
+  }
+};
 
 const MOUNT_ID = 'solpath-plan-root';
 
