@@ -2924,136 +2924,232 @@ button.sp-stu-remark__item--open:hover {
   }
 }
 
-/* --- 임웹 플래너 전용 (plan.js / #solpath-plan-root) — 관리자 패널 헤드·가독성 --- */
-.solpath-plan-shell {
-  max-width: min(100%, 48rem);
+/* --- 학생용 플래너(#solpath-plan-root > .sp-plan) — 관리자 패널 복제 없음 --- */
+#solpath-plan-root .sp-plan {
+  max-width: min(100%, 26rem);
+  margin: 0 auto;
+  padding: 0.35rem 0 1.25rem;
+  font-family: "Pretendard", system-ui, "Apple SD Gothic Neo", sans-serif;
 }
 
-.solpath-plan-hero__head {
-  margin-bottom: 0.65rem;
-  align-items: center;
+.sp-plan-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 0.75rem 1rem;
+  margin-bottom: 1rem;
 }
 
-.solpath-plan-head-left {
+.sp-plan-top__left {
   display: flex;
-  align-items: center;
-  gap: 0.75rem;
+  gap: 0.65rem;
   min-width: 0;
+  flex: 1 1 12rem;
 }
 
-.solpath-plan-head__mark.brand-mark {
-  width: 36px;
-  height: 36px;
+.sp-plan-logo {
+  width: 32px;
+  height: 32px;
   border-radius: 10px;
   flex-shrink: 0;
+  background: linear-gradient(140deg, #0b5cad, #0a7bc4 50%, #12a0c4);
+  box-shadow: 0 2px 6px rgba(11, 92, 173, 0.28);
 }
 
-.solpath-plan-kicker {
-  margin: 0 0 0.1rem;
-  font-size: calc(0.72rem + var(--sp-text-bump));
+.sp-plan-eyebrow {
+  margin: 0 0 0.12rem;
+  font-size: calc(0.68rem + var(--sp-text-bump));
   font-weight: 600;
-  letter-spacing: 0.05em;
-  color: #4a5568;
+  letter-spacing: 0.06em;
+  color: #64748b;
 }
 
-.solpath-plan-head-title {
-  margin: 0;
-  font-size: calc(0.95rem + var(--sp-text-bump));
+.sp-plan-title {
+  margin: 0 0 0.25rem;
+  font-size: calc(1rem + var(--sp-text-bump));
   font-weight: 700;
-  letter-spacing: -0.02em;
-  color: var(--ink);
-  line-height: 1.25;
+  letter-spacing: -0.03em;
+  color: #0f172a;
+  line-height: 1.2;
 }
 
-.solpath-plan-profile {
+.sp-plan-tagline {
+  margin: 0;
+  font-size: calc(0.78rem + var(--sp-text-bump));
+  line-height: 1.45;
+  color: #64748b;
+  font-weight: 500;
+  max-width: 17rem;
+}
+
+.sp-plan-user {
   display: flex;
   align-items: center;
-  gap: 0.55rem;
-  padding: 0.35rem 0.55rem 0.35rem 0.4rem;
-  border-radius: 12px;
+  gap: 0.5rem;
+  padding: 0.4rem 0.55rem;
+  border-radius: 999px;
   border: 1px solid #e2e8f0;
-  background: linear-gradient(180deg, #fff 0%, #f8fafc 100%);
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
   flex-shrink: 0;
 }
 
-.solpath-plan-profile__avatar {
-  width: 40px;
-  height: 40px;
+.sp-plan-user__avatar {
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: calc(0.9rem + var(--sp-text-bump));
-  font-weight: 700;
-  color: #fff;
-  background: linear-gradient(140deg, #0b5cad, #0a7bc4 50%, #12a0c4);
-  box-shadow: 0 1px 4px rgba(11, 92, 173, 0.28);
+  flex-shrink: 0;
+  background: linear-gradient(160deg, #e0e7ef 0%, #cbd5e1 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75);
 }
 
-.solpath-plan-profile__text {
+.sp-plan-user__text {
   display: flex;
   flex-direction: column;
-  gap: 0.06rem;
+  gap: 0.04rem;
   min-width: 0;
   text-align: left;
 }
 
-.solpath-plan-profile__name {
-  font-size: calc(0.86rem + var(--sp-text-bump));
+.sp-plan-user__name {
+  font-size: calc(0.8rem + var(--sp-text-bump));
   font-weight: 650;
-  color: #1e293b;
-  line-height: 1.25;
+  color: #334155;
+  line-height: 1.2;
 }
 
-.solpath-plan-profile__sub {
-  font-size: calc(0.7rem + var(--sp-text-bump));
-  color: #64748b;
+.sp-plan-user__note {
+  font-size: calc(0.68rem + var(--sp-text-bump));
+  color: #94a3b8;
   font-weight: 500;
-  line-height: 1.3;
 }
 
-.solpath-plan-block .sp-intro-title {
-  margin-bottom: 0.45rem;
+.sp-plan-card {
+  background: #fff;
+  border: 1px solid #e8edf3;
+  border-radius: 14px;
+  padding: 0.85rem 1rem 1rem;
+  margin-bottom: 0.75rem;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
 }
 
-.solpath-plan-panel__desc {
-  margin-bottom: 0.85rem;
+.sp-plan-card__h {
+  margin: 0 0 0.35rem;
+  font-size: calc(0.82rem + var(--sp-text-bump));
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #3b5bfd;
 }
 
-.solpath-plan-placeholder {
-  border-radius: 12px;
-  border: 1px dashed #c5cdd8;
-  background: linear-gradient(180deg, #fafbfd 0%, #f4f6f9 100%);
-  min-height: 9.5rem;
+.sp-plan-card__p {
+  margin: 0 0 0.65rem;
+  font-size: calc(0.82rem + var(--sp-text-bump));
+  line-height: 1.5;
+  color: #475569;
+}
+
+.sp-plan-card__row {
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.sp-plan-badge {
+  font-size: calc(0.65rem + var(--sp-text-bump));
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #0b5cad;
+  background: rgba(11, 92, 173, 0.09);
+  padding: 0.2rem 0.45rem;
+  border-radius: 6px;
+}
+
+.sp-plan-week {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.sp-plan-day {
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0.75rem;
-  padding: 1rem 0.85rem;
-}
-
-.solpath-plan-placeholder__grid {
-  width: min(100%, 18rem);
-  height: 6.5rem;
+  min-width: 2.1rem;
+  height: 2.1rem;
+  padding: 0 0.35rem;
   border-radius: 10px;
-  background: repeating-linear-gradient(
-    90deg,
-    #e8ecf2 0,
-    #e8ecf2 1px,
-    transparent 1px,
-    transparent 14.28%
-  );
-  opacity: 0.85;
+  font-size: calc(0.72rem + var(--sp-text-bump));
+  font-weight: 650;
+  color: #64748b;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
 }
 
-.solpath-plan-placeholder__hint {
+.sp-plan-day--on {
+  color: #fff;
+  background: linear-gradient(140deg, #0b5cad, #0c8cbd);
+  border-color: transparent;
+  box-shadow: 0 2px 6px rgba(11, 92, 173, 0.25);
+}
+
+.sp-plan-todos {
+  list-style: none;
   margin: 0;
-  font-size: calc(0.9rem + var(--sp-text-bump));
-  font-weight: 600;
-  color: #4a5563;
+  padding: 0;
 }
 
+.sp-plan-todos__item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.45rem 0;
+  border-bottom: 1px solid #eef2f6;
+  font-size: calc(0.84rem + var(--sp-text-bump));
+  color: #1e293b;
+}
+
+.sp-plan-todos__item:last-child {
+  border-bottom: none;
+}
+
+.sp-plan-todos__item--demo {
+  opacity: 0.72;
+}
+
+.sp-plan-todos__item--empty {
+  padding-top: 0.35rem;
+  border-bottom: none;
+}
+
+.sp-plan-cb {
+  width: 1.05rem;
+  height: 1.05rem;
+  border-radius: 5px;
+  border: 2px solid #cbd5e1;
+  flex-shrink: 0;
+  margin-top: 0.12rem;
+  background: #fff;
+}
+
+.sp-plan-todos__txt {
+  line-height: 1.45;
+}
+
+.sp-plan-todos__empty {
+  font-size: calc(0.78rem + var(--sp-text-bump));
+  color: #94a3b8;
+  font-weight: 500;
+  line-height: 1.45;
+}
+
+.sp-plan-foot {
+  margin: 0.25rem 0 0;
+  font-size: calc(0.72rem + var(--sp-text-bump));
+  line-height: 1.45;
+  color: #94a3b8;
+  text-align: center;
+}
