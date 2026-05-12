@@ -112,17 +112,55 @@ const GATE_HTML = `<div class="sp-plan-gate">
   <p class="sp-plan-gate__lead">솔패스 수강 이력이 있는 번호를 입력해 주세요. 입력 정보는 본인 확인·플래너 제공에만 사용됩니다.</p>
   <p class="sp-plan-gate__privacy">전화번호와 이름(필요 시)은 매칭·기록용으로만 처리되며, 구글 드라이브 연결 등은 요청하지 않습니다.</p>
   <div class="sp-plan-gate__fields">
-    <label class="sp-plan-gate__label">휴대전화</label>
-    <div class="sp-plan-gate__phone">
-      <input class="sp-plan-gate__input" id="sp-plan-p0" type="text" inputmode="numeric" maxlength="3" pattern="[0-9]*" autocomplete="off" aria-label="휴대전화 앞자리" />
-      <span class="sp-plan-gate__dash" aria-hidden="true">-</span>
-      <input class="sp-plan-gate__input" id="sp-plan-p1" type="text" inputmode="numeric" maxlength="4" pattern="[0-9]*" autocomplete="off" aria-label="휴대전화 중간 네 자리" />
-      <span class="sp-plan-gate__dash" aria-hidden="true">-</span>
-      <input class="sp-plan-gate__input" id="sp-plan-p2" type="text" inputmode="numeric" maxlength="4" pattern="[0-9]*" autocomplete="off" aria-label="휴대전화 끝 네 자리" />
-    </div>
-    <div class="sp-plan-gate__nameWrap" id="sp-plan-name-wrap" hidden>
-      <label class="sp-plan-gate__label" for="sp-plan-name">이름 (전화번호가 같은 분이 둘 이상일 때만)</label>
-      <input class="sp-plan-gate__input sp-plan-gate__input--name" id="sp-plan-name" type="text" maxlength="40" autocomplete="name" />
+    <div class="sp-plan-gate__row">
+      <div class="sp-plan-gate__nameCol" id="sp-plan-name-wrap">
+        <label class="sp-plan-gate__fieldLabel" for="sp-plan-name">이름</label>
+        <input
+          class="sp-plan-gate__input sp-plan-gate__input--name"
+          id="sp-plan-name"
+          type="text"
+          maxlength="40"
+          autocomplete="name"
+          placeholder="선택 · 동일 번호 시"
+        />
+      </div>
+      <div class="sp-plan-gate__phoneCol">
+        <span class="sp-plan-gate__fieldLabel" id="sp-plan-phone-legend">휴대전화</span>
+        <div class="sp-plan-gate__phone" role="group" aria-labelledby="sp-plan-phone-legend">
+          <input
+            class="sp-plan-gate__input sp-plan-gate__input--seg3"
+            id="sp-plan-p0"
+            type="text"
+            inputmode="numeric"
+            maxlength="3"
+            pattern="[0-9]*"
+            autocomplete="off"
+            aria-label="휴대전화 앞자리 세 자리"
+          />
+          <span class="sp-plan-gate__dash" aria-hidden="true">-</span>
+          <input
+            class="sp-plan-gate__input sp-plan-gate__input--seg4"
+            id="sp-plan-p1"
+            type="text"
+            inputmode="numeric"
+            maxlength="4"
+            pattern="[0-9]*"
+            autocomplete="off"
+            aria-label="휴대전화 중간 네 자리"
+          />
+          <span class="sp-plan-gate__dash" aria-hidden="true">-</span>
+          <input
+            class="sp-plan-gate__input sp-plan-gate__input--seg4"
+            id="sp-plan-p2"
+            type="text"
+            inputmode="numeric"
+            maxlength="4"
+            pattern="[0-9]*"
+            autocomplete="off"
+            aria-label="휴대전화 끝 네 자리"
+          />
+        </div>
+      </div>
     </div>
   </div>
   <p class="sp-plan-gate__err" id="sp-plan-gate-err" hidden></p>
@@ -204,7 +242,6 @@ function renderCalendar_(root, boot) {
 function wireGate_(root) {
   const btn = root.querySelector('#sp-plan-gate-submit');
   const errEl = root.querySelector('#sp-plan-gate-err');
-  const nameWrap = root.querySelector('#sp-plan-name-wrap');
   const nameInput = root.querySelector('#sp-plan-name');
   const gate = root.querySelector('.sp-plan-gate');
   const app = root.querySelector('.app-shell--plan');
@@ -245,7 +282,7 @@ function wireGate_(root) {
     const p1 = /** @type {HTMLInputElement | null} */ (root.querySelector('#sp-plan-p1'));
     const p2 = /** @type {HTMLInputElement | null} */ (root.querySelector('#sp-plan-p2'));
     const segs = readPhoneSegments_([p0 && p0.value, p1 && p1.value, p2 && p2.value]);
-    const name = nameInput && !nameWrap.hidden ? String(nameInput.value || '').trim() : '';
+    const name = nameInput ? String(nameInput.value || '').trim() : '';
 
     const res = await plannerPost_({
       action: 'plannerMatch',
@@ -260,7 +297,9 @@ function wireGate_(root) {
     const data = /** @type {{ outcome?: string, needName?: boolean, memberCode?: string | null }} */ (res.data || {});
     const oc = String(data.outcome || '');
     if (oc === 'need_name') {
-      if (nameWrap) nameWrap.removeAttribute('hidden');
+      if (nameInput) {
+        nameInput.focus();
+      }
       showErr('같은 번호로 등록된 분이 여러 명입니다. 이름을 입력한 뒤 다시 확인을 눌러 주세요.');
       return;
     }

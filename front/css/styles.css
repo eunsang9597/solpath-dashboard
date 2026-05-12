@@ -3009,7 +3009,7 @@ button.sp-stu-remark__item--open:hover {
 
 #solpath-plan-root .sp-plan-gate {
   padding: 1rem 0 1.25rem;
-  max-width: 22rem;
+  max-width: min(100%, 26rem);
 }
 
 #solpath-plan-root .sp-plan-gate__lead {
@@ -3027,9 +3027,35 @@ button.sp-stu-remark__item--open:hover {
 }
 
 #solpath-plan-root .sp-plan-gate__fields {
+  width: 100%;
+}
+
+#solpath-plan-root .sp-plan-gate__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 0.55rem 1rem;
+  width: 100%;
+}
+
+#solpath-plan-root .sp-plan-gate__nameCol,
+#solpath-plan-root .sp-plan-gate__phoneCol {
   display: flex;
   flex-direction: column;
-  gap: 0.65rem;
+  align-items: stretch;
+  gap: 0.28rem;
+}
+
+#solpath-plan-root .sp-plan-gate__phoneCol {
+  align-items: flex-end;
+}
+
+#solpath-plan-root .sp-plan-gate__fieldLabel {
+  font-size: calc(0.72rem + var(--sp-text-bump));
+  font-weight: 600;
+  color: #1e293b;
+  line-height: 1.2;
 }
 
 #solpath-plan-root .sp-plan-gate__label {
@@ -3051,25 +3077,33 @@ button.sp-stu-remark__item--open:hover {
 }
 
 #solpath-plan-root .sp-plan-gate__input {
-  width: 4.2rem;
-  padding: 0.45rem 0.4rem;
+  box-sizing: border-box;
+  padding: 0.45rem 0.35rem;
   border: 1px solid #cbd5e1;
   border-radius: 8px;
   font-size: calc(0.95rem + var(--sp-text-bump));
   text-align: center;
-  box-sizing: border-box;
+}
+
+#solpath-plan-root .sp-plan-gate__input--seg3 {
+  width: 3ch;
+  min-width: 2.65rem;
+  max-width: 3.35rem;
+}
+
+#solpath-plan-root .sp-plan-gate__input--seg4 {
+  width: 4ch;
+  min-width: 3.15rem;
+  max-width: 4.1rem;
 }
 
 #solpath-plan-root .sp-plan-gate__input--name {
-  width: 100%;
-  max-width: 20rem;
+  width: 12ch;
+  min-width: 7.5rem;
+  max-width: 14rem;
   text-align: left;
-}
-
-#solpath-plan-root .sp-plan-gate__nameWrap {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
 }
 
 #solpath-plan-root .sp-plan-gate__err {
