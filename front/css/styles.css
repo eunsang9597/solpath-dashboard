@@ -2924,232 +2924,62 @@ button.sp-stu-remark__item--open:hover {
   }
 }
 
-/* --- 학생용 플래너(#solpath-plan-root > .sp-plan) — 관리자 패널 복제 없음 --- */
-#solpath-plan-root .sp-plan {
-  max-width: min(100%, 26rem);
+/* --- 플래너 PC 베이스(#solpath-plan-root) — 프로필 행 + 제목 + 달력 박스만 --- */
+#solpath-plan-root .sp-plan--pc {
+  width: 100%;
+  max-width: min(100%, 72rem);
   margin: 0 auto;
-  padding: 0.35rem 0 1.25rem;
+  padding: 1rem clamp(1rem, 2.5vw, 2rem) 2rem;
+  box-sizing: border-box;
   font-family: "Pretendard", system-ui, "Apple SD Gothic Neo", sans-serif;
 }
 
-.sp-plan-top {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 0.75rem 1rem;
-  margin-bottom: 1rem;
+.sp-plan-head {
+  background: #fff;
+  border: 1px solid #e8e0f0;
+  border-radius: 12px;
+  padding: 1rem 1.35rem 1.15rem;
+  margin-bottom: 1.25rem;
+  box-shadow: 0 1px 4px rgba(74, 20, 140, 0.06);
 }
 
-.sp-plan-top__left {
-  display: flex;
-  gap: 0.65rem;
-  min-width: 0;
-  flex: 1 1 12rem;
-}
-
-.sp-plan-logo {
-  width: 32px;
-  height: 32px;
-  border-radius: 10px;
-  flex-shrink: 0;
-  background: linear-gradient(140deg, #0b5cad, #0a7bc4 50%, #12a0c4);
-  box-shadow: 0 2px 6px rgba(11, 92, 173, 0.28);
-}
-
-.sp-plan-eyebrow {
-  margin: 0 0 0.12rem;
-  font-size: calc(0.68rem + var(--sp-text-bump));
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  color: #64748b;
-}
-
-.sp-plan-title {
-  margin: 0 0 0.25rem;
-  font-size: calc(1rem + var(--sp-text-bump));
-  font-weight: 700;
-  letter-spacing: -0.03em;
-  color: #0f172a;
-  line-height: 1.2;
-}
-
-.sp-plan-tagline {
-  margin: 0;
-  font-size: calc(0.78rem + var(--sp-text-bump));
-  line-height: 1.45;
-  color: #64748b;
-  font-weight: 500;
-  max-width: 17rem;
-}
-
-.sp-plan-user {
+.sp-plan-head__profile {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.4rem 0.55rem;
-  border-radius: 999px;
-  border: 1px solid #e2e8f0;
-  background: #fff;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
-  flex-shrink: 0;
+  gap: 0.85rem;
+  min-height: 52px;
 }
 
-.sp-plan-user__avatar {
-  width: 36px;
-  height: 36px;
+.sp-plan-head__avatar {
+  width: 48px;
+  height: 48px;
   border-radius: 50%;
   flex-shrink: 0;
-  background: linear-gradient(160deg, #e0e7ef 0%, #cbd5e1 100%);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75);
+  background: linear-gradient(160deg, #ede7f6 0%, #d1c4e9 100%);
+  border: 1px solid #e1bee7;
+  box-sizing: border-box;
 }
 
-.sp-plan-user__text {
-  display: flex;
-  flex-direction: column;
-  gap: 0.04rem;
-  min-width: 0;
-  text-align: left;
+.sp-plan-head__profile-meta {
+  flex: 1;
+  min-height: 48px;
+  min-width: 8rem;
 }
 
-.sp-plan-user__name {
-  font-size: calc(0.8rem + var(--sp-text-bump));
-  font-weight: 650;
-  color: #334155;
+.sp-plan-head__title {
+  margin: 0.9rem 0 0;
+  padding: 0;
+  font-size: clamp(1.35rem, 2.1vw, 1.85rem);
+  font-weight: 750;
+  letter-spacing: -0.03em;
+  color: #4a148c;
   line-height: 1.2;
 }
 
-.sp-plan-user__note {
-  font-size: calc(0.68rem + var(--sp-text-bump));
-  color: #94a3b8;
-  font-weight: 500;
-}
-
-.sp-plan-card {
-  background: #fff;
-  border: 1px solid #e8edf3;
-  border-radius: 14px;
-  padding: 0.85rem 1rem 1rem;
-  margin-bottom: 0.75rem;
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
-}
-
-.sp-plan-card__h {
-  margin: 0 0 0.35rem;
-  font-size: calc(0.82rem + var(--sp-text-bump));
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: #3b5bfd;
-}
-
-.sp-plan-card__p {
-  margin: 0 0 0.65rem;
-  font-size: calc(0.82rem + var(--sp-text-bump));
-  line-height: 1.5;
-  color: #475569;
-}
-
-.sp-plan-card__row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-  margin-bottom: 0.5rem;
-}
-
-.sp-plan-badge {
-  font-size: calc(0.65rem + var(--sp-text-bump));
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  color: #0b5cad;
-  background: rgba(11, 92, 173, 0.09);
-  padding: 0.2rem 0.45rem;
-  border-radius: 6px;
-}
-
-.sp-plan-week {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-}
-
-.sp-plan-day {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 2.1rem;
-  height: 2.1rem;
-  padding: 0 0.35rem;
-  border-radius: 10px;
-  font-size: calc(0.72rem + var(--sp-text-bump));
-  font-weight: 650;
-  color: #64748b;
-  background: #f1f5f9;
-  border: 1px solid #e2e8f0;
-}
-
-.sp-plan-day--on {
-  color: #fff;
-  background: linear-gradient(140deg, #0b5cad, #0c8cbd);
-  border-color: transparent;
-  box-shadow: 0 2px 6px rgba(11, 92, 173, 0.25);
-}
-
-.sp-plan-todos {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.sp-plan-todos__item {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.5rem;
-  padding: 0.45rem 0;
-  border-bottom: 1px solid #eef2f6;
-  font-size: calc(0.84rem + var(--sp-text-bump));
-  color: #1e293b;
-}
-
-.sp-plan-todos__item:last-child {
-  border-bottom: none;
-}
-
-.sp-plan-todos__item--demo {
-  opacity: 0.72;
-}
-
-.sp-plan-todos__item--empty {
-  padding-top: 0.35rem;
-  border-bottom: none;
-}
-
-.sp-plan-cb {
-  width: 1.05rem;
-  height: 1.05rem;
-  border-radius: 5px;
-  border: 2px solid #cbd5e1;
-  flex-shrink: 0;
-  margin-top: 0.12rem;
-  background: #fff;
-}
-
-.sp-plan-todos__txt {
-  line-height: 1.45;
-}
-
-.sp-plan-todos__empty {
-  font-size: calc(0.78rem + var(--sp-text-bump));
-  color: #94a3b8;
-  font-weight: 500;
-  line-height: 1.45;
-}
-
-.sp-plan-foot {
-  margin: 0.25rem 0 0;
-  font-size: calc(0.72rem + var(--sp-text-bump));
-  line-height: 1.45;
-  color: #94a3b8;
-  text-align: center;
+.sp-plan-calendar {
+  min-height: 24rem;
+  border-radius: 12px;
+  border: 2px dashed #d1c4e9;
+  background: #faf8ff;
+  box-sizing: border-box;
 }
