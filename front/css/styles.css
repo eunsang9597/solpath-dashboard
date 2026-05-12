@@ -2925,26 +2925,25 @@ button.sp-stu-remark__item--open:hover {
 }
 
 /* --- 플래너: 대시보드 헤더·브랜드 뼈대 + 탭 없음, 월간 플랜·달력 슬롯 --- */
+#solpath-plan-root .app-shell--plan > .app-header {
+  margin-bottom: 0.65rem;
+}
+
+#solpath-plan-root .app-shell--plan .brand {
+  margin-bottom: 0;
+}
+
 #solpath-plan-root .app-shell--plan .brand__title {
   color: #4a148c;
 }
 
 #solpath-plan-root .app-shell--plan .sp-plan-desc {
   margin: 0.15rem 0 0;
-  font-size: calc(0.72rem + var(--sp-text-bump));
-  color: var(--muted);
-  font-weight: 500;
-  line-height: 1.45;
+  font-size: calc(0.8rem + var(--sp-text-bump));
+  color: #1e293b;
+  font-weight: 600;
+  line-height: 1.5;
   max-width: 36rem;
-}
-
-#solpath-plan-root .app-shell--plan .sp-plan-header-actions {
-  min-height: 2.85rem;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  flex-wrap: wrap;
-  gap: 0.5rem;
 }
 
 #solpath-plan-root .app-shell--plan .sp-plan-app-main {
@@ -2952,7 +2951,7 @@ button.sp-stu-remark__item--open:hover {
 }
 
 #solpath-plan-root .app-shell--plan .sp-plan-body {
-  margin-top: 0.35rem;
+  margin-top: 0;
 }
 
 #solpath-plan-root.solpath-mount .app-shell--plan .sp-plan-monthly-title {

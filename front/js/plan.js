@@ -12,7 +12,6 @@ const PLAN_SHELL_HTML = `<div class="app-shell app-shell--plan">
         <p class="sp-plan-desc">공통 일정과 나만의 할 일을 달력에서 한눈에 볼 수 있게 연결할 예정입니다.</p>
       </div>
     </div>
-    <div class="app-header__right sp-plan-header-actions" aria-hidden="true"></div>
   </header>
   <main class="app-main sp-plan-app-main">
     <div class="panel panel--hero sp-plan-body">
