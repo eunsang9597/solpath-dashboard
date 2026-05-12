@@ -2924,60 +2924,47 @@ button.sp-stu-remark__item--open:hover {
   }
 }
 
-/* --- 플래너 PC 베이스(#solpath-plan-root) — 프로필 행 + 제목 + 달력 박스만 --- */
-#solpath-plan-root .sp-plan--pc {
-  width: 100%;
-  max-width: min(100%, 72rem);
-  margin: 0 auto;
-  padding: 1rem clamp(1rem, 2.5vw, 2rem) 2rem;
-  box-sizing: border-box;
-  font-family: "Pretendard", system-ui, "Apple SD Gothic Neo", sans-serif;
+/* --- 플래너: 대시보드 헤더·브랜드 뼈대 + 탭 없음, 월간 플랜·달력 슬롯 --- */
+#solpath-plan-root .app-shell--plan .brand__title {
+  color: #4a148c;
 }
 
-.sp-plan-head {
-  background: #fff;
-  border: 1px solid #e8e0f0;
-  border-radius: 12px;
-  padding: 1rem 1.35rem 1.15rem;
-  margin-bottom: 1.25rem;
-  box-shadow: 0 1px 4px rgba(74, 20, 140, 0.06);
+#solpath-plan-root .app-shell--plan .sp-plan-desc {
+  margin: 0.15rem 0 0;
+  font-size: calc(0.72rem + var(--sp-text-bump));
+  color: var(--muted);
+  font-weight: 500;
+  line-height: 1.45;
+  max-width: 36rem;
 }
 
-.sp-plan-head__profile {
+#solpath-plan-root .app-shell--plan .sp-plan-header-actions {
+  min-height: 2.85rem;
   display: flex;
   align-items: center;
-  gap: 0.85rem;
-  min-height: 52px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 0.5rem;
 }
 
-.sp-plan-head__avatar {
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
-  flex-shrink: 0;
-  background: linear-gradient(160deg, #ede7f6 0%, #d1c4e9 100%);
-  border: 1px solid #e1bee7;
-  box-sizing: border-box;
+#solpath-plan-root .app-shell--plan .sp-plan-app-main {
+  margin-top: 0;
 }
 
-.sp-plan-head__profile-meta {
-  flex: 1;
-  min-height: 48px;
-  min-width: 8rem;
+#solpath-plan-root .app-shell--plan .sp-plan-body {
+  margin-top: 0.35rem;
 }
 
-.sp-plan-head__title {
-  margin: 0.9rem 0 0;
-  padding: 0;
-  font-size: clamp(1.35rem, 2.1vw, 1.85rem);
-  font-weight: 750;
-  letter-spacing: -0.03em;
-  color: #4a148c;
-  line-height: 1.2;
+#solpath-plan-root .app-shell--plan .sp-plan-monthly-title {
+  margin: 0 0 0.75rem;
+  font-size: calc(0.98rem + var(--sp-text-bump));
+  font-weight: 650;
+  letter-spacing: -0.015em;
+  color: #152232;
 }
 
-.sp-plan-calendar {
-  min-height: 24rem;
+#solpath-plan-root .app-shell--plan .sp-plan-calendar-slot {
+  min-height: 22rem;
   border-radius: 12px;
   border: 2px dashed #d1c4e9;
   background: #faf8ff;
