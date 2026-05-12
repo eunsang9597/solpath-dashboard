@@ -9,7 +9,7 @@ const PLAN_SHELL_HTML = `<div class="app-shell app-shell--plan solpath-plan-shel
       <span class="brand-mark" aria-hidden="true"></span>
       <div>
         <div class="brand-kicker">솔루션 편입</div>
-        <h1 class="brand__title">학습 플래너</h1>
+        <div class="brand__title">학습 플래너</div>
         <p
           class="sp-cdn-build"
           id="sp-planCdnBuild"
@@ -21,11 +21,13 @@ const PLAN_SHELL_HTML = `<div class="app-shell app-shell--plan solpath-plan-shel
     </div>
   </header>
   <main class="solpath-plan-main">
-    <section class="solpath-plan-card" aria-labelledby="solpath-plan-card-title">
-      <h2 id="solpath-plan-card-title" class="solpath-plan-card__title">플래너 화면</h2>
-      <p class="solpath-plan-card__lead">
-        달력·일정·할 일은 단계적으로 연결할 예정입니다. 아래는 이후 UI가 붙을 자리입니다.
-      </p>
+    <section class="sp-intro-card" aria-labelledby="solpath-plan-panel-label">
+      <p class="sp-intro-title" id="solpath-plan-panel-label">플래너 화면</p>
+      <div class="header-desc solpath-plan-panel__desc">
+        <p>
+          달력·일정·할 일은 단계적으로 연결할 예정입니다. 아래는 이후 UI가 붙을 자리입니다.
+        </p>
+      </div>
       <div class="solpath-plan-placeholder" role="status" aria-live="polite">
         <div class="solpath-plan-placeholder__grid" aria-hidden="true"></div>
         <p class="solpath-plan-placeholder__hint">콘텐츠 영역 (준비 중)</p>
