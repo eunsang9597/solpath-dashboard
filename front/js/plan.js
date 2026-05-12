@@ -16,8 +16,8 @@ const PLAN_SHELL_HTML = `<div class="app-shell app-shell--plan">
   </header>
   <main class="app-main sp-plan-app-main">
     <div class="panel panel--hero sp-plan-body">
-      <h2 class="sp-plan-monthly-title" id="sp-plan-monthly-h">월간 플랜</h2>
-      <div class="sp-plan-calendar-slot" role="region" aria-labelledby="sp-plan-monthly-h"></div>
+      <div class="sp-plan-monthly-title" id="sp-plan-monthly-label">월간 플랜</div>
+      <div class="sp-plan-calendar-slot" role="region" aria-labelledby="sp-plan-monthly-label"></div>
     </div>
   </main>
 </div>`;
@@ -29,4 +29,3 @@ function main() {
 }
 
 main();
-/* jsDelivr: 동일 UI, 새 커밋 SHA로 CDN 404 회피 */
