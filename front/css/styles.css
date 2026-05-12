@@ -2924,21 +2924,95 @@ button.sp-stu-remark__item--open:hover {
   }
 }
 
-/* --- 임웹 플래너 전용 (plan.js / #solpath-plan-root) — 수강생 탭과 동일 계열, 학생 가독성 --- */
+/* --- 임웹 플래너 전용 (plan.js / #solpath-plan-root) — 관리자 패널 헤드·가독성 --- */
 .solpath-plan-shell {
   max-width: min(100%, 48rem);
 }
 
 .solpath-plan-hero__head {
   margin-bottom: 0.65rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem 1rem;
 }
 
-.solpath-plan-service-line {
-  margin: 0.35rem 0 0;
-  font-size: calc(0.97rem + var(--sp-text-bump));
-  line-height: 1.45;
-  color: #2a3038;
+.solpath-plan-head-left {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.solpath-plan-head__mark.brand-mark {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+
+.solpath-plan-kicker {
+  margin: 0 0 0.1rem;
+  font-size: calc(0.72rem + var(--sp-text-bump));
   font-weight: 600;
+  letter-spacing: 0.05em;
+  color: #4a5568;
+}
+
+.solpath-plan-head-title {
+  margin: 0;
+  font-size: calc(0.95rem + var(--sp-text-bump));
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+  line-height: 1.25;
+}
+
+.solpath-plan-profile {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.35rem 0.55rem 0.35rem 0.4rem;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  background: linear-gradient(180deg, #fff 0%, #f8fafc 100%);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  flex-shrink: 0;
+}
+
+.solpath-plan-profile__avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: calc(0.9rem + var(--sp-text-bump));
+  font-weight: 700;
+  color: #fff;
+  background: linear-gradient(140deg, #0b5cad, #0a7bc4 50%, #12a0c4);
+  box-shadow: 0 1px 4px rgba(11, 92, 173, 0.28);
+}
+
+.solpath-plan-profile__text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.06rem;
+  min-width: 0;
+  text-align: left;
+}
+
+.solpath-plan-profile__name {
+  font-size: calc(0.86rem + var(--sp-text-bump));
+  font-weight: 650;
+  color: #1e293b;
+  line-height: 1.25;
+}
+
+.solpath-plan-profile__sub {
+  font-size: calc(0.7rem + var(--sp-text-bump));
+  color: #64748b;
+  font-weight: 500;
+  line-height: 1.3;
 }
 
 .solpath-plan-block .sp-intro-title {
