@@ -29,3 +29,4 @@ function main() {
 }
 
 main();
+/* jsDelivr: 동일 UI, 새 커밋 SHA로 CDN 404 회피 */
