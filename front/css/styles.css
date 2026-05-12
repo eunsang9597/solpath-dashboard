@@ -2924,18 +2924,25 @@ button.sp-stu-remark__item--open:hover {
   }
 }
 
-/* --- 임웹 플래너 전용 (plan.js / #solpath-plan-root) --- */
+/* --- 임웹 플래너 전용 (plan.js / #solpath-plan-root) — 수강생 탭과 동일 계열, 학생 가독성 --- */
 .solpath-plan-shell {
   max-width: min(100%, 48rem);
 }
 
-.solpath-plan-main {
-  margin-top: 0.25rem;
+.solpath-plan-hero__head {
+  margin-bottom: 0.65rem;
 }
 
-/* 본문 패널: 대시보드 `sp-intro-card`·`header-desc` 타이포 재사용 */
-.solpath-plan-shell .sp-intro-card {
-  margin-top: 0.15rem;
+.solpath-plan-service-line {
+  margin: 0.35rem 0 0;
+  font-size: calc(0.97rem + var(--sp-text-bump));
+  line-height: 1.45;
+  color: #2a3038;
+  font-weight: 600;
+}
+
+.solpath-plan-block .sp-intro-title {
+  margin-bottom: 0.45rem;
 }
 
 .solpath-plan-panel__desc {
