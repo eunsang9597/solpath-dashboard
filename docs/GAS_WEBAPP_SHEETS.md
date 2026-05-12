@@ -29,6 +29,7 @@ Google Apps Script [ContentService TextOutput](https://developers.google.com/app
 - 응답은 `콜백이름({...json...});` 형태, MIME 은 `ContentService.MimeType.JAVASCRIPT` (또는 환경에 따라 `TEXT`).
 - 프론트는 **`<script src=".../exec?format=jsonp&callback=…&action=…">`** 로 로드 — 스크립트 태그는 CORS `fetch`와 다른 경로이므로 동작한다.
 - **POST + `action=...`** (urlencoded / `text/plain`) 는 **curl·서버·GAS 편집기 실행** 등에 그대로 두면 된다.
+- **플래너(`plannerMatch` / `plannerBootstrap` / `initPlannerMasterSheets`)**: 임웹 `fetch`는 **`Content-Type: text/plain;charset=utf-8`** 로 JSON 문자열을 보내고, `doPost`가 본문이 `{` 로 시작하면 `JSON.parse` 한다(`HttpOpenSync.js`). 응답을 읽을 때는 여전히 **§2.1 CORS** 제약이 있으므로, 막히면 동일 출처 프록시·배포 설정 등을 검토한다([docs/PLANNER_DB_ARCHITECTURE.md](PLANNER_DB_ARCHITECTURE.md) §14).
 
 ### 2.3 임웹/분석 스크립트
 

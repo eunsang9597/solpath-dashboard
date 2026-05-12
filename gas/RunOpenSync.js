@@ -22,3 +22,8 @@ function run_OpenSync_Orders() {
 function run_OpenSync_All() {
   return dbSyncOpenAll(); // { members, products, orders }
 }
+
+/** 플래너 마스터 스프레드시트 생성·`SHEETS_PLANNER_MASTER_ID` 저장 — docs/PLANNER_DB_ARCHITECTURE.md */
+function run_Planner_InitMaster() {
+  return dbInitPlannerMasterSheets_();
+}

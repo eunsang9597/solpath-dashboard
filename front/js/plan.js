@@ -1,9 +1,56 @@
 /**
- * 플래너 임웹 전용 — 대시보드 상단 뼈대와 동일, 탭 없이 월간 플랜·달력 영역만.
+ * 플래너 임웹 전용 — 전화 확인 후 공통·개인 일정 표시 (드라이브 링크 없음).
  */
+import { GAS_BASE_URL, GAS_MODE } from './config.js';
+
 const MOUNT_ID = 'solpath-plan-root';
 
-const PLAN_SHELL_HTML = `<div class="app-shell app-shell--plan">
+/** @param {string} s */
+function esc(s) {
+  return String(s != null ? s : '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+/**
+ * @param {Record<string, unknown>} payload
+ * @return {Promise<Record<string, unknown>>}
+ */
+async function plannerPost_(payload) {
+  const url = String(GAS_BASE_URL || '').trim();
+  if (!url) {
+    return { ok: false, error: { code: 'NO_GAS_URL', message: 'gasBaseUrl이 없습니다.' } };
+  }
+  let res;
+  try {
+    res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(payload)
+    });
+  } catch (e) {
+    const m = e && typeof e === 'object' && 'message' in e ? String(/** @type {{ message?: string }} */ (e).message) : String(e);
+    return { ok: false, error: { code: 'NETWORK', message: m } };
+  }
+  if (!res.ok) {
+    const t = await res.text().catch(function () {
+      return '';
+    });
+    return { ok: false, error: { code: 'HTTP_' + res.status, message: t.slice(0, 400) || res.statusText } };
+  }
+  const txt = await res.text();
+  let j;
+  try {
+    j = JSON.parse(txt);
+  } catch (_e) {
+    return { ok: false, error: { code: 'BAD_JSON', message: txt.slice(0, 400) } };
+  }
+  return j;
+}
+
+const PLAN_APP_HTML = `<div class="app-shell app-shell--plan">
   <header class="app-header">
     <div class="brand">
       <span class="brand-mark" aria-hidden="true"></span>
@@ -14,17 +61,191 @@ const PLAN_SHELL_HTML = `<div class="app-shell app-shell--plan">
     </div>
   </header>
   <main class="app-main sp-plan-app-main">
+    <p class="sp-plan-banner" id="sp-plan-banner" hidden></p>
     <div class="panel panel--hero sp-plan-body">
       <div class="sp-plan-monthly-title" id="sp-plan-monthly-label">월간 플랜</div>
-      <div class="sp-plan-calendar-slot" role="region" aria-labelledby="sp-plan-monthly-label"></div>
+      <div class="sp-plan-calendar-slot" id="sp-plan-calendar-slot" role="region" aria-labelledby="sp-plan-monthly-label"></div>
     </div>
   </main>
 </div>`;
 
+const GATE_HTML = `<div class="sp-plan-gate">
+  <p class="sp-plan-gate__lead">솔패스 수강 이력이 있는 번호를 입력해 주세요. 입력 정보는 본인 확인·플래너 제공에만 사용됩니다.</p>
+  <p class="sp-plan-gate__privacy">전화번호와 이름(필요 시)은 매칭·기록용으로만 처리되며, 구글 드라이브 연결 등은 요청하지 않습니다.</p>
+  <div class="sp-plan-gate__fields">
+    <label class="sp-plan-gate__label">휴대전화</label>
+    <div class="sp-plan-gate__phone">
+      <input class="sp-plan-gate__input" id="sp-plan-p0" type="text" inputmode="numeric" maxlength="3" pattern="[0-9]*" autocomplete="off" aria-label="휴대전화 앞자리" />
+      <span class="sp-plan-gate__dash" aria-hidden="true">-</span>
+      <input class="sp-plan-gate__input" id="sp-plan-p1" type="text" inputmode="numeric" maxlength="4" pattern="[0-9]*" autocomplete="off" aria-label="휴대전화 중간 네 자리" />
+      <span class="sp-plan-gate__dash" aria-hidden="true">-</span>
+      <input class="sp-plan-gate__input" id="sp-plan-p2" type="text" inputmode="numeric" maxlength="4" pattern="[0-9]*" autocomplete="off" aria-label="휴대전화 끝 네 자리" />
+    </div>
+    <div class="sp-plan-gate__nameWrap" id="sp-plan-name-wrap" hidden>
+      <label class="sp-plan-gate__label" for="sp-plan-name">이름 (전화번호가 같은 분이 둘 이상일 때만)</label>
+      <input class="sp-plan-gate__input sp-plan-gate__input--name" id="sp-plan-name" type="text" maxlength="40" autocomplete="name" />
+    </div>
+  </div>
+  <p class="sp-plan-gate__err" id="sp-plan-gate-err" hidden></p>
+  <button type="button" class="btn btn--primary sp-plan-gate__btn" id="sp-plan-gate-submit">확인</button>
+</div>`;
+
+/** @param {string[]} segs */
+function readPhoneSegments_(segs) {
+  return [
+    String(segs[0] != null ? segs[0] : '').replace(/\D/g, ''),
+    String(segs[1] != null ? segs[1] : '').replace(/\D/g, ''),
+    String(segs[2] != null ? segs[2] : '').replace(/\D/g, '')
+  ];
+}
+
+/**
+ * @param {HTMLElement} root
+ * @param {{ role: string, common: object[], personal: object[] | null }} boot
+ */
+function renderCalendar_(root, boot) {
+  const slot = root.querySelector('#sp-plan-calendar-slot');
+  const ban = root.querySelector('#sp-plan-banner');
+  if (!slot) return;
+  const role = boot && boot.role === 'member' ? 'member' : 'guest';
+  if (ban) {
+    if (role === 'guest') {
+      ban.textContent = '등록된 번호로 확인되지 않아 공통 일정만 표시합니다.';
+      ban.removeAttribute('hidden');
+    } else {
+      ban.setAttribute('hidden', 'hidden');
+    }
+  }
+  const common = boot && Array.isArray(boot.common) ? boot.common : [];
+  const personal = boot && boot.personal != null && Array.isArray(boot.personal) ? boot.personal : [];
+  const lines = common
+    .slice()
+    .sort(function (a, b) {
+      const da = String(a.start_date || '');
+      const db = String(b.start_date || '');
+      if (da !== db) return da < db ? -1 : da > db ? 1 : 0;
+      return (Number(a.sort_key) || 0) - (Number(b.sort_key) || 0);
+    })
+    .map(function (ev) {
+      const t = esc(ev.title || '(제목 없음)');
+      const r0 = esc(String(ev.start_date || ''));
+      const r1 = esc(String(ev.end_date || ''));
+      return `<li><span class="sp-plan-ev__date">${r0}${r1 && r1 !== r0 ? ' ~ ' + r1 : ''}</span> <span class="sp-plan-ev__title">${t}</span></li>`;
+    });
+  const pLines =
+    role === 'member' && personal.length
+      ? personal
+          .map(function (ev) {
+            const t = esc(ev && ev.title != null ? ev.title : '일정');
+            return `<li><span class="sp-plan-ev__title">${t}</span></li>`;
+          })
+          .join('')
+      : '';
+  slot.innerHTML = `
+    <div class="sp-plan-calwrap">
+      <section class="sp-plan-calsec" aria-label="공통 일정">
+        <div class="sp-plan-calsec__h" role="heading" aria-level="3">공통 일정</div>
+        ${lines.length ? `<ul class="sp-plan-evlist">${lines.join('')}</ul>` : '<p class="sp-plan-empty">등록된 공통 일정이 없습니다.</p>'}
+      </section>
+      ${
+        role === 'member'
+          ? `<section class="sp-plan-calsec" aria-label="나의 일정"><div class="sp-plan-calsec__h" role="heading" aria-level="3">나의 일정</div>${
+              pLines.length ? `<ul class="sp-plan-evlist">${pLines}</ul>` : '<p class="sp-plan-empty">개인 일정은 아직 없습니다.</p>'
+            }</section>`
+          : ''
+      }
+    </div>`;
+}
+
+/**
+ * @param {HTMLElement} root
+ */
+function wireGate_(root) {
+  const btn = root.querySelector('#sp-plan-gate-submit');
+  const errEl = root.querySelector('#sp-plan-gate-err');
+  const nameWrap = root.querySelector('#sp-plan-name-wrap');
+  const nameInput = root.querySelector('#sp-plan-name');
+  const gate = root.querySelector('.sp-plan-gate');
+  const app = root.querySelector('.app-shell--plan');
+  if (!btn || !gate || !app) return;
+
+  function showErr(msg) {
+    if (!errEl) return;
+    if (msg) {
+      errEl.textContent = msg;
+      errEl.removeAttribute('hidden');
+    } else {
+      errEl.textContent = '';
+      errEl.setAttribute('hidden', 'hidden');
+    }
+  }
+
+  async function runBootstrap(memberCode, segs, name) {
+    const boot = await plannerPost_({
+      action: 'plannerBootstrap',
+      phoneSegments: segs,
+      name: name || '',
+      memberCode: memberCode || ''
+    });
+    if (!boot || !boot.ok) {
+      const m = boot && boot.error && boot.error.message != null ? String(boot.error.message) : '일정을 불러오지 못했습니다.';
+      showErr(m);
+      return;
+    }
+    const d = /** @type {{ role?: string, common?: object[], personal?: object[] | null }} */ (boot.data || {});
+    gate.setAttribute('hidden', 'hidden');
+    app.removeAttribute('hidden');
+    renderCalendar_(root, { role: d.role || 'guest', common: d.common || [], personal: d.personal != null ? d.personal : null });
+  }
+
+  btn.addEventListener('click', async function () {
+    showErr('');
+    const p0 = /** @type {HTMLInputElement | null} */ (root.querySelector('#sp-plan-p0'));
+    const p1 = /** @type {HTMLInputElement | null} */ (root.querySelector('#sp-plan-p1'));
+    const p2 = /** @type {HTMLInputElement | null} */ (root.querySelector('#sp-plan-p2'));
+    const segs = readPhoneSegments_([p0 && p0.value, p1 && p1.value, p2 && p2.value]);
+    const name = nameInput && !nameWrap.hidden ? String(nameInput.value || '').trim() : '';
+
+    const res = await plannerPost_({
+      action: 'plannerMatch',
+      phoneSegments: segs,
+      name: name
+    });
+    if (!res || !res.ok) {
+      const m = res && res.error && res.error.message != null ? String(res.error.message) : '확인에 실패했습니다.';
+      showErr(m);
+      return;
+    }
+    const data = /** @type {{ outcome?: string, needName?: boolean, memberCode?: string | null }} */ (res.data || {});
+    const oc = String(data.outcome || '');
+    if (oc === 'need_name') {
+      if (nameWrap) nameWrap.removeAttribute('hidden');
+      showErr('같은 번호로 등록된 분이 여러 명입니다. 이름을 입력한 뒤 다시 확인을 눌러 주세요.');
+      return;
+    }
+    if (oc === 'matched' && data.memberCode) {
+      await runBootstrap(String(data.memberCode), segs, name);
+      return;
+    }
+    await runBootstrap('', segs, name);
+  });
+}
+
 function main() {
   const el = document.getElementById(MOUNT_ID);
   if (!el) return;
-  el.innerHTML = PLAN_SHELL_HTML;
+  el.innerHTML = `<div class="sp-plan-rootinner">${GATE_HTML}${PLAN_APP_HTML}</div>`;
+  const app = el.querySelector('.app-shell--plan');
+  if (app) app.setAttribute('hidden', 'hidden');
+  if (GAS_MODE.useMock) {
+    const g = el.querySelector('.sp-plan-gate');
+    if (g) {
+      g.innerHTML =
+        '<p class="sp-plan-gate__err">스니펫에 Web App 주소(<code>gasBaseUrl</code>)가 없어 플래너를 불러올 수 없습니다.</p>';
+    }
+    return;
+  }
+  wireGate_(el);
 }
 
 main();

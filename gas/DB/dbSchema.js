@@ -128,6 +128,50 @@ var DB_STUDENT_ORDER_EVENT_HEADERS = [
   'source_sync_id'
 ];
 
+/**
+ * 플래너(학생 공개) 전용 마스터 스프레드시트. Script Property: `SHEETS_PLANNER_MASTER_ID`
+ * (문서: `docs/PLANNER_DB_ARCHITECTURE.md`)
+ */
+var DB_PROP_SHEETS_PLANNER_MASTER_ID = 'SHEETS_PLANNER_MASTER_ID';
+var DB_PLANNER_SPREADSHEET_TITLE = '솔루션편입_플래너_마스터';
+var DB_SHEET_PLANNER_REGISTRY = 'planner_registry';
+var DB_SHEET_PLANNER_MEMBER_RECORDS = 'planner_member_records';
+var DB_SHEET_PLANNER_STUDENT_LINKS = 'planner_student_links';
+var DB_SHEET_PLANNER_COMMON_CALENDAR = 'planner_common_calendar';
+
+/** @type {string[]} */
+var DB_PLANNER_REGISTRY_HEADERS = [
+  'member_code',
+  'phone_normalized',
+  'display_name',
+  'first_solpass_order_id',
+  'registry_updated_at'
+];
+
+/** @type {string[]} */
+var DB_PLANNER_MEMBER_RECORD_HEADERS = [
+  'record_id',
+  'created_at',
+  'phone_normalized',
+  'name_entered',
+  'match_outcome',
+  'member_code'
+];
+
+/** @type {string[]} */
+var DB_PLANNER_STUDENT_LINK_HEADERS = ['member_code', 'student_spreadsheet_id', 'provisioned_at'];
+
+/** @type {string[]} */
+var DB_PLANNER_COMMON_CALENDAR_HEADERS = [
+  'event_id',
+  'start_date',
+  'end_date',
+  'title',
+  'description',
+  'category',
+  'sort_key'
+];
+
 /** 연·월 목표 — `goal_target` = `entire` | `solpass` | `challenge` | `solutine` (빈칸 금지) */
 var DB_SHEET_ANALYTICS_GOALS = '01_연월_목표';
 /** 마스터 `order_items` 1:1 + 실결제·스냅샷(종료일은 운영 product_mapping.sales_end) */

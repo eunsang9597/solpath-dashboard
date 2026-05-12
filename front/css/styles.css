@@ -2971,3 +2971,127 @@ button.sp-stu-remark__item--open:hover {
   background: #faf8ff;
   box-sizing: border-box;
 }
+
+#solpath-plan-root .sp-plan-rootinner {
+  max-width: 100%;
+}
+
+#solpath-plan-root .sp-plan-gate {
+  padding: 1rem 0 1.25rem;
+  max-width: 22rem;
+}
+
+#solpath-plan-root .sp-plan-gate__lead {
+  margin: 0 0 0.5rem;
+  font-size: calc(0.82rem + var(--sp-text-bump));
+  color: #334155;
+  line-height: 1.5;
+}
+
+#solpath-plan-root .sp-plan-gate__privacy {
+  margin: 0 0 1rem;
+  font-size: calc(0.72rem + var(--sp-text-bump));
+  color: #64748b;
+  line-height: 1.45;
+}
+
+#solpath-plan-root .sp-plan-gate__fields {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+#solpath-plan-root .sp-plan-gate__label {
+  font-size: calc(0.76rem + var(--sp-text-bump));
+  font-weight: 600;
+  color: #1e293b;
+}
+
+#solpath-plan-root .sp-plan-gate__phone {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+#solpath-plan-root .sp-plan-gate__dash {
+  color: #94a3b8;
+  font-weight: 600;
+}
+
+#solpath-plan-root .sp-plan-gate__input {
+  width: 4.2rem;
+  padding: 0.45rem 0.4rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: calc(0.95rem + var(--sp-text-bump));
+  text-align: center;
+  box-sizing: border-box;
+}
+
+#solpath-plan-root .sp-plan-gate__input--name {
+  width: 100%;
+  max-width: 20rem;
+  text-align: left;
+}
+
+#solpath-plan-root .sp-plan-gate__nameWrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+#solpath-plan-root .sp-plan-gate__err {
+  margin: 0.5rem 0 0;
+  font-size: calc(0.78rem + var(--sp-text-bump));
+  color: #b71c1c;
+  line-height: 1.4;
+}
+
+#solpath-plan-root .sp-plan-gate__btn {
+  margin-top: 0.85rem;
+}
+
+#solpath-plan-root .app-shell--plan .sp-plan-banner {
+  margin: 0 0 0.5rem;
+  padding: 0.5rem 0.65rem;
+  border-radius: 8px;
+  background: #fff8e1;
+  border: 1px solid #ffe082;
+  color: #5d4037;
+  font-size: calc(0.78rem + var(--sp-text-bump));
+  line-height: 1.45;
+}
+
+#solpath-plan-root .sp-plan-calwrap {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+#solpath-plan-root .sp-plan-calsec__h {
+  margin: 0 0 0.45rem;
+  font-size: calc(0.88rem + var(--sp-text-bump));
+  font-weight: 700;
+  color: #4a148c;
+}
+
+#solpath-plan-root .sp-plan-evlist {
+  margin: 0;
+  padding-left: 1.1rem;
+  color: #1e293b;
+  font-size: calc(0.82rem + var(--sp-text-bump));
+  line-height: 1.55;
+}
+
+#solpath-plan-root .sp-plan-ev__date {
+  color: #5e35b1;
+  font-weight: 600;
+  margin-right: 0.35rem;
+}
+
+#solpath-plan-root .sp-plan-empty {
+  margin: 0;
+  color: #64748b;
+  font-size: calc(0.8rem + var(--sp-text-bump));
+}

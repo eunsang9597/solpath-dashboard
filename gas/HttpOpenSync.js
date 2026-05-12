@@ -122,7 +122,10 @@ function openSyncAllowedActions_() {
     'studentMgmtRenewalStatusProductMembers',
     'studentMgmtExportReportsBundle',
     'analyticsExportStagingPut',
-    'analyticsTableExportFromStaging'
+    'analyticsTableExportFromStaging',
+    'plannerMatch',
+    'plannerBootstrap',
+    'initPlannerMasterSheets'
   ];
 }
 
@@ -599,6 +602,40 @@ function doPost(e) {
     }
   } catch (errJ) {
     jBody = null;
+  }
+  if (!jBody && e.postData && e.postData.contents) {
+    var tPlain = (e.postData.type != null ? String(e.postData.type) : '').toLowerCase();
+    if (tPlain.indexOf('text/plain') >= 0) {
+      var rawJ = String(e.postData.contents).trim();
+      if (rawJ.charAt(0) === '{') {
+        try {
+          jBody = JSON.parse(rawJ);
+        } catch (_errPlain) {
+          jBody = null;
+        }
+      }
+    }
+  }
+  if (jBody && jBody.action === 'plannerMatch') {
+    return openSyncTextOutputJson_(dbPlannerMatch_(jBody));
+  }
+  if (jBody && jBody.action === 'plannerBootstrap') {
+    return openSyncTextOutputJson_(dbPlannerBootstrap_(jBody));
+  }
+  if (jBody && jBody.action === 'initPlannerMasterSheets') {
+    var rPl0 = dbInitPlannerMasterSheets_();
+    if (rPl0 && rPl0.error) {
+      return openSyncTextOutputJson_({ ok: false, error: { code: rPl0.error.code, message: rPl0.error.message } });
+    }
+    return openSyncTextOutputJson_({
+      ok: true,
+      data: {
+        plannerSpreadsheetId: rPl0.id,
+        plannerSpreadsheetUrl: rPl0.url,
+        alreadyConfigured: rPl0.already,
+        createdNew: rPl0.createdNew
+      }
+    });
   }
   if (jBody && jBody.action === 'productMappingApply' && jBody.rows && jBody.rows.length) {
     return openSyncTextOutputJson_(dbProductMappingApply_(jBody.rows));
