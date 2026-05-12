@@ -18,7 +18,10 @@ if [[ -z "$NEW" ]]; then
 fi
 export NEW
 # URL·`cdnCommit`·HTML 주석 SOLPATH_PIN — 모두 **같은** 풀 SHA (병렬 편집 금지)
-for f in "${ROOT}/IMWEB_SNIPPET_INJECT.html" "${ROOT}/IMWEB_SNIPPET.html"; do
+for f in \
+  "${ROOT}/IMWEB_SNIPPET_INJECT.html" \
+  "${ROOT}/IMWEB_SNIPPET.html" \
+  "${ROOT}/IMWEB_SNIPPET_PLAN.html"; do
   if [[ ! -f "$f" ]]; then
     echo "없음: $f" >&2
     exit 1
