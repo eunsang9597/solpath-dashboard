@@ -2924,3 +2924,69 @@ button.sp-stu-remark__item--open:hover {
   }
 }
 
+/* --- 임웹 플래너 전용 (plan.js / #solpath-plan-root) --- */
+.solpath-plan-shell {
+  max-width: min(100%, 48rem);
+}
+
+.solpath-plan-main {
+  margin-top: 0.25rem;
+}
+
+.solpath-plan-card {
+  background: var(--card);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  border: 1px solid var(--line);
+  padding: clamp(1.1rem, 3vw, 1.5rem);
+}
+
+.solpath-plan-card__title {
+  margin: 0 0 0.45rem;
+  font-size: calc(1.05rem + var(--sp-text-bump));
+  font-weight: 700;
+  color: var(--ink);
+  letter-spacing: -0.02em;
+}
+
+.solpath-plan-card__lead {
+  margin: 0 0 1.1rem;
+  font-size: calc(0.88rem + var(--sp-text-bump));
+  line-height: 1.55;
+  color: var(--muted);
+}
+
+.solpath-plan-placeholder {
+  border-radius: 12px;
+  border: 1px dashed #c5cdd8;
+  background: linear-gradient(180deg, #fafbfd 0%, #f4f6f9 100%);
+  min-height: 12rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.85rem;
+  padding: 1.25rem 1rem;
+}
+
+.solpath-plan-placeholder__grid {
+  width: min(100%, 18rem);
+  height: 6.5rem;
+  border-radius: 10px;
+  background: repeating-linear-gradient(
+    90deg,
+    #e8ecf2 0,
+    #e8ecf2 1px,
+    transparent 1px,
+    transparent 14.28%
+  );
+  opacity: 0.85;
+}
+
+.solpath-plan-placeholder__hint {
+  margin: 0;
+  font-size: calc(0.8rem + var(--sp-text-bump));
+  font-weight: 600;
+  color: #7a8491;
+}
+
