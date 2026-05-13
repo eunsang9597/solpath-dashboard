@@ -251,6 +251,52 @@ function plannerMergeStudentProfile_(apiPartial) {
 }
 
 /**
+ * `prev_major_gpa` 한 필드 문자열(예: `국어국문학과 · 평점 3.82 / 4.5`)을 같은 칸 안 탭(칩)으로 나눈다.
+ * @param {string} raw
+ * @returns {string}
+ */
+function plannerPrevMajorGpaPillsHtml_(raw) {
+  const s = String(raw != null ? raw : '').trim();
+  if (!s) return '';
+  const chunks = s
+    .split(/\s*·\s*/)
+    .map(function (x) {
+      return String(x || '').trim();
+    })
+    .filter(Boolean);
+  if (!chunks.length) return '';
+  /** @type {{ lbl: string, val: string }[]} */
+  const items = [];
+  chunks.forEach(function (chunk) {
+    const m = chunk.match(/^평점\s*(.*)$/i);
+    if (m) {
+      const rest = String(m[1] != null ? m[1] : '').trim();
+      items.push({ lbl: '평점', val: rest || '—' });
+    } else {
+      items.push({ lbl: '학과', val: chunk });
+    }
+  });
+  return (
+    '<div class="sp-plan-student__pills" role="list">' +
+    items
+      .map(function (t) {
+        const aria = (t.lbl ? t.lbl + ' ' : '') + t.val;
+        return (
+          '<span class="sp-plan-student__pill" role="listitem" tabindex="0" aria-label="' +
+          esc(aria) +
+          '">' +
+          (t.lbl ? '<span class="sp-plan-student__pill-lbl">' + esc(t.lbl) + '</span>' : '') +
+          '<span class="sp-plan-student__pill-val">' +
+          esc(t.val) +
+          '</span></span>'
+        );
+      })
+      .join('') +
+    '</div>'
+  );
+}
+
+/**
  * 학생 정보 표 — **데이터 객체만** 받아 DOM 생성 (HTML에 문구 박지 않음).
  * @param {HTMLElement} root
  * @param {Record<string, unknown>|null|undefined} profile API `student_profile` 또는 null(목업만)
@@ -289,7 +335,7 @@ function renderPlannerStudentProfile_(root, profile) {
     '<tr>' +
     '<th scope="row">전적대 학과 · 학점</th>' +
     '<td colspan="3" data-sp-plan-student="prev_major_gpa">' +
-    esc(p.prev_major_gpa) +
+    plannerPrevMajorGpaPillsHtml_(p.prev_major_gpa) +
     '</td>' +
     '</tr>' +
     '<tr>' +
@@ -317,12 +363,55 @@ function renderPlannerStudentProfile_(root, profile) {
  */
 
 /**
+ * 빠른 등록(quickPlanByDate)으로 해당 주의 과목별 강 범위를 만든다.
+ * @param {object} st
+ * @param {string[]} weekDateKeys YYYY-MM-DD 7일
+ * @returns {Record<string, { min: number, max: number }>}
+ */
+function plannerCurriculumWeekLessonRangeFromQuickPlan_(st, weekDateKeys) {
+  /** @type {Record<string, { min: number, max: number }>} */
+  const out = {};
+  if (!st || !st.quickPlanByDate) return out;
+  (weekDateKeys || []).forEach(function (key) {
+    const list = st.quickPlanByDate && st.quickPlanByDate[key] ? st.quickPlanByDate[key] : null;
+    if (!Array.isArray(list)) return;
+    list.forEach(function (t) {
+      if (!t || typeof t !== 'object') return;
+      const subj = String(t.subject != null ? t.subject : '').trim();
+      const L = Number(t.lesson);
+      if (!subj) return;
+      if (!isFinite(L) || L <= 0) return;
+      if (!out[subj]) out[subj] = { min: L, max: L };
+      else {
+        if (L < out[subj].min) out[subj].min = L;
+        if (L > out[subj].max) out[subj].max = L;
+      }
+    });
+  });
+  return out;
+}
+
+/**
+ * @param {{ min: number, max: number }|null|undefined} r
+ * @returns {string}
+ */
+function plannerCurriculumLessonOutlineFromRange_(r) {
+  if (!r || !isFinite(r.min) || !isFinite(r.max) || r.min <= 0 || r.max <= 0) return '';
+  const lo = Math.min(r.min, r.max);
+  const hi = Math.max(r.min, r.max);
+  if (lo === hi) return String(lo) + '강';
+  return String(lo) + '강~' + String(hi) + '강';
+}
+
+/**
  * @param {number} weekIndex 0..5
+ * @param {Record<string, { min: number, max: number }>} [weekLessonRanges] subjectCode → {min,max}
  * @returns {PlannerCurriculumWeekPayload}
  */
-function plannerCurriculumMockWeekPayload_(weekIndex) {
+function plannerCurriculumMockWeekPayload_(weekIndex, weekLessonRanges) {
   const phases = ['기본 개념·예문', '오답·심화', '실전 모의', '누적 복습', '약점 보완', '월말 정리'];
   const phase = phases[weekIndex % phases.length];
+  const ranges = weekLessonRanges && typeof weekLessonRanges === 'object' ? weekLessonRanges : {};
   return {
     source: 'mock',
     week_index: weekIndex,
@@ -331,17 +420,22 @@ function plannerCurriculumMockWeekPayload_(weekIndex) {
       {
         subject: '문법',
         textbook_goal: '솔패스 문법 교재 · ' + phase,
-        lesson_outline: '1강~20강'
+        lesson_outline: plannerCurriculumLessonOutlineFromRange_(ranges.grammar) || '—'
       },
       {
         subject: '논리',
         textbook_goal: '논리 추론 기초 교재 · ' + phase,
-        lesson_outline: '1강~20강'
+        lesson_outline: plannerCurriculumLessonOutlineFromRange_(ranges.logic) || '—'
       },
       {
         subject: '독해',
         textbook_goal: '실전 지문 독해 · ' + phase,
-        lesson_outline: '1강~20강'
+        lesson_outline: plannerCurriculumLessonOutlineFromRange_(ranges.read) || '—'
+      },
+      {
+        subject: '어휘',
+        textbook_goal: '핵심 어휘 · ' + phase,
+        lesson_outline: plannerCurriculumLessonOutlineFromRange_(ranges.vocab) || '—'
       }
     ]
   };
@@ -362,7 +456,7 @@ function plannerCurriculumWeekTableHtml_(payload) {
       esc(r.textbook_goal) +
       '</td><td class="sp-plan-cur__outline">' +
       esc(r.lesson_outline) +
-      '</td></tr>';
+      '</td><td class="sp-plan-cur__link"><a class="sp-plan-cur__a" href="" aria-disabled="true" tabindex="-1"></a></td></tr>';
   });
   return (
     '<div class="sp-plan-cur" data-sp-plan-cur-source="' +
@@ -375,6 +469,7 @@ function plannerCurriculumWeekTableHtml_(payload) {
     '<th scope="col" class="sp-plan-cur__thCat">구분</th>' +
     '<th scope="col">교재명 · 학습 목표</th>' +
     '<th scope="col" class="sp-plan-cur__thOut">목차</th>' +
+    '<th scope="col" class="sp-plan-cur__thLink">링크</th>' +
     '</tr></thead><tbody>' +
     body +
     '</tbody></table></div>'
@@ -1050,7 +1145,7 @@ function renderCalendar_(root, boot) {
 
   const apiHadCalendarRows = common.length > 0 || personal.length > 0;
 
-  /** @type {{ role: 'member'|'guest', viewMonth: Date, byDate: Record<string, number>, selectedDate: string|null, apiHadCalendarRows: boolean, dayTodoOrderByDate?: Record<string, string[]>, dayTimelineSlotsByDate?: Record<string, Record<string, boolean>>, dayTimelineTodoByDate?: Record<string, Record<string, string>>, quickPlanByDate?: Record<string, { subject: string, lesson: number }[]>, modalBrushTodoId?: string }} */
+  /** @type {{ role: 'member'|'guest', viewMonth: Date, byDate: Record<string, number>, selectedDate: string|null, apiHadCalendarRows: boolean, dayTodoOrderByDate?: Record<string, string[]>, dayTimelineSlotsByDate?: Record<string, Record<string, boolean>>, dayTimelineTodoByDate?: Record<string, Record<string, string>>, quickPlanByDate?: Record<string, { subject: string, lesson: number }[]>, modalBrushTodoId?: string, quickRegCollapsed?: boolean }} */
   const st = (root.__spPlanState =
     root.__spPlanState && typeof root.__spPlanState === 'object'
       ? root.__spPlanState
@@ -1064,7 +1159,8 @@ function renderCalendar_(root, boot) {
           dayTimelineSlotsByDate: {},
           dayTimelineTodoByDate: {},
           quickPlanByDate: {},
-          modalBrushTodoId: ''
+          modalBrushTodoId: '',
+          quickRegCollapsed: false
         });
   st.role = role;
   st.byDate = byDate;
@@ -1072,6 +1168,7 @@ function renderCalendar_(root, boot) {
   if (st.modalBrushTodoId == null) st.modalBrushTodoId = '';
   if (!st.quickPlanByDate) st.quickPlanByDate = {};
   if (!st.dayTimelineTodoByDate) st.dayTimelineTodoByDate = {};
+  if (typeof st.quickRegCollapsed !== 'boolean') st.quickRegCollapsed = false;
   if (!(st.viewMonth instanceof Date) || isNaN(Number(st.viewMonth))) {
     st.viewMonth = new Date();
   }
@@ -1169,7 +1266,20 @@ function renderCalendar_(root, boot) {
         wk +
         '주</div>' +
         '</div>' +
-        plannerCurriculumWeekTableHtml_(plannerCurriculumMockWeekPayload_(w)) +
+        plannerCurriculumWeekTableHtml_(
+          plannerCurriculumMockWeekPayload_(
+            w,
+            plannerCurriculumWeekLessonRangeFromQuickPlan_(st, [
+              ymd(new Date(sun.getFullYear(), sun.getMonth(), sun.getDate() + 0)),
+              ymd(new Date(sun.getFullYear(), sun.getMonth(), sun.getDate() + 1)),
+              ymd(new Date(sun.getFullYear(), sun.getMonth(), sun.getDate() + 2)),
+              ymd(new Date(sun.getFullYear(), sun.getMonth(), sun.getDate() + 3)),
+              ymd(new Date(sun.getFullYear(), sun.getMonth(), sun.getDate() + 4)),
+              ymd(new Date(sun.getFullYear(), sun.getMonth(), sun.getDate() + 5)),
+              ymd(new Date(sun.getFullYear(), sun.getMonth(), sun.getDate() + 6))
+            ])
+          )
+        ) +
         '</div>';
 
       for (let di = 0; di < 7; di++) {
@@ -1294,13 +1404,23 @@ function renderCalendar_(root, boot) {
 
   slot.innerHTML =
     '<div class="sp-plan-calstack">' +
-    '<section class="sp-plan-quick" id="sp-plan-quick-reg" aria-label="빠른 등록">' +
+    '<section class="sp-plan-quick' +
+    (st.quickRegCollapsed ? ' is-collapsed' : '') +
+    '" id="sp-plan-quick-reg" aria-label="빠른 등록">' +
     '<div class="sp-plan-quick__head">' +
-    '<span class="sp-plan-quick__title">빠른 등록</span>' +
+    '<div class="sp-plan-quick__headL">' +
+    '<button type="button" class="sp-plan-quick__collapse" id="sp-quick-toggle" aria-expanded="' +
+    (st.quickRegCollapsed ? 'false' : 'true') +
+    '" aria-controls="sp-plan-quick-body" title="빠른 등록 접기·펼치기">' +
+    '<span class="sp-plan-quick__chev" aria-hidden="true">▼</span>' +
+    '</button>' +
+    '<span class="sp-plan-quick__title">빠른 등록</span></div>' +
     '<span class="sp-plan-quick__note">보는 달만 · 저장 없음</span></div>' +
+    '<div id="sp-plan-quick-body" class="sp-plan-quick__body">' +
     '<p class="sp-plan-quick__err" id="sp-plan-quick-err" hidden></p>' +
-    '<div class="sp-plan-quick__row sp-plan-quick__dows">' +
+    '<div class="sp-plan-quick__row sp-plan-quick__row--horiz">' +
     '<span class="sp-plan-quick__lbl">요일</span>' +
+    '<div class="sp-plan-quick__chks" role="group" aria-label="요일">' +
     '<label class="sp-plan-quick__chk"><input type="checkbox" name="sp-dow" value="1"/>월</label>' +
     '<label class="sp-plan-quick__chk"><input type="checkbox" name="sp-dow" value="2"/>화</label>' +
     '<label class="sp-plan-quick__chk"><input type="checkbox" name="sp-dow" value="3"/>수</label>' +
@@ -1308,22 +1428,24 @@ function renderCalendar_(root, boot) {
     '<label class="sp-plan-quick__chk"><input type="checkbox" name="sp-dow" value="5"/>금</label>' +
     '<label class="sp-plan-quick__chk"><input type="checkbox" name="sp-dow" value="6"/>토</label>' +
     '<label class="sp-plan-quick__chk"><input type="checkbox" name="sp-dow" value="0"/>일</label>' +
-    '</div>' +
-    '<div class="sp-plan-quick__row">' +
+    '</div></div>' +
+    '<div class="sp-plan-quick__row sp-plan-quick__row--horiz">' +
     '<span class="sp-plan-quick__lbl">과목</span>' +
+    '<div class="sp-plan-quick__chks" role="group" aria-label="과목">' +
     '<label class="sp-plan-quick__chk"><input type="checkbox" name="sp-subj" value="grammar" checked/>문법</label>' +
     '<label class="sp-plan-quick__chk"><input type="checkbox" name="sp-subj" value="logic" checked/>논리</label>' +
     '<label class="sp-plan-quick__chk"><input type="checkbox" name="sp-subj" value="read" checked/>독해</label>' +
     '<label class="sp-plan-quick__chk"><input type="checkbox" name="sp-subj" value="vocab"/>어휘</label>' +
-    '</div>' +
-    '<div class="sp-plan-quick__row sp-plan-quick__row--nums">' +
+    '</div></div>' +
+    '<div class="sp-plan-quick__row sp-plan-quick__row--horiz sp-plan-quick__row--nums">' +
     '<span class="sp-plan-quick__lbl">강</span>' +
+    '<div class="sp-plan-quick__chks sp-plan-quick__chks--nums">' +
     '<input type="number" id="sp-lesson-from" class="sp-plan-quick__num" min="1" max="99" value="1" />' +
     '<span class="sp-plan-quick__til">~</span>' +
     '<input type="number" id="sp-lesson-to" class="sp-plan-quick__num" min="1" max="99" value="20" />' +
     '<button type="button" class="btn btn--primary sp-plan-quick__apply" id="sp-quick-apply">이 달에 반영</button>' +
     '<button type="button" class="btn btn--ghost sp-plan-quick__clear" id="sp-quick-clear">이 달 지우기</button>' +
-    '</div></section>' +
+    '</div></div></div></section>' +
     '<div class="sp-plan-month" id="sp-plan-month-wrap">' +
     '<div class="sp-plan-month__head">' +
     '<button type="button" class="btn btn--ghost sp-plan-month__nav" data-nav="-1" aria-label="이전 달">‹</button>' +
@@ -1352,6 +1474,17 @@ function renderCalendar_(root, boot) {
     slot.addEventListener('click', function (e) {
       const t = /** @type {HTMLElement|null} */ (e.target instanceof HTMLElement ? e.target : null);
       if (!t) return;
+      const quickToggle = t.id === 'sp-quick-toggle' ? t : t.closest ? t.closest('#sp-quick-toggle') : null;
+      if (quickToggle) {
+        const sec = slot.querySelector('#sp-plan-quick-reg');
+        const btn = slot.querySelector('#sp-quick-toggle');
+        if (sec && btn) {
+          const nowCollapsed = sec.classList.toggle('is-collapsed');
+          st.quickRegCollapsed = nowCollapsed;
+          btn.setAttribute('aria-expanded', nowCollapsed ? 'false' : 'true');
+        }
+        return;
+      }
       const quickApply = t.id === 'sp-quick-apply' ? t : t.closest ? t.closest('#sp-quick-apply') : null;
       const quickClear = t.id === 'sp-quick-clear' ? t : t.closest ? t.closest('#sp-quick-clear') : null;
       if (quickApply || quickClear) {

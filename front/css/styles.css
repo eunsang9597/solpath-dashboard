@@ -2943,7 +2943,7 @@ button.sp-stu-remark__item--open:hover {
   color: #1e293b;
   font-weight: 600;
   line-height: 1.5;
-  max-width: min(100%, 52rem);
+  max-width: 100%;
 }
 
 #solpath-plan-root .app-shell--plan .sp-plan-app-main {
@@ -2952,6 +2952,15 @@ button.sp-stu-remark__item--open:hover {
 
 #solpath-plan-root .app-shell--plan .sp-plan-body {
   margin-top: 0;
+}
+
+/* 플래너: 좌우 여백 줄여 가용 폭 확보 */
+#solpath-plan-root .app-shell--plan {
+  padding: 0.85rem 0.55rem 1.35rem;
+}
+
+#solpath-plan-root .app-shell--plan .panel--hero.sp-plan-body {
+  padding: 1.05rem 1.05rem 1.1rem;
 }
 
 /* 플래너: 학생 정보(상담 표 형태, 월간 위 · DB 연동 전 목업) */
@@ -3013,6 +3022,50 @@ button.sp-stu-remark__item--open:hover {
   color: #0f172a;
   font-weight: 550;
   background: #fff;
+}
+
+#solpath-plan-root .sp-plan-student__pills {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+#solpath-plan-root .sp-plan-student__pill {
+  display: inline-flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.3rem 0.4rem;
+  padding: 0.38rem 0.55rem;
+  border-radius: 9px;
+  border: 1px solid #e2e8f0;
+  background: #f1f5f9;
+  box-sizing: border-box;
+  max-width: 100%;
+  outline: none;
+}
+
+#solpath-plan-root .sp-plan-student__pill:focus-visible {
+  border-color: #6366f1;
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.22);
+}
+
+#solpath-plan-root .sp-plan-student__pill-lbl {
+  flex: 0 0 auto;
+  font-size: calc(0.68rem + var(--sp-text-bump));
+  font-weight: 800;
+  color: #64748b;
+  letter-spacing: -0.02em;
+}
+
+#solpath-plan-root .sp-plan-student__pill-val {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: calc(0.8rem + var(--sp-text-bump));
+  font-weight: 650;
+  color: #0f172a;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
 }
 
 #solpath-plan-root .sp-plan-student__tr--study th,
@@ -3332,10 +3385,70 @@ button.sp-stu-remark__item--open:hover {
 
 #solpath-plan-root .sp-plan-quick__head {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: 0.5rem;
   margin-bottom: 0.45rem;
+}
+
+#solpath-plan-root .sp-plan-quick.is-collapsed .sp-plan-quick__head {
+  margin-bottom: 0;
+}
+
+#solpath-plan-root .sp-plan-quick__headL {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+#solpath-plan-root .sp-plan-quick__collapse {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 1.65rem;
+  height: 1.65rem;
+  margin: 0;
+  padding: 0;
+  border: 1px solid #ddd6fe;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #5b21b6;
+  cursor: pointer;
+  line-height: 1;
+  box-sizing: border-box;
+}
+
+#solpath-plan-root .sp-plan-quick__collapse:hover {
+  border-color: #a78bfa;
+  background: #faf5ff;
+}
+
+#solpath-plan-root .sp-plan-quick__collapse:focus-visible {
+  outline: 2px solid #7c3aed;
+  outline-offset: 2px;
+}
+
+#solpath-plan-root .sp-plan-quick__chev {
+  display: inline-block;
+  font-size: 0.55rem;
+  line-height: 1;
+  transition: transform 0.16s ease;
+}
+
+#solpath-plan-root .sp-plan-quick.is-collapsed .sp-plan-quick__chev {
+  transform: rotate(-90deg);
+}
+
+#solpath-plan-root .sp-plan-quick__body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+#solpath-plan-root .sp-plan-quick.is-collapsed .sp-plan-quick__body {
+  display: none;
 }
 
 #solpath-plan-root .sp-plan-quick__title {
@@ -3351,22 +3464,54 @@ button.sp-stu-remark__item--open:hover {
 }
 
 #solpath-plan-root .sp-plan-quick__err {
-  margin: 0 0 0.4rem;
+  margin: 0;
   font-size: calc(0.72rem + var(--sp-text-bump));
   color: #b91c1c;
   font-weight: 650;
 }
 
-#solpath-plan-root .sp-plan-quick__row {
+#solpath-plan-root .sp-plan-quick__row--horiz {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
-  gap: 0.35rem 0.5rem;
-  margin-top: 0.35rem;
+  gap: 0.45rem;
+  margin-top: 0;
 }
 
-#solpath-plan-root .sp-plan-quick__row--nums {
+#solpath-plan-root .sp-plan-quick__row--horiz .sp-plan-quick__lbl {
+  flex: 0 0 auto;
+  align-self: center;
+}
+
+#solpath-plan-root .sp-plan-quick__chks {
+  display: flex;
+  flex-wrap: nowrap;
   align-items: center;
+  gap: 0.35rem 0.55rem;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  padding: 0.1rem 0;
+  box-sizing: border-box;
+}
+
+#solpath-plan-root .sp-plan-quick__chks--nums {
+  flex-wrap: nowrap;
+  gap: 0.4rem 0.5rem;
+}
+
+#solpath-plan-root .sp-plan-quick__chks--nums .sp-plan-quick__num,
+#solpath-plan-root .sp-plan-quick__chks--nums .sp-plan-quick__til {
+  flex-shrink: 0;
+}
+
+#solpath-plan-root .sp-plan-quick__chks--nums .sp-plan-quick__apply,
+#solpath-plan-root .sp-plan-quick__chks--nums .sp-plan-quick__clear {
+  flex-shrink: 0;
+  margin-left: 0;
+  white-space: nowrap;
 }
 
 #solpath-plan-root .sp-plan-quick__lbl {
@@ -3379,6 +3524,7 @@ button.sp-stu-remark__item--open:hover {
 
 #solpath-plan-root .sp-plan-quick__chk {
   display: inline-flex;
+  flex: 0 0 auto;
   align-items: center;
   gap: 0.2rem;
   font-size: calc(0.72rem + var(--sp-text-bump));
@@ -3386,15 +3532,12 @@ button.sp-stu-remark__item--open:hover {
   color: #334155;
   cursor: pointer;
   user-select: none;
+  white-space: nowrap;
 }
 
 #solpath-plan-root .sp-plan-quick__chk input {
   margin: 0;
   accent-color: #7c3aed;
-}
-
-#solpath-plan-root .sp-plan-quick__dows .sp-plan-quick__chk {
-  margin-right: 0.15rem;
 }
 
 #solpath-plan-root .sp-plan-quick__num {
@@ -3410,11 +3553,6 @@ button.sp-stu-remark__item--open:hover {
 #solpath-plan-root .sp-plan-quick__til {
   color: #94a3b8;
   font-weight: 700;
-}
-
-#solpath-plan-root .sp-plan-quick__apply,
-#solpath-plan-root .sp-plan-quick__clear {
-  margin-left: 0.25rem;
 }
 
 #solpath-plan-root .sp-plan-month {
@@ -3492,9 +3630,9 @@ button.sp-stu-remark__item--open:hover {
 
 #solpath-plan-root .sp-plan-month__weekRow {
   display: grid;
-  grid-template-columns: minmax(17rem, 24rem) repeat(7, 1fr);
+  grid-template-columns: minmax(14rem, 19rem) repeat(7, 1fr);
   gap: 0.35rem;
-  min-height: 6.5rem;
+  min-height: 5.8rem;
   align-items: stretch;
 }
 
@@ -3510,7 +3648,7 @@ button.sp-stu-remark__item--open:hover {
   border-radius: 10px;
   border: 1px solid #d8b4fe;
   background: linear-gradient(165deg, #f3e8ff 0%, #ede9fe 55%, #e9d5ff 100%);
-  padding: 0.35rem 0.4rem;
+  padding: 0.3rem 0.35rem;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -3543,7 +3681,7 @@ button.sp-stu-remark__item--open:hover {
   color: #4c1d95;
   font-weight: 800;
   text-align: center;
-  padding: 0.28rem 0.25rem;
+  padding: 0.22rem 0.22rem;
   border: 1px solid #ddd6fe;
   line-height: 1.2;
 }
@@ -3551,7 +3689,7 @@ button.sp-stu-remark__item--open:hover {
 #solpath-plan-root .sp-plan-cur__tbl tbody th,
 #solpath-plan-root .sp-plan-cur__tbl tbody td {
   border: 1px solid #e2e8f0;
-  padding: 0.28rem 0.32rem;
+  padding: 0.2rem 0.26rem;
   vertical-align: middle;
   line-height: 1.35;
 }
@@ -3588,6 +3726,10 @@ button.sp-stu-remark__item--open:hover {
   width: 4.5rem;
 }
 
+#solpath-plan-root .sp-plan-cur__thLink {
+  width: 3.25rem;
+}
+
 #solpath-plan-root .sp-plan-cur__goal {
   word-break: keep-all;
   overflow-wrap: anywhere;
@@ -3598,6 +3740,22 @@ button.sp-stu-remark__item--open:hover {
   font-weight: 750;
   color: #0f172a;
   white-space: nowrap;
+}
+
+#solpath-plan-root .sp-plan-cur__link {
+  text-align: center;
+  white-space: nowrap;
+}
+
+#solpath-plan-root .sp-plan-cur__a {
+  display: inline-block;
+  width: 1.6rem;
+  height: 1.6rem;
+  border-radius: 8px;
+  border: 1px dashed #cbd5e1;
+  background: transparent;
+  box-sizing: border-box;
+  pointer-events: none;
 }
 
 #solpath-plan-root .sp-plan-month__weekMeta-range {
