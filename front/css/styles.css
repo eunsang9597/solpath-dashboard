@@ -3453,7 +3453,7 @@ button.sp-stu-remark__item--open:hover {
 
 /* 요일·과목: .chks 래퍼를 contents로 없애 라벨들이 한 flex 줄에만 gap으로 붙음 */
 #solpath-plan-root .sp-plan-quick__row--horiz:not(.sp-plan-quick__row--nums) {
-  display: flex;
+  display: flex ;
   flex-direction: row;
   flex-wrap: wrap;
   align-items: center;
@@ -3465,7 +3465,11 @@ button.sp-stu-remark__item--open:hover {
 }
 
 #solpath-plan-root .sp-plan-quick__row--horiz:not(.sp-plan-quick__row--nums) .sp-plan-quick__chks {
-  display: contents;
+  display: flex !important;
+  flex-direction: row !important;
+  flex-wrap: nowrap !important;
+  align-items: center !important;
+  gap: 0.35rem 0.45rem !important;
 }
 
 #solpath-plan-root .sp-plan-quick__row--horiz.sp-plan-quick__row--nums {
@@ -3611,7 +3615,7 @@ button.sp-stu-remark__item--open:hover {
 
 #solpath-plan-root .sp-plan-month__dow {
   display: grid;
-  grid-template-columns: minmax(22rem, 28rem) repeat(7, minmax(10.5rem, 1fr));
+  grid-template-columns: minmax(22rem, 28rem) repeat(7, minmax(7.5rem, 1fr)) !important;
   gap: 0.3rem;
   padding: 0 0.05rem;
   align-items: center;
@@ -3659,7 +3663,7 @@ button.sp-stu-remark__item--open:hover {
 
 #solpath-plan-root .sp-plan-month__weekRow {
   display: grid;
-  grid-template-columns: minmax(22rem, 28rem) repeat(7, minmax(10.5rem, 1fr));
+  grid-template-columns: minmax(22rem, 28rem) repeat(7, minmax(7.5rem, 1fr)) !important;
   gap: 0.3rem;
   min-height: 5.8rem;
   align-items: stretch;
@@ -3817,9 +3821,9 @@ button.sp-stu-remark__item--open:hover {
   flex-direction: column;
   gap: 0.28rem;
   box-sizing: border-box;
-  min-width: 11rem;
+  min-width: 7.5rem !important;  
   width: 100%;
-  max-width: 100%;
+  max-width: none !important;
   position: relative;
   overflow-x: auto;
   overflow-y: visible;
@@ -4034,6 +4038,10 @@ button.sp-stu-remark__item--open:hover {
   cursor: grab;
 }
 
+#solpath-plan-root .sp-plan-day__todoRow:first-child {
+  border-top: 0;
+}
+
 #solpath-plan-root .sp-plan-day__todoRow:active {
   cursor: grabbing;
 }
@@ -4150,8 +4158,6 @@ button.sp-stu-remark__item--open:hover {
   outline: 2px solid #7c3aed;
   outline-offset: -2px;
   background: #faf5ff;
-}
-  border-top: 0;
 }
 
 #solpath-plan-root .sp-plan-day__todoTxt {
