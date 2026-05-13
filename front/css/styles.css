@@ -3008,12 +3008,20 @@ button.sp-stu-remark__item--open:hover {
 }
 
 #solpath-plan-root .sp-plan-gate {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-inline: auto;
   padding: 1rem 0 1.25rem;
-  max-width: min(100%, 26rem);
+  max-width: min(100%, 28rem);
+  box-sizing: border-box;
 }
 
 #solpath-plan-root .sp-plan-gate__lead {
   margin: 0 0 0.5rem;
+  width: 100%;
+  max-width: 24rem;
+  text-align: center;
   font-size: calc(0.82rem + var(--sp-text-bump));
   color: #334155;
   line-height: 1.5;
@@ -3021,30 +3029,40 @@ button.sp-stu-remark__item--open:hover {
 
 #solpath-plan-root .sp-plan-gate__privacy {
   margin: 0 0 1rem;
+  width: 100%;
+  max-width: 24rem;
+  text-align: center;
   font-size: calc(0.72rem + var(--sp-text-bump));
   color: #64748b;
   line-height: 1.45;
 }
 
 #solpath-plan-root .sp-plan-gate__fields {
+  display: flex;
+  justify-content: center;
   width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 #solpath-plan-root .sp-plan-gate__row {
-  display: flex;
-  flex-wrap: wrap;
+  display: inline-flex;
+  flex-wrap: nowrap;
   align-items: flex-end;
-  justify-content: space-between;
-  gap: 0.55rem 1rem;
-  width: 100%;
+  justify-content: center;
+  gap: 0.75rem 1.25rem;
+  max-width: 100%;
 }
 
 #solpath-plan-root .sp-plan-gate__nameCol,
 #solpath-plan-root .sp-plan-gate__phoneCol {
   display: flex;
   flex-direction: column;
+  flex: 0 0 auto;
   align-items: stretch;
   gap: 0.28rem;
+  min-width: 0;
 }
 
 #solpath-plan-root .sp-plan-gate__phoneCol {
@@ -3056,6 +3074,7 @@ button.sp-stu-remark__item--open:hover {
   font-weight: 600;
   color: #1e293b;
   line-height: 1.2;
+  text-align: inherit;
 }
 
 #solpath-plan-root .sp-plan-gate__label {
@@ -3067,13 +3086,14 @@ button.sp-stu-remark__item--open:hover {
 #solpath-plan-root .sp-plan-gate__phone {
   display: flex;
   align-items: center;
+  flex-wrap: nowrap;
   gap: 0.35rem;
-  flex-wrap: wrap;
 }
 
 #solpath-plan-root .sp-plan-gate__dash {
   color: #94a3b8;
   font-weight: 600;
+  flex-shrink: 0;
 }
 
 #solpath-plan-root .sp-plan-gate__input {
@@ -3089,25 +3109,30 @@ button.sp-stu-remark__item--open:hover {
   width: 3ch;
   min-width: 2.65rem;
   max-width: 3.35rem;
+  flex-shrink: 0;
 }
 
 #solpath-plan-root .sp-plan-gate__input--seg4 {
   width: 4ch;
   min-width: 3.15rem;
   max-width: 4.1rem;
+  flex-shrink: 0;
 }
 
 #solpath-plan-root .sp-plan-gate__input--name {
-  width: 12ch;
-  min-width: 7.5rem;
-  max-width: 14rem;
+  width: 9ch;
+  min-width: 5rem;
+  max-width: 10.5rem;
   text-align: left;
-  padding-left: 0.5rem;
-  padding-right: 0.5rem;
+  padding-left: 0.45rem;
+  padding-right: 0.45rem;
 }
 
 #solpath-plan-root .sp-plan-gate__err {
   margin: 0.5rem 0 0;
+  width: 100%;
+  max-width: 24rem;
+  text-align: center;
   font-size: calc(0.78rem + var(--sp-text-bump));
   color: #b71c1c;
   line-height: 1.4;
@@ -3115,6 +3140,7 @@ button.sp-stu-remark__item--open:hover {
 
 #solpath-plan-root .sp-plan-gate__btn {
   margin-top: 0.85rem;
+  align-self: center;
 }
 
 #solpath-plan-root .app-shell--plan .sp-plan-banner {
