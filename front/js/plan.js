@@ -207,6 +207,180 @@ function esc(s) {
     .replace(/"/g, '&quot;');
 }
 
+/**
+ * `plannerBootstrap.data.student_profile` 에 대응하는 **목업 객체** (필드명은 API 맞출 때 그대로 쓰면 됨).
+ * @type {Record<string, string>}
+ */
+const MOCK_PLANNER_STUDENT_PROFILE = {
+  display_name: '김솔패',
+  phone_display: '010-2345-6789',
+  track: '인문',
+  admission_type: '일반',
+  prev_university: '○○대학교',
+  prev_major_gpa: '국어국문학과 · 평점 3.82 / 4.5',
+  goal_university: '서울대학교',
+  goal_department: '경영학부',
+  study_status: '노배이스 처음시작'
+};
+
+/**
+ * API가 일부 필드만 줄 때 목업과 병합.
+ * @param {Record<string, unknown>|null|undefined} apiPartial
+ * @returns {Record<string, string>}
+ */
+function plannerMergeStudentProfile_(apiPartial) {
+  const o = apiPartial && typeof apiPartial === 'object' ? /** @type {Record<string, unknown>} */ (apiPartial) : {};
+  const m = MOCK_PLANNER_STUDENT_PROFILE;
+  /** @param {string} k */
+  function pick(k) {
+    const v = o[k];
+    if (v != null && String(v).trim()) return String(v);
+    return m[k] != null ? m[k] : '';
+  }
+  return {
+    display_name: pick('display_name'),
+    phone_display: pick('phone_display'),
+    track: pick('track'),
+    admission_type: pick('admission_type'),
+    prev_university: pick('prev_university'),
+    prev_major_gpa: pick('prev_major_gpa'),
+    goal_university: pick('goal_university'),
+    goal_department: pick('goal_department'),
+    study_status: pick('study_status')
+  };
+}
+
+/**
+ * 학생 정보 표 — **데이터 객체만** 받아 DOM 생성 (HTML에 문구 박지 않음).
+ * @param {HTMLElement} root
+ * @param {Record<string, unknown>|null|undefined} profile API `student_profile` 또는 null(목업만)
+ */
+function renderPlannerStudentProfile_(root, profile) {
+  const tbody = root.querySelector('#sp-plan-student-tbody');
+  if (!tbody) return;
+  const p = plannerMergeStudentProfile_(profile);
+  tbody.innerHTML =
+    '<tr>' +
+    '<th scope="row">이름</th>' +
+    '<td data-sp-plan-student="display_name">' +
+    esc(p.display_name) +
+    '</td>' +
+    '<th scope="row">휴대전화</th>' +
+    '<td data-sp-plan-student="phone_display">' +
+    esc(p.phone_display) +
+    '</td>' +
+    '</tr>' +
+    '<tr>' +
+    '<th scope="row">계열</th>' +
+    '<td data-sp-plan-student="track">' +
+    esc(p.track) +
+    '</td>' +
+    '<th scope="row">편입 구분</th>' +
+    '<td data-sp-plan-student="admission_type">' +
+    esc(p.admission_type) +
+    '</td>' +
+    '</tr>' +
+    '<tr>' +
+    '<th scope="row">전적대</th>' +
+    '<td colspan="3" data-sp-plan-student="prev_university">' +
+    esc(p.prev_university) +
+    '</td>' +
+    '</tr>' +
+    '<tr>' +
+    '<th scope="row">전적대 학과 · 학점</th>' +
+    '<td colspan="3" data-sp-plan-student="prev_major_gpa">' +
+    esc(p.prev_major_gpa) +
+    '</td>' +
+    '</tr>' +
+    '<tr>' +
+    '<th scope="row">목표대학</th>' +
+    '<td data-sp-plan-student="goal_university">' +
+    esc(p.goal_university) +
+    '</td>' +
+    '<th scope="row">목표 학과</th>' +
+    '<td data-sp-plan-student="goal_department">' +
+    esc(p.goal_department) +
+    '</td>' +
+    '</tr>' +
+    '<tr class="sp-plan-student__tr--study">' +
+    '<th scope="row">공부 현황</th>' +
+    '<td colspan="3" class="sp-plan-student__td--text" data-sp-plan-student="study_status">' +
+    esc(p.study_status) +
+    '</td>' +
+    '</tr>';
+}
+
+/**
+ * 주간 커리큘럼 한 블록 — API에서 내려올 **JSON 형태** 목업 (`rows[]`).
+ * @typedef {{ subject: string, textbook_goal: string, lesson_outline: string }} PlannerCurriculumRowPayload
+ * @typedef {{ source: string, week_index: number, focus_phase: string, rows: PlannerCurriculumRowPayload[] }} PlannerCurriculumWeekPayload
+ */
+
+/**
+ * @param {number} weekIndex 0..5
+ * @returns {PlannerCurriculumWeekPayload}
+ */
+function plannerCurriculumMockWeekPayload_(weekIndex) {
+  const phases = ['기본 개념·예문', '오답·심화', '실전 모의', '누적 복습', '약점 보완', '월말 정리'];
+  const phase = phases[weekIndex % phases.length];
+  return {
+    source: 'mock',
+    week_index: weekIndex,
+    focus_phase: phase,
+    rows: [
+      {
+        subject: '문법',
+        textbook_goal: '솔패스 문법 교재 · ' + phase,
+        lesson_outline: '1강~20강'
+      },
+      {
+        subject: '논리',
+        textbook_goal: '논리 추론 기초 교재 · ' + phase,
+        lesson_outline: '1강~20강'
+      },
+      {
+        subject: '독해',
+        textbook_goal: '실전 지문 독해 · ' + phase,
+        lesson_outline: '1강~20강'
+      }
+    ]
+  };
+}
+
+/**
+ * `PlannerCurriculumWeekPayload` → 표 HTML (내용은 전부 `esc` 처리).
+ * @param {PlannerCurriculumWeekPayload} payload
+ * @returns {string}
+ */
+function plannerCurriculumWeekTableHtml_(payload) {
+  let body = '';
+  (payload.rows || []).forEach(function (r) {
+    body +=
+      '<tr><th scope="row">' +
+      esc(r.subject) +
+      '</th><td class="sp-plan-cur__goal">' +
+      esc(r.textbook_goal) +
+      '</td><td class="sp-plan-cur__outline">' +
+      esc(r.lesson_outline) +
+      '</td></tr>';
+  });
+  return (
+    '<div class="sp-plan-cur" data-sp-plan-cur-source="' +
+    esc(payload.source) +
+    '" data-sp-plan-cur-week="' +
+    String(payload.week_index) +
+    '">' +
+    '<table class="sp-plan-cur__tbl">' +
+    '<thead><tr>' +
+    '<th scope="col" class="sp-plan-cur__thCat">구분</th>' +
+    '<th scope="col">교재명 · 학습 목표</th>' +
+    '<th scope="col" class="sp-plan-cur__thOut">목차</th>' +
+    '</tr></thead><tbody>' +
+    body +
+    '</tbody></table></div>'
+  );
+}
+
 const PLAN_DEV_HTML = `<div class="sp-plan-devbar" id="sp-plan-devbar" role="region" aria-label="제작용 도구">
   <span class="sp-plan-devbar__label">제작용</span>
   <button type="button" class="btn btn--ghost sp-plan-devbar__btn" id="sp-plan-dev-skip-gate" title="전화·이름 확인 없이 메인 화면만 표시합니다. (추적·GAS 호출 없음)">원페이지만(게이트 생략)</button>
@@ -229,6 +403,15 @@ const PLAN_APP_HTML = `<div class="app-shell app-shell--plan">
   <main class="app-main sp-plan-app-main">
     <p class="sp-plan-banner" id="sp-plan-banner" hidden></p>
     <div class="panel panel--hero sp-plan-body">
+      <section class="sp-plan-student" id="sp-plan-student-info" aria-labelledby="sp-plan-student-info-title">
+        <h2 class="sp-plan-student__title" id="sp-plan-student-info-title">학생 정보</h2>
+        <p class="sp-plan-student__hint">추후 학생 DB와 연동 예정 · 현재 표시는 시연용 목업입니다.</p>
+        <div class="sp-plan-student__wrap">
+          <table class="sp-plan-student__tbl">
+            <tbody id="sp-plan-student-tbody"></tbody>
+          </table>
+        </div>
+      </section>
       <div class="sp-plan-monthly-title" id="sp-plan-monthly-label">월간 플랜</div>
       <div class="sp-plan-calendar-slot" id="sp-plan-calendar-slot" role="region" aria-labelledby="sp-plan-monthly-label"></div>
     </div>
@@ -411,6 +594,415 @@ function wirePlanPhoneDigitsOnly_(root) {
   });
 }
 
+/** 일일 타임라인: 06:00~22:00, 30분 칸 (저장 없음 · 프론트만) */
+const PLAN_TIMELINE_START_H = 6;
+const PLAN_TIMELINE_END_H = 22;
+const PLAN_TIMELINE_STEP_MIN = 30;
+
+function plannerPad2_(n) {
+  return String(n < 10 ? '0' : '') + String(n);
+}
+
+function plannerYmdFromParts_(y, m0, day) {
+  return String(y) + '-' + plannerPad2_(m0 + 1) + '-' + plannerPad2_(day);
+}
+
+function plannerMonthYmdPrefix_(viewMonth) {
+  return String(viewMonth.getFullYear()) + '-' + plannerPad2_(viewMonth.getMonth() + 1) + '-';
+}
+
+/**
+ * @param {object} st
+ * @param {Date} viewMonth
+ */
+function plannerMonthHasQuickPlan_(st, viewMonth) {
+  const pfx = plannerMonthYmdPrefix_(viewMonth);
+  if (!st.quickPlanByDate) return false;
+  return Object.keys(st.quickPlanByDate).some(function (k) {
+    return k.indexOf(pfx) === 0 && st.quickPlanByDate[k] && st.quickPlanByDate[k].length > 0;
+  });
+}
+
+/**
+ * @param {object} st
+ * @param {Date} viewMonth
+ */
+function plannerClearQuickPlanForMonth_(st, viewMonth) {
+  if (!st.quickPlanByDate) st.quickPlanByDate = {};
+  const pfx = plannerMonthYmdPrefix_(viewMonth);
+  Object.keys(st.quickPlanByDate).forEach(function (k) {
+    if (k.indexOf(pfx) === 0) delete st.quickPlanByDate[k];
+  });
+}
+
+/**
+ * @param {object} st
+ * @param {string} ymd
+ */
+function plannerAssignedMinutesForDay_(st, ymd) {
+  const slots = st.dayTimelineTodoByDate && st.dayTimelineTodoByDate[ymd];
+  if (!slots) return 0;
+  let n = 0;
+  Object.keys(slots).forEach(function (k) {
+    if (slots[k]) n++;
+  });
+  return n * PLAN_TIMELINE_STEP_MIN;
+}
+
+/**
+ * @param {object} st
+ * @param {Date} viewMonth
+ * @param {number[]} weekdays 0=일 … 6=토
+ * @param {string[]} subjects grammar|logic|read|vocab
+ * @param {number} fromL
+ * @param {number} toL
+ */
+function plannerApplyQuickPlanToState_(st, viewMonth, weekdays, subjects, fromL, toL) {
+  plannerClearQuickPlanForMonth_(st, viewMonth);
+  const y = viewMonth.getFullYear();
+  const m0 = viewMonth.getMonth();
+  const last = new Date(y, m0 + 1, 0).getDate();
+  const dates = [];
+  for (let day = 1; day <= last; day++) {
+    const dd = new Date(y, m0, day);
+    if (weekdays.indexOf(dd.getDay()) >= 0) {
+      dates.push(plannerYmdFromParts_(y, m0, day));
+    }
+  }
+  if (!dates.length || !subjects.length) return;
+  const lo = Math.min(Number(fromL) || 1, Number(toL) || 1);
+  const hi = Math.max(Number(fromL) || 1, Number(toL) || 1);
+  const tasks = [];
+  subjects.forEach(function (subj) {
+    for (let L = lo; L <= hi; L++) {
+      tasks.push({ subject: subj, lesson: L });
+    }
+  });
+  if (!st.quickPlanByDate) st.quickPlanByDate = {};
+  /** 선택한 요일이 도는 날짜마다 동일한 과목·강 목록을 한 번씩 붙인다(저장 없음 · 프론트만). */
+  dates.forEach(function (key) {
+    if (!st.quickPlanByDate[key]) st.quickPlanByDate[key] = [];
+    tasks.forEach(function (t) {
+      st.quickPlanByDate[key].push({ subject: t.subject, lesson: t.lesson });
+    });
+  });
+}
+
+/** @param {Record<string, unknown>} legacy */
+function plannerMigrateLegacySlotsToTodo_(legacy) {
+  const out = {};
+  if (!legacy || typeof legacy !== 'object') return out;
+  Object.keys(legacy).forEach(function (k) {
+    const v = legacy[k];
+    if (typeof v === 'boolean') {
+      if (v) out[k] = '';
+    } else if (typeof v === 'string') {
+      out[k] = v;
+    }
+  });
+  return out;
+}
+
+/** @param {string} id */
+function plannerTodoSlotClassSuffix_(id) {
+  return /^(grammar|logic|read|vocab)$/.test(id) ? id : 'misc';
+}
+
+function plannerTimelineSlotCount_() {
+  return ((PLAN_TIMELINE_END_H - PLAN_TIMELINE_START_H) * 60) / PLAN_TIMELINE_STEP_MIN;
+}
+
+/** @param {number} i */
+function plannerTimelineSlotLabel_(i) {
+  const t0 = PLAN_TIMELINE_START_H * 60 + i * PLAN_TIMELINE_STEP_MIN;
+  const t1 = t0 + PLAN_TIMELINE_STEP_MIN;
+  const h0 = Math.floor(t0 / 60);
+  const m0 = t0 % 60;
+  const h1 = Math.floor(t1 / 60);
+  const m1 = t1 % 60;
+  return plannerPad2_(h0) + ':' + plannerPad2_(m0) + '–' + plannerPad2_(h1) + ':' + plannerPad2_(m1);
+}
+
+/**
+ * @param {object} st
+ * @param {string} d
+ * @returns {Record<string, string>} 슬롯 인덱스 → todoId(또는 빈 문자열)
+ */
+function plannerEnsureTimelineTodoSlots_(st, d) {
+  if (!st.dayTimelineTodoByDate) st.dayTimelineTodoByDate = {};
+  if (!st.dayTimelineTodoByDate[d]) {
+    const leg = st.dayTimelineSlotsByDate && st.dayTimelineSlotsByDate[d];
+    st.dayTimelineTodoByDate[d] = leg ? plannerMigrateLegacySlotsToTodo_(leg) : {};
+    if (leg && st.dayTimelineSlotsByDate) {
+      try {
+        delete st.dayTimelineSlotsByDate[d];
+      } catch (_e) {
+        st.dayTimelineSlotsByDate[d] = {};
+      }
+    }
+  }
+  return st.dayTimelineTodoByDate[d];
+}
+
+/**
+ * @param {object} st
+ * @param {string} d
+ * @returns {string[]}
+ */
+function plannerEnsureTodoOrder_(st, d) {
+  if (!st.dayTodoOrderByDate) st.dayTodoOrderByDate = {};
+  if (!st.dayTodoOrderByDate[d]) {
+    st.dayTodoOrderByDate[d] = ['grammar', 'logic', 'read', 'vocab'];
+  }
+  return st.dayTodoOrderByDate[d];
+}
+
+/** 일일 todo 카탈로그 — API `personal[]` 등으로 치환 시 `task_id` 키만 맞추면 됨. @type {Record<string, { cat: string, cls: string, txt: string, time: string }>} */
+const MOCK_PLANNER_TODO_CATALOG = {
+  grammar: { cat: '문법', cls: 'sp-plan-chip--grammar', txt: '핵심 문법 단원 복습 · 예문 정리', time: '45M' },
+  logic: { cat: '논리', cls: 'sp-plan-chip--logic', txt: '논리 추론 유형별 풀이', time: '50M' },
+  read: { cat: '독해', cls: 'sp-plan-chip--read', txt: '실전 지문 2편 · 시간 재기', time: '1H' },
+  vocab: { cat: '어휘', cls: 'sp-plan-chip--vocab', txt: 'day1 ~ day30', time: '30M' }
+};
+
+/**
+ * @param {string[]} orderIds
+ * @param {string} [brushTodoId]
+ * @returns {string}
+ */
+function plannerDayTodosHtmlFromOrder_(orderIds, brushTodoId) {
+  const brush = brushTodoId != null ? String(brushTodoId) : '';
+  let h = '';
+  orderIds.forEach(function (id) {
+    const r = MOCK_PLANNER_TODO_CATALOG[id];
+    if (!r) return;
+    const isB = Boolean(brush && id === brush);
+    h +=
+      '<div class="sp-plan-day__todoRow' +
+      (isB ? ' is-brush' : '') +
+      '" draggable="true" data-todo-id="' +
+      esc(id) +
+      '">' +
+      '<span class="sp-plan-chip ' +
+      esc(r.cls) +
+      '">' +
+      esc(r.cat) +
+      '</span>' +
+      '<span class="sp-plan-day__todoTxt">' +
+      esc(r.txt) +
+      '</span>' +
+      '<span class="sp-plan-day__todoTime">' +
+      esc(r.time) +
+      '</span></div>';
+  });
+  return h;
+}
+
+/**
+ * @param {object} st
+ * @param {string} dateYmd
+ * @returns {string}
+ */
+function plannerDayTimelineHtml_(st, dateYmd) {
+  const slots = plannerEnsureTimelineTodoSlots_(st, dateYmd);
+  const n = plannerTimelineSlotCount_();
+  let h = '';
+  for (let i = 0; i < n; i++) {
+    const k = String(i);
+    const tid = slots[k] ? String(slots[k]) : '';
+    const lab = plannerTimelineSlotLabel_(i);
+    const suf = tid ? plannerTodoSlotClassSuffix_(tid) : '';
+    h +=
+      '<div class="sp-plan-timegrid__row">' +
+      '<span class="sp-plan-timegrid__lbl">' +
+      esc(lab) +
+      '</span>' +
+      '<button type="button" tabindex="0" class="sp-plan-timecell' +
+      (tid ? ' is-on sp-plan-timecell--todo sp-plan-timecell--todo--' + suf : '') +
+      '" data-slot="' +
+      esc(k) +
+      '" aria-pressed="' +
+      (tid ? 'true' : 'false') +
+      '" aria-label="' +
+      esc(lab + (tid ? ' · ' + tid : '') + ' 구간') +
+      '"></button></div>';
+  }
+  return h;
+}
+
+/**
+ * @param {HTMLElement} root
+ * @param {HTMLButtonElement} btn
+ */
+function plannerPaintTimecellFromState_(root, btn) {
+  const st = root.__spPlanState;
+  if (!st || !st.selectedDate) return;
+  const slot = btn.getAttribute('data-slot');
+  if (slot == null) return;
+  const slots = plannerEnsureTimelineTodoSlots_(st, st.selectedDate);
+  const brush = st.modalBrushTodoId ? String(st.modalBrushTodoId) : '';
+  if (!brush) {
+    slots[slot] = '';
+  } else {
+    slots[slot] = brush;
+  }
+  const tid = slots[slot] ? String(slots[slot]) : '';
+  const i = Number(slot);
+  const lab = plannerTimelineSlotLabel_(isNaN(i) ? 0 : i);
+  const suf = tid ? plannerTodoSlotClassSuffix_(tid) : '';
+  btn.className =
+    'sp-plan-timecell' + (tid ? ' is-on sp-plan-timecell--todo sp-plan-timecell--todo--' + suf : '');
+  btn.setAttribute('aria-pressed', tid ? 'true' : 'false');
+  btn.setAttribute('aria-label', esc(lab + (tid ? ' · ' + tid : '') + ' 구간'));
+}
+
+/**
+ * 일일 모달: 할 일 순서 드래그 · 행 클릭=브러시 · 타임라인 칠하기(POST 없음)
+ * @param {HTMLElement} modalEl
+ * @param {HTMLElement} root
+ */
+function wirePlannerDayModalUiOnce_(modalEl, root) {
+  if (modalEl.__spPlanDayUiWired) return;
+  modalEl.__spPlanDayUiWired = true;
+  const todoList = modalEl.querySelector('#sp-plan-day-todo-list');
+  const timegrid = modalEl.querySelector('#sp-plan-day-timegrid');
+  if (!todoList || !timegrid) return;
+
+  let painting = false;
+  let lastPaintSlot = '';
+
+  todoList.addEventListener('click', function (e) {
+    const row = e.target && e.target.closest ? e.target.closest('.sp-plan-day__todoRow') : null;
+    if (!row || !todoList.contains(row)) return;
+    const id = row.getAttribute('data-todo-id') || '';
+    const st = root.__spPlanState;
+    if (!st) return;
+    st.modalBrushTodoId = st.modalBrushTodoId === id ? '' : id;
+    todoList.querySelectorAll('.sp-plan-day__todoRow').forEach(function (r) {
+      const rid = r.getAttribute('data-todo-id') || '';
+      r.classList.toggle('is-brush', Boolean(st.modalBrushTodoId) && rid === st.modalBrushTodoId);
+    });
+  });
+
+  todoList.addEventListener('dragstart', function (e) {
+    const row = e.target && e.target.closest ? e.target.closest('.sp-plan-day__todoRow') : null;
+    if (!row || !todoList.contains(row)) return;
+    const id = row.getAttribute('data-todo-id') || '';
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', id);
+    row.classList.add('is-dragging');
+    modalEl.__spDragTodoId = id;
+  });
+
+  todoList.addEventListener('dragend', function (e) {
+    const row = e.target && e.target.closest ? e.target.closest('.sp-plan-day__todoRow') : null;
+    if (row) row.classList.remove('is-dragging');
+    modalEl.__spDragTodoId = '';
+  });
+
+  todoList.addEventListener('dragover', function (e) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  });
+
+  todoList.addEventListener('drop', function (e) {
+    e.preventDefault();
+    const st = root.__spPlanState;
+    if (!st || !st.selectedDate) return;
+    const draggedId =
+      (modalEl.__spDragTodoId && String(modalEl.__spDragTodoId)) ||
+      (e.dataTransfer ? String(e.dataTransfer.getData('text/plain') || '') : '');
+    if (!draggedId) return;
+    const targetRow = /** @type {HTMLElement|null} */ (e.target && e.target.closest ? e.target.closest('.sp-plan-day__todoRow') : null);
+    if (!targetRow || !todoList.contains(targetRow)) return;
+    const targetId = targetRow.getAttribute('data-todo-id') || '';
+    if (!targetId || draggedId === targetId) return;
+    const order = plannerEnsureTodoOrder_(st, st.selectedDate).slice();
+    const from = order.indexOf(draggedId);
+    const to = order.indexOf(targetId);
+    if (from < 0 || to < 0) return;
+    order.splice(from, 1);
+    order.splice(to, 0, draggedId);
+    st.dayTodoOrderByDate[st.selectedDate] = order;
+    todoList.innerHTML = plannerDayTodosHtmlFromOrder_(order, st.modalBrushTodoId || '');
+    todoList.querySelectorAll('.sp-plan-day__todoRow').forEach(function (r) {
+      const rid = r.getAttribute('data-todo-id') || '';
+      r.classList.toggle('is-brush', Boolean(st.modalBrushTodoId) && rid === st.modalBrushTodoId);
+    });
+  });
+
+  function endPaintGlobal() {
+    painting = false;
+    lastPaintSlot = '';
+    window.removeEventListener('pointerup', endPaintGlobal);
+    window.removeEventListener('pointercancel', endPaintGlobal);
+  }
+
+  timegrid.addEventListener('pointerdown', function (e) {
+    const btn = e.target && e.target.closest ? e.target.closest('.sp-plan-timecell') : null;
+    if (!btn || !timegrid.contains(btn) || !(btn instanceof HTMLButtonElement)) return;
+    painting = true;
+    lastPaintSlot = '';
+    plannerPaintTimecellFromState_(root, btn);
+    lastPaintSlot = btn.getAttribute('data-slot') || '';
+    window.addEventListener('pointerup', endPaintGlobal);
+    window.addEventListener('pointercancel', endPaintGlobal);
+  });
+
+  timegrid.addEventListener('pointermove', function (e) {
+    if (!painting) return;
+    const el = document.elementFromPoint(e.clientX, e.clientY);
+    const btn = el && el.closest ? el.closest('.sp-plan-timecell') : null;
+    if (!btn || !timegrid.contains(btn) || !(btn instanceof HTMLButtonElement)) return;
+    const sk = btn.getAttribute('data-slot') || '';
+    if (sk === lastPaintSlot) return;
+    lastPaintSlot = sk;
+    plannerPaintTimecellFromState_(root, btn);
+  });
+
+  timegrid.addEventListener('keydown', function (e) {
+    const btn = e.target && e.target.closest ? e.target.closest('.sp-plan-timecell') : null;
+    if (!btn || !timegrid.contains(btn) || !(btn instanceof HTMLButtonElement)) return;
+    if (e.key === ' ' || e.key === 'Spacebar') {
+      e.preventDefault();
+      const st = root.__spPlanState;
+      if (!st || !st.selectedDate) return;
+      const slot = btn.getAttribute('data-slot');
+      if (slot == null) return;
+      const slots = plannerEnsureTimelineTodoSlots_(st, st.selectedDate);
+      const cur = slots[slot] ? String(slots[slot]) : '';
+      if (cur) {
+        slots[slot] = '';
+      } else if (st.modalBrushTodoId) {
+        slots[slot] = String(st.modalBrushTodoId);
+      } else {
+        return;
+      }
+      plannerPaintTimecellFromState_(root, btn);
+    } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      const cells = Array.prototype.slice.call(timegrid.querySelectorAll('.sp-plan-timecell'));
+      const i = cells.indexOf(btn);
+      if (i < 0) return;
+      const next = e.key === 'ArrowDown' ? cells[i + 1] : cells[i - 1];
+      if (next instanceof HTMLButtonElement) {
+        next.focus();
+      }
+    }
+  });
+}
+
+/**
+ * 일일 모달 «오늘 할 일» — **프론트 목업만**. 추후 `plannerBootstrap.personal` 등으로 치환.
+ * @param {string} dateYmd
+ * @param {object} st
+ * @returns {string}
+ */
+function plannerDayTodosMockHtml_(dateYmd, st) {
+  const order = plannerEnsureTodoOrder_(st, dateYmd);
+  return plannerDayTodosHtmlFromOrder_(order, st.modalBrushTodoId || '');
+}
+
 /**
  * @param {HTMLElement} root
  * @param {{ role: string, common: object[], personal: object[] | null }} boot
@@ -446,13 +1038,30 @@ function renderCalendar_(root, boot) {
     byDate[d0] = (byDate[d0] || 0) + 1;
   });
 
-  /** @type {{ role: 'member'|'guest', viewMonth: Date, byDate: Record<string, number>, selectedDate: string|null }} */
+  const apiHadCalendarRows = common.length > 0 || personal.length > 0;
+
+  /** @type {{ role: 'member'|'guest', viewMonth: Date, byDate: Record<string, number>, selectedDate: string|null, apiHadCalendarRows: boolean, dayTodoOrderByDate?: Record<string, string[]>, dayTimelineSlotsByDate?: Record<string, Record<string, boolean>>, dayTimelineTodoByDate?: Record<string, Record<string, string>>, quickPlanByDate?: Record<string, { subject: string, lesson: number }[]>, modalBrushTodoId?: string }} */
   const st = (root.__spPlanState =
     root.__spPlanState && typeof root.__spPlanState === 'object'
       ? root.__spPlanState
-      : { role: role, viewMonth: new Date(), byDate: {}, selectedDate: null });
+      : {
+          role: role,
+          viewMonth: new Date(),
+          byDate: {},
+          selectedDate: null,
+          apiHadCalendarRows: false,
+          dayTodoOrderByDate: {},
+          dayTimelineSlotsByDate: {},
+          dayTimelineTodoByDate: {},
+          quickPlanByDate: {},
+          modalBrushTodoId: ''
+        });
   st.role = role;
   st.byDate = byDate;
+  st.apiHadCalendarRows = apiHadCalendarRows;
+  if (st.modalBrushTodoId == null) st.modalBrushTodoId = '';
+  if (!st.quickPlanByDate) st.quickPlanByDate = {};
+  if (!st.dayTimelineTodoByDate) st.dayTimelineTodoByDate = {};
   if (!(st.viewMonth instanceof Date) || isNaN(Number(st.viewMonth))) {
     st.viewMonth = new Date();
   }
@@ -472,6 +1081,42 @@ function renderCalendar_(root, boot) {
   }
 
   /** @param {Date} d */
+  function mdShort(d) {
+    return d.getMonth() + 1 + '/' + d.getDate();
+  }
+
+  /** 해당 주(일요일 기준) ISO 주차 — 시연용 메타 표시 */
+  function isoWeekNumber_(d) {
+    const x = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+    const dayNum = x.getUTCDay() || 7;
+    x.setUTCDate(x.getUTCDate() + 4 - dayNum);
+    const yearStart = new Date(Date.UTC(x.getUTCFullYear(), 0, 1));
+    return Math.ceil(((x.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+  }
+
+  /**
+   * 시트에 `start_date` 일정이 없을 때만: 월간 점·배지 시연 (실제 todo 모달 HTML 목업과 별개 파이프)
+   * @param {number} viewY
+   * @param {number} viewM 0–11
+   * @returns {Record<string, number>}
+   */
+  function plannerDemoDotsForViewMonth_(viewY, viewM) {
+    const out = {};
+    const pairs = [
+      [2, 1],
+      [5, 2],
+      [12, 1],
+      [18, 2],
+      [26, 3]
+    ];
+    pairs.forEach(function (pair) {
+      const key = viewY + '-' + pad2(viewM + 1) + '-' + pad2(pair[0]);
+      out[key] = pair[1];
+    });
+    return out;
+  }
+
+  /** @param {Date} d */
   function monthStartSunday(d) {
     const s = new Date(d.getFullYear(), d.getMonth(), 1);
     const wd = s.getDay(); // 0=Sun
@@ -482,29 +1127,65 @@ function renderCalendar_(root, boot) {
 
   function renderMonth_() {
     const view = st.viewMonth;
-    const title = slot.querySelector('.sp-plan-month__title');
+    const wrap = slot.querySelector('#sp-plan-month-wrap');
+    if (!wrap) return;
+    const title = wrap.querySelector('.sp-plan-month__title');
     if (title) title.textContent = ym(view);
 
-    const grid = slot.querySelector('.sp-plan-month__grid');
+    const grid = wrap.querySelector('.sp-plan-month__grid');
     if (!grid) return;
     const start = monthStartSunday(view);
     const viewY = view.getFullYear();
     const viewM = view.getMonth();
 
+    const hasQuick = plannerMonthHasQuickPlan_(st, view);
+    const demoByDate = st.apiHadCalendarRows || hasQuick ? {} : plannerDemoDotsForViewMonth_(viewY, viewM);
+
     let html = '';
-    for (let i = 0; i < 42; i++) {
-      const d = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
-      const inMonth = d.getFullYear() === viewY && d.getMonth() === viewM;
-      const key = ymd(d);
-      const n = st.byDate[key] || 0;
-      html += `
+    for (let w = 0; w < 6; w++) {
+      const sun = new Date(start.getFullYear(), start.getMonth(), start.getDate() + w * 7);
+      const sat = new Date(sun.getFullYear(), sun.getMonth(), sun.getDate() + 6);
+      const wk = isoWeekNumber_(sun);
+      html += '<div class="sp-plan-month__weekRow">';
+      html +=
+        '<div class="sp-plan-month__weekLead">' +
+        '<div class="sp-plan-month__weekMeta" aria-label="주간 구간">' +
+        '<div class="sp-plan-month__weekMeta-range">' +
+        mdShort(sun) +
+        ' – ' +
+        mdShort(sat) +
+        '</div>' +
+        '<div class="sp-plan-month__weekMeta-wk">ISO ' +
+        wk +
+        '주</div>' +
+        '</div>' +
+        plannerCurriculumWeekTableHtml_(plannerCurriculumMockWeekPayload_(w)) +
+        '</div>';
+
+      for (let di = 0; di < 7; di++) {
+        const d = new Date(sun.getFullYear(), sun.getMonth(), sun.getDate() + di);
+        const inMonth = d.getFullYear() === viewY && d.getMonth() === viewM;
+        const key = ymd(d);
+        const apiN = st.byDate[key] || 0;
+        const qn = st.quickPlanByDate && st.quickPlanByDate[key] ? st.quickPlanByDate[key].length : 0;
+        const demN = demoByDate[key] || 0;
+        const asg = plannerAssignedMinutesForDay_(st, key) > 0 ? 1 : 0;
+        const badge = apiN + qn + demN + asg;
+        let dots = '';
+        if (apiN) dots += '<span class="sp-plan-day__dot sp-plan-day__dot--api" title="일정"></span>';
+        if (qn) dots += '<span class="sp-plan-day__dot sp-plan-day__dot--quick" title="빠른등록"></span>';
+        if (asg) dots += '<span class="sp-plan-day__dot sp-plan-day__dot--assign" title="시간표"></span>';
+        if (demN) dots += '<span class="sp-plan-day__dot sp-plan-day__dot--demo" title="시연"></span>';
+        html += `
         <button type="button" class="sp-plan-day${inMonth ? '' : ' is-out'}" data-ymd="${key}" ${inMonth ? '' : 'disabled'}>
           <div class="sp-plan-day__top">
             <span class="sp-plan-day__num">${d.getDate()}</span>
-            ${n ? `<span class="sp-plan-day__badge" aria-label="일정 ${n}개">${n}</span>` : ''}
+            ${badge ? `<span class="sp-plan-day__badge" aria-label="요약 ${badge}건">${badge}</span>` : ''}
           </div>
-          <div class="sp-plan-day__dots" aria-hidden="true">${n ? '<span class="sp-plan-day__dot"></span>' : ''}</div>
+          <div class="sp-plan-day__dots" aria-hidden="true">${dots}</div>
         </button>`;
+      }
+      html += '</div>';
     }
     grid.innerHTML = html;
   }
@@ -526,15 +1207,13 @@ function renderCalendar_(root, boot) {
           <div class="sp-plan-day">
             <section class="sp-plan-day__left" aria-label="할 일">
               <div class="sp-plan-day__secTitle">오늘 할 일</div>
-              <div class="sp-plan-day__todo">
-                <div class="sp-plan-day__todoRow"><span class="sp-plan-chip sp-plan-chip--k">국어</span><span class="sp-plan-day__todoTxt">예시: 2020 수능 국어영역</span><span class="sp-plan-day__todoTime">1H 20M</span></div>
-                <div class="sp-plan-day__todoRow"><span class="sp-plan-chip sp-plan-chip--e">영어</span><span class="sp-plan-day__todoTxt">예시: 어휘 (p.78~90)</span><span class="sp-plan-day__todoTime">40M</span></div>
-              </div>
+              <div class="sp-plan-day__todo" id="sp-plan-day-todo-list"></div>
             </section>
             <section class="sp-plan-day__right" aria-label="타임라인">
               <div class="sp-plan-day__secTitle">TIME TABLE</div>
               <div class="sp-plan-day__timeline">
-                <div class="sp-plan-day__timelineGrid" aria-hidden="true"></div>
+                <p class="sp-plan-day__timelineHint">할 일 행을 클릭하면 브러시 · 시간 칸을 드래그해 칠함(브러시 없이 칸만 누르면 지움). Space=포커스 칸 토글 · ↑↓ 이동. 저장·API 없음.</p>
+                <div class="sp-plan-day__timegrid" id="sp-plan-day-timegrid" role="group" aria-label="시간표"></div>
               </div>
             </section>
           </div>
@@ -548,6 +1227,18 @@ function renderCalendar_(root, boot) {
         </div>
       </div>`;
     root.appendChild(el);
+    const cta = el.querySelector('.sp-plan-lock__cta');
+    if (cta) {
+      cta.addEventListener('click', function (ev) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        /* 시연: 결제 플로우 없이 세션 내 회원 UI(잠금 해제) */
+        st.role = 'member';
+        if (ban) ban.setAttribute('hidden', 'hidden');
+        const lockEl = el.querySelector('#sp-plan-day-lock');
+        if (lockEl) lockEl.setAttribute('hidden', 'hidden');
+      });
+    }
     el.addEventListener('click', function (e) {
       const t = /** @type {HTMLElement|null} */ (e.target);
       if (!t) return;
@@ -563,6 +1254,7 @@ function renderCalendar_(root, boot) {
         }
       }
     });
+    wirePlannerDayModalUiOnce_(el, root);
   }
 
   function openDayModal_(dateYmd) {
@@ -572,6 +1264,10 @@ function renderCalendar_(root, boot) {
     st.selectedDate = String(dateYmd || '');
     const title = m.querySelector('#sp-plan-day-modal-title');
     if (title) title.textContent = st.selectedDate ? st.selectedDate + ' · 일일 플래너' : '일일 플래너';
+    const todoSlot = m.querySelector('#sp-plan-day-todo-list');
+    if (todoSlot) todoSlot.innerHTML = plannerDayTodosMockHtml_(st.selectedDate, st);
+    const timegrid = m.querySelector('#sp-plan-day-timegrid');
+    if (timegrid) timegrid.innerHTML = plannerDayTimelineHtml_(st, st.selectedDate);
     m.removeAttribute('hidden');
     const lock = m.querySelector('#sp-plan-day-lock');
     if (lock) {
@@ -586,47 +1282,141 @@ function renderCalendar_(root, boot) {
     m.setAttribute('hidden', 'hidden');
   }
 
-  slot.innerHTML = `
-    <div class="sp-plan-month">
-      <div class="sp-plan-month__head">
-        <button type="button" class="btn btn--ghost sp-plan-month__nav" data-nav="-1" aria-label="이전 달">‹</button>
-        <div class="sp-plan-month__title">${ym(st.viewMonth)}</div>
-        <button type="button" class="btn btn--ghost sp-plan-month__nav" data-nav="1" aria-label="다음 달">›</button>
-      </div>
-      <div class="sp-plan-month__dow" role="row" aria-label="요일">
-        <div class="sp-plan-month__dowCell is-sun">SUN</div>
-        <div class="sp-plan-month__dowCell">MON</div>
-        <div class="sp-plan-month__dowCell">TUE</div>
-        <div class="sp-plan-month__dowCell">WED</div>
-        <div class="sp-plan-month__dowCell">THU</div>
-        <div class="sp-plan-month__dowCell">FRI</div>
-        <div class="sp-plan-month__dowCell is-sat">SAT</div>
-      </div>
-      <div class="sp-plan-month__grid" role="grid" aria-label="월간 달력"></div>
-    </div>`;
+  slot.innerHTML =
+    '<div class="sp-plan-calstack">' +
+    '<section class="sp-plan-quick" id="sp-plan-quick-reg" aria-label="빠른 등록">' +
+    '<div class="sp-plan-quick__head">' +
+    '<span class="sp-plan-quick__title">빠른 등록</span>' +
+    '<span class="sp-plan-quick__note">보는 달만 · 저장 없음</span></div>' +
+    '<p class="sp-plan-quick__err" id="sp-plan-quick-err" hidden></p>' +
+    '<div class="sp-plan-quick__row sp-plan-quick__dows">' +
+    '<span class="sp-plan-quick__lbl">요일</span>' +
+    '<label class="sp-plan-quick__chk"><input type="checkbox" name="sp-dow" value="1"/>월</label>' +
+    '<label class="sp-plan-quick__chk"><input type="checkbox" name="sp-dow" value="2"/>화</label>' +
+    '<label class="sp-plan-quick__chk"><input type="checkbox" name="sp-dow" value="3"/>수</label>' +
+    '<label class="sp-plan-quick__chk"><input type="checkbox" name="sp-dow" value="4"/>목</label>' +
+    '<label class="sp-plan-quick__chk"><input type="checkbox" name="sp-dow" value="5"/>금</label>' +
+    '<label class="sp-plan-quick__chk"><input type="checkbox" name="sp-dow" value="6"/>토</label>' +
+    '<label class="sp-plan-quick__chk"><input type="checkbox" name="sp-dow" value="0"/>일</label>' +
+    '</div>' +
+    '<div class="sp-plan-quick__row">' +
+    '<span class="sp-plan-quick__lbl">과목</span>' +
+    '<label class="sp-plan-quick__chk"><input type="checkbox" name="sp-subj" value="grammar" checked/>문법</label>' +
+    '<label class="sp-plan-quick__chk"><input type="checkbox" name="sp-subj" value="logic" checked/>논리</label>' +
+    '<label class="sp-plan-quick__chk"><input type="checkbox" name="sp-subj" value="read" checked/>독해</label>' +
+    '<label class="sp-plan-quick__chk"><input type="checkbox" name="sp-subj" value="vocab"/>어휘</label>' +
+    '</div>' +
+    '<div class="sp-plan-quick__row sp-plan-quick__row--nums">' +
+    '<span class="sp-plan-quick__lbl">강</span>' +
+    '<input type="number" id="sp-lesson-from" class="sp-plan-quick__num" min="1" max="99" value="1" />' +
+    '<span class="sp-plan-quick__til">~</span>' +
+    '<input type="number" id="sp-lesson-to" class="sp-plan-quick__num" min="1" max="99" value="20" />' +
+    '<button type="button" class="btn btn--primary sp-plan-quick__apply" id="sp-quick-apply">이 달에 반영</button>' +
+    '<button type="button" class="btn btn--ghost sp-plan-quick__clear" id="sp-quick-clear">이 달 지우기</button>' +
+    '</div></section>' +
+    '<div class="sp-plan-month" id="sp-plan-month-wrap">' +
+    '<div class="sp-plan-month__head">' +
+    '<button type="button" class="btn btn--ghost sp-plan-month__nav" data-nav="-1" aria-label="이전 달">‹</button>' +
+    '<div class="sp-plan-month__title">' +
+    ym(st.viewMonth) +
+    '</div>' +
+    '<button type="button" class="btn btn--ghost sp-plan-month__nav" data-nav="1" aria-label="다음 달">›</button>' +
+    '</div>' +
+    '<div class="sp-plan-month__dow" role="row" aria-label="요일">' +
+    '<div class="sp-plan-month__dowCorner" aria-hidden="true">주차 · 커리큘럼</div>' +
+    '<div class="sp-plan-month__dowCell is-sun">SUN</div>' +
+    '<div class="sp-plan-month__dowCell">MON</div>' +
+    '<div class="sp-plan-month__dowCell">TUE</div>' +
+    '<div class="sp-plan-month__dowCell">WED</div>' +
+    '<div class="sp-plan-month__dowCell">THU</div>' +
+    '<div class="sp-plan-month__dowCell">FRI</div>' +
+    '<div class="sp-plan-month__dowCell is-sat">SAT</div>' +
+    '</div>' +
+    '<div class="sp-plan-month__grid" role="grid" aria-label="월간 달력"></div>' +
+    '</div></div>';
 
   renderMonth_();
 
-  slot.addEventListener('click', function (e) {
-    const t = /** @type {HTMLElement|null} */ (e.target instanceof HTMLElement ? e.target : null);
-    if (!t) return;
-    const nav = t.closest ? t.closest('[data-nav]') : null;
-    if (nav && nav.getAttribute) {
-      const step = Number(nav.getAttribute('data-nav')) || 0;
-      if (step) {
-        st.viewMonth = new Date(st.viewMonth.getFullYear(), st.viewMonth.getMonth() + step, 1);
-        renderMonth_();
+  if (!slot.__spPlanCalWired) {
+    slot.__spPlanCalWired = true;
+    slot.addEventListener('click', function (e) {
+      const t = /** @type {HTMLElement|null} */ (e.target instanceof HTMLElement ? e.target : null);
+      if (!t) return;
+      const quickApply = t.id === 'sp-quick-apply' ? t : t.closest ? t.closest('#sp-quick-apply') : null;
+      const quickClear = t.id === 'sp-quick-clear' ? t : t.closest ? t.closest('#sp-quick-clear') : null;
+      if (quickApply || quickClear) {
+        const errEl = slot.querySelector('#sp-plan-quick-err');
+        const qr = slot.querySelector('#sp-plan-quick-reg');
+        if (quickApply && qr) {
+          if (errEl) {
+            errEl.textContent = '';
+            errEl.setAttribute('hidden', 'hidden');
+          }
+          const weekdays = [];
+          qr.querySelectorAll('input[name="sp-dow"]:checked').forEach(function (cb) {
+            weekdays.push(Number(/** @type {HTMLInputElement} */ (cb).value));
+          });
+          const subjects = [];
+          qr.querySelectorAll('input[name="sp-subj"]:checked').forEach(function (cb) {
+            subjects.push(String(/** @type {HTMLInputElement} */ (cb).value));
+          });
+          const fromEl = slot.querySelector('#sp-lesson-from');
+          const toEl = slot.querySelector('#sp-lesson-to');
+          const fromL = fromEl && 'value' in fromEl ? Number(/** @type {HTMLInputElement} */ (fromEl).value) : 1;
+          const toL = toEl && 'value' in toEl ? Number(/** @type {HTMLInputElement} */ (toEl).value) : 20;
+          if (!weekdays.length) {
+            if (errEl) {
+              errEl.textContent = '요일을 한 개 이상 선택해 주세요.';
+              errEl.removeAttribute('hidden');
+            }
+            return;
+          }
+          if (!subjects.length) {
+            if (errEl) {
+              errEl.textContent = '과목을 한 개 이상 선택해 주세요.';
+              errEl.removeAttribute('hidden');
+            }
+            return;
+          }
+          plannerApplyQuickPlanToState_(st, st.viewMonth, weekdays, subjects, fromL, toL);
+          renderMonth_();
+          const modal = root.querySelector('#sp-plan-day-modal');
+          if (modal && st.selectedDate && !modal.hasAttribute('hidden')) {
+            openDayModal_(st.selectedDate);
+          }
+        }
+        if (quickClear) {
+          plannerClearQuickPlanForMonth_(st, st.viewMonth);
+          renderMonth_();
+          if (errEl) {
+            errEl.textContent = '';
+            errEl.setAttribute('hidden', 'hidden');
+          }
+          const modal = root.querySelector('#sp-plan-day-modal');
+          if (modal && st.selectedDate && !modal.hasAttribute('hidden')) {
+            openDayModal_(st.selectedDate);
+          }
+        }
+        return;
       }
-      return;
-    }
-    const btn = t.closest ? t.closest('.sp-plan-day') : null;
-    if (btn && btn.getAttribute && !btn.hasAttribute('disabled')) {
-      const key = btn.getAttribute('data-ymd') || '';
-      if (key) {
-        openDayModal_(key);
+      const nav = t.closest ? t.closest('[data-nav]') : null;
+      if (nav && nav.getAttribute) {
+        const step = Number(nav.getAttribute('data-nav')) || 0;
+        if (step) {
+          st.viewMonth = new Date(st.viewMonth.getFullYear(), st.viewMonth.getMonth() + step, 1);
+          renderMonth_();
+        }
+        return;
       }
-    }
-  });
+      const btn = t.closest ? t.closest('.sp-plan-day') : null;
+      if (btn && btn.getAttribute && !btn.hasAttribute('disabled')) {
+        const key = btn.getAttribute('data-ymd') || '';
+        if (key) {
+          openDayModal_(key);
+        }
+      }
+    });
+  }
 }
 
 /**
@@ -665,9 +1455,12 @@ function wireGate_(root) {
       showErr(m);
       return;
     }
-    const d = /** @type {{ role?: string, common?: object[], personal?: object[] | null }} */ (boot.data || {});
+    const d = /** @type {{ role?: string, common?: object[], personal?: object[] | null, student_profile?: Record<string, unknown> }} */ (
+      boot.data || {}
+    );
     gate.setAttribute('hidden', 'hidden');
     app.removeAttribute('hidden');
+    renderPlannerStudentProfile_(root, d.student_profile);
     renderCalendar_(root, { role: d.role || 'guest', common: d.common || [], personal: d.personal != null ? d.personal : null });
   }
 
@@ -735,6 +1528,7 @@ function wirePlanDevBar_(root) {
     if (gate) gate.setAttribute('hidden', 'hidden');
     if (app) app.removeAttribute('hidden');
     renderCalendar_(root, { role: 'guest', common: [], personal: null });
+    renderPlannerStudentProfile_(root, MOCK_PLANNER_STUDENT_PROFILE);
   });
 
   initBtn.addEventListener('click', async function () {
@@ -803,6 +1597,7 @@ function main() {
   if (!el) return;
   injectPlanGateFallbackCss_();
   el.innerHTML = `<div class="sp-plan-rootinner">${PLAN_DEV_HTML}${GATE_HTML}${PLAN_APP_HTML}</div>`;
+  renderPlannerStudentProfile_(el, MOCK_PLANNER_STUDENT_PROFILE);
   const app = el.querySelector('.app-shell--plan');
   if (app) app.setAttribute('hidden', 'hidden');
   wirePlanDevBar_(el);

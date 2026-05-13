@@ -2954,6 +2954,123 @@ button.sp-stu-remark__item--open:hover {
   margin-top: 0;
 }
 
+/* 플래너: 학생 정보(상담 표 형태, 월간 위 · DB 연동 전 목업) */
+#solpath-plan-root .sp-plan-student {
+  margin: 0 0 1.1rem;
+  padding: 0;
+}
+
+#solpath-plan-root .sp-plan-student__title {
+  margin: 0 0 0.35rem;
+  font-size: calc(0.98rem + var(--sp-text-bump));
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  color: #4a148c;
+  line-height: 1.3;
+}
+
+#solpath-plan-root .sp-plan-student__hint {
+  margin: 0 0 0.6rem;
+  font-size: calc(0.72rem + var(--sp-text-bump));
+  color: #64748b;
+  line-height: 1.4;
+}
+
+#solpath-plan-root .sp-plan-student__wrap {
+  overflow-x: auto;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  box-shadow: 0 1px 0 rgba(15, 23, 42, 0.04);
+}
+
+#solpath-plan-root .sp-plan-student__tbl {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: calc(0.82rem + var(--sp-text-bump));
+  table-layout: fixed;
+}
+
+#solpath-plan-root .sp-plan-student__tbl th,
+#solpath-plan-root .sp-plan-student__tbl td {
+  border: 1px solid #e2e8f0;
+  padding: 0.55rem 0.65rem;
+  vertical-align: middle;
+  text-align: left;
+  word-break: keep-all;
+}
+
+#solpath-plan-root .sp-plan-student__tbl th {
+  width: 8.5rem;
+  max-width: 32%;
+  background: #f8fafc;
+  color: #334155;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+#solpath-plan-root .sp-plan-student__tbl td {
+  color: #0f172a;
+  font-weight: 550;
+  background: #fff;
+}
+
+#solpath-plan-root .sp-plan-student__tr--study th,
+#solpath-plan-root .sp-plan-student__tr--study td {
+  vertical-align: top;
+}
+
+#solpath-plan-root .sp-plan-student__td--text {
+  white-space: pre-wrap;
+  min-height: 4.25rem;
+  line-height: 1.55;
+  font-weight: 500;
+  color: #1e293b;
+}
+
+#solpath-plan-root .sp-plan-student__tbl tr:nth-child(even) th {
+  background: #f1f5f9;
+}
+
+#solpath-plan-root .sp-plan-student__tbl tr:nth-child(even) td {
+  background: #fafbfc;
+}
+
+@media (max-width: 640px) {
+  #solpath-plan-root .sp-plan-student__tbl,
+  #solpath-plan-root .sp-plan-student__tbl tbody,
+  #solpath-plan-root .sp-plan-student__tbl tr,
+  #solpath-plan-root .sp-plan-student__tbl th,
+  #solpath-plan-root .sp-plan-student__tbl td {
+    display: block;
+    width: 100%;
+    max-width: none;
+  }
+
+  #solpath-plan-root .sp-plan-student__tbl tr {
+    border-bottom: 1px solid #e2e8f0;
+  }
+
+  #solpath-plan-root .sp-plan-student__tbl tr:last-child {
+    border-bottom: 0;
+  }
+
+  #solpath-plan-root .sp-plan-student__tbl th {
+    padding-bottom: 0.2rem;
+    border-bottom: 0;
+  }
+
+  #solpath-plan-root .sp-plan-student__tbl td {
+    padding-top: 0.2rem;
+    border-top: 0;
+    border-bottom: 0;
+  }
+
+  #solpath-plan-root .sp-plan-student__tbl td[colspan] {
+    border-top: 0;
+  }
+}
+
 #solpath-plan-root.solpath-mount .app-shell--plan .sp-plan-monthly-title {
   margin: 0 0 0.75rem;
   padding: 0;
@@ -3194,6 +3311,112 @@ button.sp-stu-remark__item--open:hover {
 }
 
 /* --- 플래너: 월간 달력(6주 고정) + 일일 모달(뼈대) --- */
+#solpath-plan-root .sp-plan-calstack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  min-height: 0;
+}
+
+#solpath-plan-root .sp-plan-quick {
+  flex: 0 0 auto;
+  border: 1px solid #e9d5ff;
+  border-radius: 12px;
+  padding: 0.65rem 0.75rem 0.7rem;
+  background: linear-gradient(180deg, #faf5ff 0%, #ffffff 55%);
+  box-sizing: border-box;
+}
+
+#solpath-plan-root .sp-plan-quick__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.45rem;
+}
+
+#solpath-plan-root .sp-plan-quick__title {
+  font-weight: 850;
+  font-size: calc(0.82rem + var(--sp-text-bump));
+  color: #4c1d95;
+}
+
+#solpath-plan-root .sp-plan-quick__note {
+  font-size: calc(0.65rem + var(--sp-text-bump));
+  color: #64748b;
+  font-weight: 600;
+}
+
+#solpath-plan-root .sp-plan-quick__err {
+  margin: 0 0 0.4rem;
+  font-size: calc(0.72rem + var(--sp-text-bump));
+  color: #b91c1c;
+  font-weight: 650;
+}
+
+#solpath-plan-root .sp-plan-quick__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.5rem;
+  margin-top: 0.35rem;
+}
+
+#solpath-plan-root .sp-plan-quick__row--nums {
+  align-items: center;
+}
+
+#solpath-plan-root .sp-plan-quick__lbl {
+  flex: 0 0 auto;
+  min-width: 2.5rem;
+  font-size: calc(0.7rem + var(--sp-text-bump));
+  font-weight: 800;
+  color: #475569;
+}
+
+#solpath-plan-root .sp-plan-quick__chk {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  font-size: calc(0.72rem + var(--sp-text-bump));
+  font-weight: 650;
+  color: #334155;
+  cursor: pointer;
+  user-select: none;
+}
+
+#solpath-plan-root .sp-plan-quick__chk input {
+  margin: 0;
+  accent-color: #7c3aed;
+}
+
+#solpath-plan-root .sp-plan-quick__dows .sp-plan-quick__chk {
+  margin-right: 0.15rem;
+}
+
+#solpath-plan-root .sp-plan-quick__num {
+  width: 3.5rem;
+  padding: 0.35rem 0.4rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: calc(0.85rem + var(--sp-text-bump));
+  font-variant-numeric: tabular-nums;
+  box-sizing: border-box;
+}
+
+#solpath-plan-root .sp-plan-quick__til {
+  color: #94a3b8;
+  font-weight: 700;
+}
+
+#solpath-plan-root .sp-plan-quick__apply,
+#solpath-plan-root .sp-plan-quick__clear {
+  margin-left: 0.25rem;
+}
+
 #solpath-plan-root .sp-plan-month {
   width: 100%;
   height: 100%;
@@ -3202,6 +3425,7 @@ button.sp-stu-remark__item--open:hover {
   gap: 0.55rem;
   padding: 0.75rem;
   box-sizing: border-box;
+  overflow-x: auto;
 }
 
 #solpath-plan-root .sp-plan-month__head {
@@ -3226,9 +3450,20 @@ button.sp-stu-remark__item--open:hover {
 
 #solpath-plan-root .sp-plan-month__dow {
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
+  grid-template-columns: minmax(17rem, 24rem) repeat(7, 1fr);
   gap: 0.35rem;
   padding: 0 0.1rem;
+  align-items: center;
+}
+
+#solpath-plan-root .sp-plan-month__dowCorner {
+  font-size: calc(0.58rem + var(--sp-text-bump));
+  font-weight: 750;
+  color: #64748b;
+  text-align: center;
+  letter-spacing: 0.02em;
+  line-height: 1.25;
+  padding: 0 0.15rem;
 }
 
 #solpath-plan-root .sp-plan-month__dowCell {
@@ -3248,12 +3483,135 @@ button.sp-stu-remark__item--open:hover {
 }
 
 #solpath-plan-root .sp-plan-month__grid {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  grid-auto-rows: minmax(5.25rem, 1fr);
+  display: flex;
+  flex-direction: column;
   gap: 0.35rem;
   flex: 1 1 auto;
   min-height: 0;
+}
+
+#solpath-plan-root .sp-plan-month__weekRow {
+  display: grid;
+  grid-template-columns: minmax(17rem, 24rem) repeat(7, 1fr);
+  gap: 0.35rem;
+  min-height: 6.5rem;
+  align-items: stretch;
+}
+
+#solpath-plan-root .sp-plan-month__weekLead {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 0;
+  min-height: 0;
+}
+
+#solpath-plan-root .sp-plan-month__weekMeta {
+  border-radius: 10px;
+  border: 1px solid #d8b4fe;
+  background: linear-gradient(165deg, #f3e8ff 0%, #ede9fe 55%, #e9d5ff 100%);
+  padding: 0.35rem 0.4rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.15rem;
+  min-width: 0;
+  box-sizing: border-box;
+  flex: 0 0 auto;
+}
+
+#solpath-plan-root .sp-plan-cur {
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  overflow: auto;
+  box-sizing: border-box;
+}
+
+#solpath-plan-root .sp-plan-cur__tbl {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: calc(0.65rem + var(--sp-text-bump));
+  table-layout: fixed;
+}
+
+#solpath-plan-root .sp-plan-cur__tbl thead th {
+  background: #ede9fe;
+  color: #4c1d95;
+  font-weight: 800;
+  text-align: center;
+  padding: 0.28rem 0.25rem;
+  border: 1px solid #ddd6fe;
+  line-height: 1.2;
+}
+
+#solpath-plan-root .sp-plan-cur__tbl tbody th,
+#solpath-plan-root .sp-plan-cur__tbl tbody td {
+  border: 1px solid #e2e8f0;
+  padding: 0.28rem 0.32rem;
+  vertical-align: middle;
+  line-height: 1.35;
+}
+
+#solpath-plan-root .sp-plan-cur__tbl tbody th {
+  width: 2.85rem;
+  max-width: 22%;
+  background: linear-gradient(180deg, #ede9fe 0%, #e9d5ff 100%);
+  color: #5b21b6;
+  font-weight: 800;
+  text-align: center;
+  white-space: nowrap;
+}
+
+#solpath-plan-root .sp-plan-cur__tbl tbody td {
+  color: #1e293b;
+  font-weight: 550;
+  background: #fff;
+}
+
+#solpath-plan-root .sp-plan-cur__tbl tbody tr:nth-child(even) td {
+  background: #fafbfc;
+}
+
+#solpath-plan-root .sp-plan-cur__tbl tbody tr:nth-child(even) th {
+  background: linear-gradient(180deg, #e9d5ff 0%, #ddd6fe 100%);
+}
+
+#solpath-plan-root .sp-plan-cur__thCat {
+  width: 2.85rem;
+}
+
+#solpath-plan-root .sp-plan-cur__thOut {
+  width: 4.5rem;
+}
+
+#solpath-plan-root .sp-plan-cur__goal {
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+
+#solpath-plan-root .sp-plan-cur__outline {
+  text-align: center;
+  font-weight: 750;
+  color: #0f172a;
+  white-space: nowrap;
+}
+
+#solpath-plan-root .sp-plan-month__weekMeta-range {
+  font-size: calc(0.72rem + var(--sp-text-bump));
+  font-weight: 800;
+  color: #4c1d95;
+  line-height: 1.25;
+}
+
+#solpath-plan-root .sp-plan-month__weekMeta-wk {
+  font-size: calc(0.6rem + var(--sp-text-bump));
+  font-weight: 700;
+  color: #6d28d9;
+  opacity: 0.95;
 }
 
 #solpath-plan-root .sp-plan-day {
@@ -3322,6 +3680,26 @@ button.sp-stu-remark__item--open:hover {
   width: 0.45rem;
   height: 0.45rem;
   border-radius: 999px;
+  background: #f59e0b;
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.18);
+}
+
+#solpath-plan-root .sp-plan-day__dot--api {
+  background: #6366f1;
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.22);
+}
+
+#solpath-plan-root .sp-plan-day__dot--quick {
+  background: #a855f7;
+  box-shadow: 0 0 0 2px rgba(168, 85, 247, 0.2);
+}
+
+#solpath-plan-root .sp-plan-day__dot--assign {
+  background: #0ea5e9;
+  box-shadow: 0 0 0 2px rgba(14, 165, 233, 0.22);
+}
+
+#solpath-plan-root .sp-plan-day__dot--demo {
   background: #f59e0b;
   box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.18);
 }
@@ -3410,9 +3788,126 @@ button.sp-stu-remark__item--open:hover {
   align-items: center;
   padding: 0.6rem 0.7rem;
   border-top: 1px solid #eef2f7;
+  cursor: grab;
 }
 
-#solpath-plan-root .sp-plan-day__todoRow:first-child {
+#solpath-plan-root .sp-plan-day__todoRow:active {
+  cursor: grabbing;
+}
+
+#solpath-plan-root .sp-plan-day__todoRow.is-dragging {
+  opacity: 0.88;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.12);
+}
+
+#solpath-plan-root .sp-plan-day__timeline {
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 0.65rem 0.7rem;
+  background: #f8fafc;
+}
+
+#solpath-plan-root .sp-plan-day__timelineHint {
+  margin: 0 0 0.45rem;
+  font-size: calc(0.68rem + var(--sp-text-bump));
+  color: #64748b;
+  line-height: 1.35;
+}
+
+#solpath-plan-root .sp-plan-day__timegrid {
+  max-height: 16.5rem;
+  overflow: auto;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+}
+
+#solpath-plan-root .sp-plan-timegrid__row {
+  display: flex;
+  align-items: stretch;
+  gap: 0.35rem;
+  min-height: 2.25rem;
+  box-sizing: border-box;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+#solpath-plan-root .sp-plan-timegrid__row:last-child {
+  border-bottom: 0;
+}
+
+#solpath-plan-root .sp-plan-timegrid__lbl {
+  flex: 0 0 6.75rem;
+  width: 6.75rem;
+  font-size: calc(0.65rem + var(--sp-text-bump));
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+  color: #475569;
+  display: flex;
+  align-items: center;
+  padding: 0 0.25rem 0 0.35rem;
+  border-right: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+
+#solpath-plan-root .sp-plan-timecell {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 2px 0.35rem 2px 0;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #ffffff;
+  cursor: pointer;
+  padding: 0;
+  min-height: 1.65rem;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+#solpath-plan-root .sp-plan-timecell:hover {
+  border-color: #94a3b8;
+  background: #f1f5f9;
+}
+
+#solpath-plan-root .sp-plan-timecell.is-on {
+  border-color: #6366f1;
+  background: linear-gradient(180deg, #e0e7ff 0%, #c7d2fe 100%);
+  box-shadow: inset 0 0 0 1px rgba(99, 102, 241, 0.25);
+}
+
+#solpath-plan-root .sp-plan-timecell--todo--grammar.is-on {
+  border-color: #4f46e5;
+  background: linear-gradient(180deg, #dbeafe 0%, #a5b4fc 100%);
+  box-shadow: inset 0 0 0 1px rgba(79, 70, 229, 0.28);
+}
+
+#solpath-plan-root .sp-plan-timecell--todo--logic.is-on {
+  border-color: #0d9488;
+  background: linear-gradient(180deg, #ccfbf1 0%, #5eead4 100%);
+  box-shadow: inset 0 0 0 1px rgba(13, 148, 136, 0.25);
+}
+
+#solpath-plan-root .sp-plan-timecell--todo--read.is-on {
+  border-color: #2563eb;
+  background: linear-gradient(180deg, #dbeafe 0%, #93c5fd 100%);
+  box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.22);
+}
+
+#solpath-plan-root .sp-plan-timecell--todo--vocab.is-on {
+  border-color: #ca8a04;
+  background: linear-gradient(180deg, #fef9c3 0%, #fde047 100%);
+  box-shadow: inset 0 0 0 1px rgba(202, 138, 4, 0.28);
+}
+
+#solpath-plan-root .sp-plan-timecell--todo--misc.is-on {
+  border-color: #64748b;
+  background: linear-gradient(180deg, #f1f5f9 0%, #e2e8f0 100%);
+  box-shadow: inset 0 0 0 1px rgba(100, 116, 139, 0.25);
+}
+
+#solpath-plan-root .sp-plan-day__todoRow.is-brush {
+  outline: 2px solid #7c3aed;
+  outline-offset: -2px;
+  background: #faf5ff;
+}
   border-top: 0;
 }
 
@@ -3453,18 +3948,24 @@ button.sp-stu-remark__item--open:hover {
   background: #fecaca;
 }
 
-#solpath-plan-root .sp-plan-day__timeline {
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  padding: 0.65rem 0.7rem;
-  background: #f8fafc;
+#solpath-plan-root .sp-plan-chip--grammar {
+  background: #c7d2fe;
+  color: #312e81;
 }
 
-#solpath-plan-root .sp-plan-day__timelineGrid {
-  height: 18rem;
-  background-image: linear-gradient(#dbe3ef 1px, transparent 1px), linear-gradient(90deg, #eef2f7 1px, transparent 1px);
-  background-size: 100% 1.5rem, 2.4rem 100%;
-  border-radius: 10px;
+#solpath-plan-root .sp-plan-chip--logic {
+  background: #99f6e4;
+  color: #134e4a;
+}
+
+#solpath-plan-root .sp-plan-chip--read {
+  background: #bfdbfe;
+  color: #1e3a8a;
+}
+
+#solpath-plan-root .sp-plan-chip--vocab {
+  background: #fde68a;
+  color: #713f12;
 }
 
 #solpath-plan-root .sp-plan-lock {
