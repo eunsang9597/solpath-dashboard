@@ -4277,7 +4277,39 @@ button.sp-stu-remark__item--open:hover {
   pointer-events: auto;
 }
 
-/* ── 달력 레이아웃 픽스 ── */
+/* ============================================================
+   플래너 CSS 픽스 — 맨 아래 추가
+   ============================================================ */
+
+/* 1. panel--hero overflow:hidden 플래너만 해제 */
+#solpath-plan-root .app-shell--plan .panel--hero.sp-plan-body {
+  overflow-x: auto !important;
+  overflow-y: visible !important;
+}
+
+/* 2. 44rem max-width 제한 플래너만 해제 */
+#solpath-plan-root .app-shell--plan {
+  max-width: 100% !important;
+}
+
+/* 3. 아임웹 전역 label 스타일 오버라이드 (체크박스 세로 쌓임 방지) */
+#solpath-plan-root .sp-plan-quick__chk {
+  display: inline-flex !important;
+  width: auto !important;
+  flex: 0 0 auto !important;
+}
+#solpath-plan-root .sp-plan-quick__chk input[type="checkbox"] {
+  display: inline-block !important;
+  width: auto !important;
+  flex-shrink: 0 !important;
+}
+
+/* 4. 체크박스 간격 조정 */
+#solpath-plan-root .sp-plan-quick__chks {
+  gap: 0.35rem 1rem !important;
+}
+
+/* 5. 달력 calstack/grid/weekRow width 고정값 해제 */
 #solpath-plan-root .sp-plan-calstack {
   width: 100% !important;
   min-width: 0 !important;
@@ -4290,35 +4322,21 @@ button.sp-stu-remark__item--open:hover {
   min-width: 0 !important;
 }
 
+/* 6. 달력 grid 컬럼 비율 — 커리큘럼 왼쪽 + 일자 칸 너비 */
 #solpath-plan-root .sp-plan-month__weekRow,
 #solpath-plan-root .sp-plan-month__dow {
-  grid-template-columns: minmax(18rem, 22rem) repeat(7, minmax(7rem, 1fr)) !important;
+  grid-template-columns: minmax(20rem, 26rem) repeat(7, minmax(8rem, 1fr)) !important;
   box-sizing: border-box !important;
 }
 
+/* 7. 달력 일자 버튼 min-width 고정값 해제 */
 #solpath-plan-root .sp-plan-month .sp-plan-day {
   min-width: 0 !important;
 }
 
-/* 원인 1: panel--hero overflow:hidden 플래너만 해제 */
-#solpath-plan-root .app-shell--plan .panel--hero.sp-plan-body {
-  overflow-x: auto !important;
-  overflow-y: visible !important;
-}
-
-/* 원인 2: 44rem max-width 제한 플래너만 해제 */
-#solpath-plan-root .app-shell--plan {
-  max-width: 100% !important;
-}
-
-/* 원인 3: 아임웹 label 전역 스타일 오버라이드 */
-#solpath-plan-root .sp-plan-quick__chk {
-  display: inline-flex !important;
-  width: auto !important;
-  flex: 0 0 auto !important;
-}
-#solpath-plan-root .sp-plan-quick__chk input[type="checkbox"] {
-  display: inline-block !important;
-  width: auto !important;
-  flex-shrink: 0 !important;
+/* 8. 커리큘럼 링크 열 잘림 방지 */
+#solpath-plan-root .sp-plan-cur__thLink,
+#solpath-plan-root .sp-plan-cur__link {
+  min-width: 2.5rem !important;
+  width: 2.5rem !important;
 }
