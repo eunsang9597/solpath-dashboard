@@ -1286,6 +1286,7 @@ function renderCalendar_(root, boot) {
         const d = new Date(sun.getFullYear(), sun.getMonth(), sun.getDate() + di);
         const inMonth = d.getFullYear() === viewY && d.getMonth() === viewM;
         const key = ymd(d);
+        const wkCls = di === 0 ? ' is-sun' : di === 6 ? ' is-sat' : '';
         const apiN = st.byDate[key] || 0;
         const qn = st.quickPlanByDate && st.quickPlanByDate[key] ? st.quickPlanByDate[key].length : 0;
         const demN = demoByDate[key] || 0;
@@ -1297,7 +1298,7 @@ function renderCalendar_(root, boot) {
         if (asg) dots += '<span class="sp-plan-day__dot sp-plan-day__dot--assign" title="시간표"></span>';
         if (demN) dots += '<span class="sp-plan-day__dot sp-plan-day__dot--demo" title="시연"></span>';
         html += `
-        <button type="button" class="sp-plan-day${inMonth ? '' : ' is-out'}" data-ymd="${key}" ${inMonth ? '' : 'disabled'}>
+        <button type="button" class="sp-plan-day${wkCls}${inMonth ? '' : ' is-out'}" data-ymd="${key}" ${inMonth ? '' : 'disabled'}>
           <div class="sp-plan-day__top">
             <span class="sp-plan-day__num">${d.getDate()}</span>
             ${badge ? `<span class="sp-plan-day__badge" aria-label="요약 ${badge}건">${badge}</span>` : ''}

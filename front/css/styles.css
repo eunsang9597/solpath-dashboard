@@ -3785,6 +3785,7 @@ button.sp-stu-remark__item--open:hover {
   gap: 0.35rem;
   box-sizing: border-box;
   min-width: 0;
+  position: relative;
 }
 
 #solpath-plan-root .sp-plan-day:hover {
@@ -3805,12 +3806,18 @@ button.sp-stu-remark__item--open:hover {
   align-items: center;
   justify-content: space-between;
   gap: 0.5rem;
+  min-height: 1.4rem;
+  position: relative;
 }
 
 #solpath-plan-root .sp-plan-day__num {
   font-weight: 850;
   color: #0f172a;
   font-size: calc(0.85rem + var(--sp-text-bump));
+  position: absolute;
+  left: 0;
+  top: 0;
+  line-height: 1.2;
 }
 
 #solpath-plan-root .sp-plan-day__badge {
@@ -3825,6 +3832,17 @@ button.sp-stu-remark__item--open:hover {
   color: #4a148c;
   font-weight: 800;
   font-size: calc(0.7rem + var(--sp-text-bump));
+  position: absolute;
+  right: 0;
+  top: 0;
+}
+
+#solpath-plan-root .sp-plan-day.is-sun .sp-plan-day__num {
+  color: #dc2626;
+}
+
+#solpath-plan-root .sp-plan-day.is-sat .sp-plan-day__num {
+  color: #2563eb;
 }
 
 #solpath-plan-root .sp-plan-day__dots {
