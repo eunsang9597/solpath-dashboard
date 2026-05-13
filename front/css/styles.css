@@ -3774,6 +3774,8 @@ button.sp-stu-remark__item--open:hover {
   box-sizing: border-box;
   min-width: 0;
   position: relative;
+  /* absolute 뱃지·점이 칸보다 오른쪽(토요일 옆 여백)으로 새는 것 방지 */
+  overflow: hidden;
 }
 
 #solpath-plan-root .sp-plan-day:hover {
@@ -3796,6 +3798,8 @@ button.sp-stu-remark__item--open:hover {
   gap: 0.5rem;
   min-height: 1.25rem;
   position: relative;
+  width: 100%;
+  flex-shrink: 0;
 }
 
 #solpath-plan-root .sp-plan-day__num {
