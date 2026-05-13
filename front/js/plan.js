@@ -735,7 +735,7 @@ function plannerAssignedMinutesForDay_(st, ymd) {
 
 /**
  * 선택 요일에 해당하는 날짜를 달 안에서 **시간순**으로 두고,
- * 과목×강 N건을 `floor(N/M)`건씩 앞쪽 M-1일에 두고, 나머지는 **마지막 날**에 몰아 넣는다(저장 없음).
+ * 과목×강 N건을 **그 순서대로** 날짜에 돌려가며 한 건씩 붙인다(5/1이 첫 요일이면 그날부터)(저장 없음).
  * @param {object} st
  * @param {Date} viewMonth
  * @param {number[]} weekdays 0=일 … 6=토
@@ -767,19 +767,35 @@ function plannerApplyQuickPlanToState_(st, viewMonth, weekdays, subjects, fromL,
   if (!tasks.length) return;
   if (!st.quickPlanByDate) st.quickPlanByDate = {};
   const M = dates.length;
-  const N = tasks.length;
-  const q = Math.floor(N / M);
-  const r = N % M;
-  let ti = 0;
-  for (let j = 0; j < M; j++) {
-    const key = dates[j];
-    const cnt = q + (j === M - 1 ? r : 0);
+  if (!M) return;
+  tasks.forEach(function (t, idx) {
+    const key = dates[idx % M];
     if (!st.quickPlanByDate[key]) st.quickPlanByDate[key] = [];
-    for (let k = 0; k < cnt; k++) {
-      const t = tasks[ti++];
-      if (t) st.quickPlanByDate[key].push({ subject: t.subject, lesson: t.lesson });
-    }
+    st.quickPlanByDate[key].push({ subject: t.subject, lesson: t.lesson });
+  });
+}
+
+/**
+ * 달력 칸에 빠른등록 요약(짧은 문자열) — 점/배지 외에 일자 안에 보이게.
+ * @param {object} st
+ * @param {string} key ymd
+ * @returns {string}
+ */
+function plannerQuickPlanCellSummaryHtml_(st, key) {
+  const arr = st.quickPlanByDate && st.quickPlanByDate[key];
+  if (!Array.isArray(arr) || !arr.length) return '';
+  const subjOne = { grammar: '문', logic: '논', read: '독', vocab: '어' };
+  const maxShow = 3;
+  const parts = [];
+  for (let i = 0; i < arr.length && parts.length < maxShow; i++) {
+    const t = arr[i];
+    if (!t || typeof t !== 'object') continue;
+    const ab = subjOne[String(t.subject)] || String(t.subject || '').slice(0, 1);
+    parts.push(ab + String(t.lesson != null ? t.lesson : ''));
   }
+  let tail = '';
+  if (arr.length > maxShow) tail = ' +' + String(arr.length - maxShow);
+  return '<div class="sp-plan-day__quick" aria-hidden="true">' + esc(parts.join(' · ') + tail) + '</div>';
 }
 
 /** @param {Record<string, unknown>} legacy */
@@ -1299,6 +1315,7 @@ function renderCalendar_(root, boot) {
             ${badge ? `<span class="sp-plan-day__badge" aria-label="요약 ${badge}건">${badge}</span>` : ''}
           </div>
           <div class="sp-plan-day__dots" aria-hidden="true">${dots}</div>
+          ${plannerQuickPlanCellSummaryHtml_(st, key)}
         </button>`;
       }
       html += '</div>';
@@ -1343,21 +1360,22 @@ function renderCalendar_(root, boot) {
         </div>
       </div>`;
     root.appendChild(el);
-    const cta = el.querySelector('.sp-plan-lock__cta');
-    if (cta) {
-      cta.addEventListener('click', function (ev) {
-        ev.preventDefault();
-        ev.stopPropagation();
-        /* 시연: 결제 없이 잠금(블러)만 즉시 해제 */
-        st.planGuestUnlockMock = true;
+    el.addEventListener('click', function (e) {
+      const t = /** @type {HTMLElement|null} */ (e.target instanceof HTMLElement ? e.target : null);
+      if (!t) return;
+      const buy = t.closest ? t.closest('.sp-plan-lock__cta') : null;
+      if (buy && el.contains(buy)) {
+        e.preventDefault();
+        e.stopPropagation();
+        const st0 = root.__spPlanState;
+        if (st0 && typeof st0 === 'object') {
+          st0.planGuestUnlockMock = true;
+        }
         const lockEl = el.querySelector('#sp-plan-day-lock');
         if (lockEl) lockEl.setAttribute('hidden', 'hidden');
-      });
-    }
-    el.addEventListener('click', function (e) {
-      const t = /** @type {HTMLElement|null} */ (e.target);
-      if (!t) return;
-      if (t && t.getAttribute && t.getAttribute('data-sp-plan-close') === '1') {
+        return;
+      }
+      if (t.getAttribute && t.getAttribute('data-sp-plan-close') === '1') {
         closeDayModal_();
       }
     });
