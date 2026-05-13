@@ -3576,10 +3576,13 @@ button.sp-stu-remark__item--open:hover {
 
 #solpath-plan-root .sp-plan-month__dow {
   display: grid;
-  grid-template-columns: minmax(8.25rem, 10.5rem) repeat(7, minmax(6rem, 1fr));
+  grid-template-columns: minmax(9rem, 11rem) repeat(7, minmax(11rem, 1fr));
   gap: 0.3rem;
   padding: 0 0.05rem;
   align-items: center;
+  width: max-content;
+  min-width: 100%;
+  box-sizing: border-box;
 }
 
 #solpath-plan-root .sp-plan-month__dowCorner {
@@ -3614,14 +3617,20 @@ button.sp-stu-remark__item--open:hover {
   gap: 0.35rem;
   flex: 1 1 auto;
   min-height: 0;
+  width: max-content;
+  min-width: 100%;
+  box-sizing: border-box;
 }
 
 #solpath-plan-root .sp-plan-month__weekRow {
   display: grid;
-  grid-template-columns: minmax(8.25rem, 10.5rem) repeat(7, minmax(6rem, 1fr));
+  grid-template-columns: minmax(9rem, 11rem) repeat(7, minmax(11rem, 1fr));
   gap: 0.3rem;
   min-height: 5.8rem;
   align-items: stretch;
+  width: max-content;
+  min-width: 100%;
+  box-sizing: border-box;
 }
 
 #solpath-plan-root .sp-plan-month__weekLead {
@@ -3772,10 +3781,13 @@ button.sp-stu-remark__item--open:hover {
   flex-direction: column;
   gap: 0.28rem;
   box-sizing: border-box;
-  min-width: 0;
+  min-width: 11rem;
+  width: 100%;
+  max-width: 100%;
   position: relative;
-  /* absolute 뱃지·점이 칸보다 오른쪽(토요일 옆 여백)으로 새는 것 방지 */
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: visible;
+  -webkit-overflow-scrolling: touch;
 }
 
 #solpath-plan-root .sp-plan-day:hover {
