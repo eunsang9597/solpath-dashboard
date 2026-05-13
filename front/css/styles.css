@@ -4299,3 +4299,26 @@ button.sp-stu-remark__item--open:hover {
 #solpath-plan-root .sp-plan-month .sp-plan-day {
   min-width: 0 !important;
 }
+
+/* 원인 1: panel--hero overflow:hidden 플래너만 해제 */
+#solpath-plan-root .app-shell--plan .panel--hero.sp-plan-body {
+  overflow-x: auto !important;
+  overflow-y: visible !important;
+}
+
+/* 원인 2: 44rem max-width 제한 플래너만 해제 */
+#solpath-plan-root .app-shell--plan {
+  max-width: 100% !important;
+}
+
+/* 원인 3: 아임웹 label 전역 스타일 오버라이드 */
+#solpath-plan-root .sp-plan-quick__chk {
+  display: inline-flex !important;
+  width: auto !important;
+  flex: 0 0 auto !important;
+}
+#solpath-plan-root .sp-plan-quick__chk input[type="checkbox"] {
+  display: inline-block !important;
+  width: auto !important;
+  flex-shrink: 0 !important;
+}
