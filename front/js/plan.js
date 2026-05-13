@@ -756,7 +756,7 @@ function plannerAssignedMinutesForDay_(st, ymd) {
 /**
  * 선택 요일만 달에서 시간순으로 모은 뒤, **달력 주(월요일 시작)** 별로 나누고
  * 각 주 안에서는 그 주에 해당하는 요일만 순서대로 채운다(첫 주는 월 중간이면 슬롯이 1~2개일 수 있음).
- * **과목은 서로 섞지 않고** 과목마다 동일 규칙으로 따로 배치한다(독해가 맨 뒤 날짜로 몰리지 않음)(저장 없음).
+ * **과목은 서로 섞지 않고** 과목마다 동일 규칙으로 따로 배치한다. 달 안 슬롯에 다 안 들어가면 **남은 강은 그 달의 마지막 선택 요일**에 이어 붙인다(저장 없음).
  * @param {object} st
  * @param {Date} viewMonth
  * @param {number[]} weekdays 0=일 … 6=토
@@ -791,6 +791,7 @@ function plannerApplyQuickPlanToState_(st, viewMonth, weekdays, subjects, fromL,
   const weekStarts = Array.from(byWeek.keys()).sort(function (a, b) {
     return a - b;
   });
+  const lastDumpKey = dates[dates.length - 1];
   subjects.forEach(function (subj) {
     let L = lo;
     for (let wi = 0; wi < weekStarts.length && L <= hi; wi++) {
@@ -801,6 +802,11 @@ function plannerApplyQuickPlanToState_(st, viewMonth, weekdays, subjects, fromL,
         st.quickPlanByDate[key].push({ subject: subj, lesson: L });
         L++;
       }
+    }
+    while (L <= hi) {
+      if (!st.quickPlanByDate[lastDumpKey]) st.quickPlanByDate[lastDumpKey] = [];
+      st.quickPlanByDate[lastDumpKey].push({ subject: subj, lesson: L });
+      L++;
     }
   });
 }
@@ -814,18 +820,63 @@ function plannerApplyQuickPlanToState_(st, viewMonth, weekdays, subjects, fromL,
 function plannerQuickPlanCellSummaryHtml_(st, key) {
   const arr = st.quickPlanByDate && st.quickPlanByDate[key];
   if (!Array.isArray(arr) || !arr.length) return '';
-  const subjOne = { grammar: '문', logic: '논', read: '독', vocab: '어' };
-  const maxShow = 3;
-  const parts = [];
-  for (let i = 0; i < arr.length && parts.length < maxShow; i++) {
-    const t = arr[i];
-    if (!t || typeof t !== 'object') continue;
-    const ab = subjOne[String(t.subject)] || String(t.subject || '').slice(0, 1);
-    parts.push(ab + String(t.lesson != null ? t.lesson : ''));
+  const subjName = { grammar: '문법', logic: '논리', read: '독해', vocab: '어휘' };
+  const order = ['grammar', 'logic', 'read', 'vocab'];
+  /** @type {Record<string, number[]>} */
+  const bySub = {};
+  arr.forEach(function (t) {
+    if (!t || typeof t !== 'object') return;
+    const s = String(t.subject != null ? t.subject : '').trim();
+    const L = Number(t.lesson);
+    if (!s || !isFinite(L) || L <= 0) return;
+    if (!bySub[s]) bySub[s] = [];
+    bySub[s].push(L);
+  });
+  function lessonsToOutline_(nums) {
+    const u = nums
+      .slice()
+      .sort(function (a, b) {
+        return a - b;
+      })
+      .filter(function (v, i, a) {
+        return i === 0 || v !== a[i - 1];
+      });
+    if (!u.length) return '';
+    const parts = [];
+    let runStart = u[0];
+    let prev = u[0];
+    for (let i = 1; i <= u.length; i++) {
+      const cur = u[i];
+      if (i === u.length || cur !== prev + 1) {
+        parts.push(runStart === prev ? String(runStart) : runStart + '~' + prev);
+        if (i < u.length) {
+          runStart = cur;
+          prev = cur;
+        }
+      } else {
+        prev = cur;
+      }
+    }
+    return parts.join(', ');
   }
-  let tail = '';
-  if (arr.length > maxShow) tail = ' +' + String(arr.length - maxShow);
-  return '<div class="sp-plan-day__quick" aria-hidden="true">' + esc(parts.join(' · ') + tail) + '</div>';
+  const lines = [];
+  order.forEach(function (code) {
+    const nums = bySub[code];
+    if (!nums || !nums.length) return;
+    const outline = lessonsToOutline_(nums);
+    const name = subjName[code] || esc(code);
+    lines.push('<div class="sp-plan-day__quickLine">' + esc(name) + ' ' + esc(outline) + '강</div>');
+  });
+  Object.keys(bySub).forEach(function (code) {
+    if (order.indexOf(code) >= 0) return;
+    const nums = bySub[code];
+    if (!nums || !nums.length) return;
+    lines.push(
+      '<div class="sp-plan-day__quickLine">' + esc(code) + ' ' + esc(lessonsToOutline_(nums)) + '강</div>'
+    );
+  });
+  if (!lines.length) return '';
+  return '<div class="sp-plan-day__quick" aria-hidden="true">' + lines.join('') + '</div>';
 }
 
 /** @param {Record<string, unknown>} legacy */
