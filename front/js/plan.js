@@ -251,20 +251,19 @@ function plannerMergeStudentProfile_(apiPartial) {
 }
 
 /**
- * `prev_major_gpa` 한 필드 문자열(예: `국어국문학과 · 평점 3.82 / 4.5`)을 같은 행에서 좌/우로 나눈다.
+ * `prev_major_gpa` 문자열(예: `국어국문학과 · 평점 3.82 / 4.5`)에서 학과·평점만 분리한다.
  * @param {string} raw
- * @returns {string}
+ * @returns {{ major: string, gpa: string }}
  */
-function plannerPrevMajorGpaPillsHtml_(raw) {
+function plannerPrevMajorGpaParts_(raw) {
   const s = String(raw != null ? raw : '').trim();
-  if (!s) return '';
+  if (!s) return { major: '—', gpa: '—' };
   const chunks = s
     .split(/\s*·\s*/)
     .map(function (x) {
       return String(x || '').trim();
     })
     .filter(Boolean);
-  if (!chunks.length) return '';
   let major = '';
   let gpa = '';
   chunks.forEach(function (chunk) {
@@ -272,30 +271,13 @@ function plannerPrevMajorGpaPillsHtml_(raw) {
     if (m) {
       const rest = String(m[1] != null ? m[1] : '').trim();
       gpa = rest || '—';
-    } else {
-      if (!major) major = chunk;
+    } else if (!major) {
+      major = chunk;
     }
   });
   if (!major) major = '—';
   if (!gpa) gpa = '—';
-  return (
-    '<div class="sp-plan-student__split" role="group" aria-label="전적대 학과 · 평점">' +
-    '<span class="sp-plan-student__splitItem" aria-label="학과 ' +
-    esc(major) +
-    '">' +
-    '<span class="sp-plan-student__splitLbl">학과</span>' +
-    '<span class="sp-plan-student__splitVal">' +
-    esc(major) +
-    '</span></span>' +
-    '<span class="sp-plan-student__splitItem" aria-label="평점 ' +
-    esc(gpa) +
-    '">' +
-    '<span class="sp-plan-student__splitLbl">평점</span>' +
-    '<span class="sp-plan-student__splitVal">' +
-    esc(gpa) +
-    '</span></span>' +
-    '</div>'
-  );
+  return { major: major, gpa: gpa };
 }
 
 /**
@@ -307,6 +289,7 @@ function renderPlannerStudentProfile_(root, profile) {
   const tbody = root.querySelector('#sp-plan-student-tbody');
   if (!tbody) return;
   const p = plannerMergeStudentProfile_(profile);
+  const pm = plannerPrevMajorGpaParts_(p.prev_major_gpa);
   tbody.innerHTML =
     '<tr>' +
     '<th scope="row">이름</th>' +
@@ -330,14 +313,18 @@ function renderPlannerStudentProfile_(root, profile) {
     '</tr>' +
     '<tr>' +
     '<th scope="row">전적대</th>' +
-    '<td colspan="3" data-sp-plan-student="prev_university">' +
+    '<td data-sp-plan-student="prev_university">' +
     esc(p.prev_university) +
+    '</td>' +
+    '<th scope="row">학과</th>' +
+    '<td data-sp-plan-student="prev_major">' +
+    esc(pm.major) +
     '</td>' +
     '</tr>' +
     '<tr>' +
-    '<th scope="row">전적대 학과 · 학점</th>' +
+    '<th scope="row">평점</th>' +
     '<td colspan="3" data-sp-plan-student="prev_major_gpa">' +
-    plannerPrevMajorGpaPillsHtml_(p.prev_major_gpa) +
+    esc(pm.gpa) +
     '</td>' +
     '</tr>' +
     '<tr>' +

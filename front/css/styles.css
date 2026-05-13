@@ -3024,51 +3024,6 @@ button.sp-stu-remark__item--open:hover {
   background: #fff;
 }
 
-#solpath-plan-root .sp-plan-student__split {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0;
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
-  overflow: hidden;
-  background: #ffffff;
-}
-
-#solpath-plan-root .sp-plan-student__splitItem {
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 0.45rem;
-  padding: 0.45rem 0.6rem;
-  min-width: 0;
-  box-sizing: border-box;
-  background: #ffffff;
-}
-
-#solpath-plan-root .sp-plan-student__splitItem + .sp-plan-student__splitItem {
-  border-left: 1px solid #e2e8f0;
-  background: #fafbfc;
-}
-
-#solpath-plan-root .sp-plan-student__splitLbl {
-  flex: 0 0 auto;
-  font-size: calc(0.72rem + var(--sp-text-bump));
-  font-weight: 800;
-  color: #64748b;
-  white-space: nowrap;
-}
-
-#solpath-plan-root .sp-plan-student__splitVal {
-  flex: 1 1 auto;
-  min-width: 0;
-  font-size: calc(0.82rem + var(--sp-text-bump));
-  font-weight: 650;
-  color: #0f172a;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 #solpath-plan-root .sp-plan-student__tr--study th,
 #solpath-plan-root .sp-plan-student__tr--study td {
   vertical-align: top;
