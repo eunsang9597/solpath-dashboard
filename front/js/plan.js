@@ -1,6 +1,6 @@
 /**
  * 플래너 임웹 전용 — 전화 확인 후 공통·개인 일정 표시 (드라이브 링크 없음).
- * `config.js`를 import하지 않음: CDN·임웹에서 `plan.js`만 로드되어도 동작하고, 2차 모듈 요청 404를 피함.
+ * GAS 호출은 관리자 `app.js` 와 동일하게 **JSONP(GET)**. `fetch` POST는 GAS `TextOutput` CORS 한계로 막힐 수 있음.
  * 스니펫에서 먼저 `window.__SOLPATH__ = { gasBaseUrl: "…/exec", … }` 를 둔다.
  */
 function spReadPlanInjected_() {
@@ -37,6 +37,119 @@ const GAS_MODE = {
 
 const MOUNT_ID = 'solpath-plan-root';
 
+/** `styles.css`가 막혀도 게이트 한 줄·가운데 유지 */
+const PLAN_GATE_FALLBACK_CSS = `#solpath-plan-root .sp-plan-gate{display:flex!important;flex-direction:column!important;align-items:center!important;margin-left:auto!important;margin-right:auto!important;max-width:28rem!important;box-sizing:border-box!important;padding:1rem 0.5rem 1.25rem!important}#solpath-plan-root .sp-plan-gate__lead,#solpath-plan-root .sp-plan-gate__privacy{width:100%;max-width:24rem;text-align:center;margin:0 0 0.5rem}#solpath-plan-root .sp-plan-gate__privacy{margin-bottom:1rem;color:#64748b;font-size:0.85rem}#solpath-plan-root .sp-plan-gate__pair{display:inline-flex!important;flex-wrap:nowrap!important;align-items:flex-end!important;justify-content:center!important;gap:1rem!important;width:100%!important;max-width:100%!important;overflow-x:auto!important;box-sizing:border-box!important}#solpath-plan-root .sp-plan-gate__stack{display:flex!important;flex-direction:column!important;gap:0.28rem!important;flex:0 0 auto!important}#solpath-plan-root .sp-plan-gate__stack--tel{align-items:flex-end!important}#solpath-plan-root .sp-plan-gate__lbl{font-size:0.75rem;font-weight:600;color:#1e293b}#solpath-plan-root .sp-plan-gate__tel{display:inline-flex!important;flex-wrap:nowrap!important;align-items:center!important;gap:0.35rem!important}#solpath-plan-root .sp-plan-gate__dash{color:#94a3b8;font-weight:600;flex-shrink:0}#solpath-plan-root .sp-plan-gate__input{box-sizing:border-box;padding:0.45rem 0.35rem;border:1px solid #cbd5e1;border-radius:8px;font-size:1rem}#solpath-plan-root .sp-plan-gate__input--seg3{width:3.2rem;min-width:2.6rem;text-align:center;flex-shrink:0}#solpath-plan-root .sp-plan-gate__input--seg4{width:3.8rem;min-width:3.1rem;text-align:center;flex-shrink:0}#solpath-plan-root .sp-plan-gate__input--name{width:9rem;min-width:5rem;max-width:11rem;text-align:left;padding-left:0.45rem;padding-right:0.45rem}#solpath-plan-root .sp-plan-gate__err{margin:0.5rem 0 0;width:100%;max-width:24rem;text-align:center;color:#b71c1c;font-size:0.8rem}#solpath-plan-root .sp-plan-gate__btn{margin-top:0.85rem;align-self:center}`;
+
+function injectPlanGateFallbackCss_() {
+  if (document.getElementById('sp-plan-gate-fallback-css')) return;
+  const el = document.createElement('style');
+  el.id = 'sp-plan-gate-fallback-css';
+  el.textContent = PLAN_GATE_FALLBACK_CSS;
+  document.head.appendChild(el);
+}
+
+/**
+ * 관리자 `app.js` / `studentMgmt.js` 와 동일: `GET` JSONP.
+ * @param {string} baseUrl
+ * @param {string} action
+ * @param {Record<string, string>|null} extraParams
+ * @param {number} timeoutMs
+ * @returns {Promise<Record<string, unknown>>}
+ */
+function plannerGasJsonpWithParams_(baseUrl, action, extraParams, timeoutMs) {
+  return new Promise(function (resolve, reject) {
+    const cb = '_solpath_jp_' + String(Date.now()) + '_' + String(Math.floor(Math.random() * 1e9));
+    const lim = timeoutMs != null ? timeoutMs : 360000;
+    const t = window.setTimeout(function () {
+      cleanup();
+      reject(new Error('timeout'));
+    }, lim);
+    const s = document.createElement('script');
+    const g = globalThis;
+    function cleanup() {
+      window.clearTimeout(t);
+      try {
+        delete g[cb];
+      } catch (_e) {
+        g[cb] = undefined;
+      }
+      if (s.parentNode) {
+        s.parentNode.removeChild(s);
+      }
+    }
+    g[cb] = function (/** @type {Record<string, unknown>} */ data) {
+      cleanup();
+      resolve(data);
+    };
+    let u;
+    try {
+      u = new URL(baseUrl);
+    } catch (_e) {
+      cleanup();
+      reject(new Error('bad url'));
+      return;
+    }
+    u.searchParams.set('format', 'jsonp');
+    u.searchParams.set('callback', cb);
+    u.searchParams.set('action', action);
+    if (extraParams) {
+      Object.keys(extraParams).forEach(function (k) {
+        u.searchParams.set(k, extraParams[k]);
+      });
+    }
+    s.async = true;
+    s.src = u.toString();
+    s.onerror = function () {
+      cleanup();
+      reject(new Error('script error'));
+    };
+    document.head.appendChild(s);
+  });
+}
+
+const PLANNER_JSONP_TIMEOUT_MS = 360000;
+
+/**
+ * `HttpOpenSync.js` JSONP 분기 — 쿼리 `p0`·`p1`·`p2`·`n`·`m`(memberCode).
+ * @param {Record<string, unknown>} payload
+ * @return {Promise<Record<string, unknown>>}
+ */
+async function plannerGasCall_(payload) {
+  const url = String(GAS_BASE_URL || '').trim();
+  if (!url) {
+    return { ok: false, error: { code: 'NO_GAS_URL', message: 'gasBaseUrl이 없습니다.' } };
+  }
+  const action = String(payload.action != null ? payload.action : '');
+  try {
+    if (action === 'plannerRegistryRebuild' || action === 'plannerDevFullReset' || action === 'initPlannerMasterSheets') {
+      return await plannerGasJsonpWithParams_(url, action, null, PLANNER_JSONP_TIMEOUT_MS);
+    }
+    if (action === 'plannerMatch' || action === 'plannerBootstrap') {
+      const segs = /** @type {unknown[]} */ (Array.isArray(payload.phoneSegments) ? payload.phoneSegments : []);
+      const extra = {
+        p0: String(segs[0] != null ? segs[0] : '').replace(/\D/g, ''),
+        p1: String(segs[1] != null ? segs[1] : '').replace(/\D/g, ''),
+        p2: String(segs[2] != null ? segs[2] : '').replace(/\D/g, ''),
+        n: String(payload.name != null ? payload.name : ''),
+        m: String(payload.memberCode != null ? payload.memberCode : '')
+      };
+      return await plannerGasJsonpWithParams_(url, action, extra, PLANNER_JSONP_TIMEOUT_MS);
+    }
+    return { ok: false, error: { code: 'BAD_ACTION', message: '지원하지 않는 action: ' + action } };
+  } catch (e) {
+    const m = e && typeof e === 'object' && 'message' in e ? String(/** @type {{ message?: string }} */ (e).message) : String(e);
+    return {
+      ok: false,
+      error: {
+        code: 'NETWORK',
+        message:
+          m +
+          ' (GAS Web App: "Anyone(익명)" + Execute as Me + 새 버전 배포. 관리자와 동일 JSONP 경로입니다.)'
+      }
+    };
+  }
+}
+
 /** @param {string} s */
 function esc(s) {
   return String(s != null ? s : '')
@@ -44,51 +157,6 @@ function esc(s) {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
-}
-
-/**
- * @param {Record<string, unknown>} payload
- * @return {Promise<Record<string, unknown>>}
- */
-async function plannerPost_(payload) {
-  const url = String(GAS_BASE_URL || '').trim();
-  if (!url) {
-    return { ok: false, error: { code: 'NO_GAS_URL', message: 'gasBaseUrl이 없습니다.' } };
-  }
-  let res;
-  try {
-    res = await fetch(url, {
-      method: 'POST',
-      mode: 'cors',
-      credentials: 'omit',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify(payload)
-    });
-  } catch (e) {
-    const m = e && typeof e === 'object' && 'message' in e ? String(/** @type {{ message?: string }} */ (e).message) : String(e);
-    const hint =
-      ' (GAS Web App: 배포가 "Anyone(익명)" + Execute as Me 인지, `clasp push` 후 새 버전 배포했는지 확인. 401이면 브라우저가 CORS로 같이 보일 수 있음.)';
-    return { ok: false, error: { code: 'NETWORK', message: m + hint } };
-  }
-  if (!res.ok) {
-    const t = await res.text().catch(function () {
-      return '';
-    });
-    const base = t.slice(0, 400) || res.statusText;
-    const hint401 =
-      res.status === 401
-        ? ' — Web App이 익명 POST를 거부한 것일 수 있음. Apps Script [배포]에서 "실행 사용자: 나" + "액세스: 모든 사용자(익명 포함)" 후 새 버전 배포.'
-        : '';
-    return { ok: false, error: { code: 'HTTP_' + res.status, message: base + hint401 } };
-  }
-  const txt = await res.text();
-  let j;
-  try {
-    j = JSON.parse(txt);
-  } catch (_e) {
-    return { ok: false, error: { code: 'BAD_JSON', message: txt.slice(0, 400) } };
-  }
-  return j;
 }
 
 const PLAN_DEV_HTML = `<div class="sp-plan-devbar" id="sp-plan-devbar" role="region" aria-label="제작용 도구">
@@ -266,7 +334,7 @@ function wireGate_(root) {
   }
 
   async function runBootstrap(memberCode, segs, name) {
-    const boot = await plannerPost_({
+    const boot = await plannerGasCall_({
       action: 'plannerBootstrap',
       phoneSegments: segs,
       name: name || '',
@@ -291,7 +359,7 @@ function wireGate_(root) {
     const segs = readPhoneSegments_([p0 && p0.value, p1 && p1.value, p2 && p2.value]);
     const name = nameInput ? String(nameInput.value || '').trim() : '';
 
-    const res = await plannerPost_({
+    const res = await plannerGasCall_({
       action: 'plannerMatch',
       phoneSegments: segs,
       name: name
@@ -340,7 +408,7 @@ function wirePlanDevBar_(root) {
     ) {
       return;
     }
-    const r = await plannerPost_({ action: 'plannerDevFullReset' });
+    const r = await plannerGasCall_({ action: 'plannerDevFullReset' });
     if (!r || !r.ok) {
       const m = r && r.error && r.error.message != null ? String(r.error.message) : '초기화에 실패했습니다.';
       showDevMsg(m);
@@ -352,7 +420,7 @@ function wirePlanDevBar_(root) {
 
   syncBtn.addEventListener('click', async function () {
     showDevMsg('');
-    const r = await plannerPost_({ action: 'plannerRegistryRebuild' });
+    const r = await plannerGasCall_({ action: 'plannerRegistryRebuild' });
     if (!r || !r.ok) {
       const m = r && r.error && r.error.message != null ? String(r.error.message) : '동기화에 실패했습니다.';
       showDevMsg(m);
@@ -374,6 +442,7 @@ function wirePlanDevBar_(root) {
 function main() {
   const el = document.getElementById(MOUNT_ID);
   if (!el) return;
+  injectPlanGateFallbackCss_();
   el.innerHTML = `<div class="sp-plan-rootinner">${PLAN_DEV_HTML}${GATE_HTML}${PLAN_APP_HTML}</div>`;
   const app = el.querySelector('.app-shell--plan');
   if (app) app.setAttribute('hidden', 'hidden');

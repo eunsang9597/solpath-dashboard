@@ -139,7 +139,35 @@ function openSyncAllowedActions_() {
 function openSyncRouteAction_(action, e) {
   e = e || { parameter: {} };
   if (action === 'ping') {
-    return { ok: true, data: { name: 'openSync', version: 14, actions: openSyncAllowedActions_() } };
+    return { ok: true, data: { name: 'openSync', version: 15, actions: openSyncAllowedActions_() } };
+  }
+  /** 플래너(임웹): 관리자와 동일하게 JSONP `GET ?format=jsonp&callback=…&action=…` — `fetch` POST는 GAS TextOutput CORS로 막힐 수 있음. POST(doPost)도 유지. */
+  if (action === 'plannerMatch') {
+    return dbPlannerMatch_(openSyncPlannerBodyFromGetParams_(e));
+  }
+  if (action === 'plannerBootstrap') {
+    return dbPlannerBootstrap_(openSyncPlannerBodyFromGetParams_(e));
+  }
+  if (action === 'plannerRegistryRebuild') {
+    return dbPlannerRebuildRegistryFromMaster_();
+  }
+  if (action === 'plannerDevFullReset') {
+    return dbPlannerDevFullReset_();
+  }
+  if (action === 'initPlannerMasterSheets') {
+    var rPlInit = dbInitPlannerMasterSheets_();
+    if (rPlInit && rPlInit.error) {
+      return { ok: false, error: { code: rPlInit.error.code, message: rPlInit.error.message } };
+    }
+    return {
+      ok: true,
+      data: {
+        plannerSpreadsheetId: rPlInit.id,
+        plannerSpreadsheetUrl: rPlInit.url,
+        alreadyConfigured: rPlInit.already,
+        createdNew: rPlInit.createdNew
+      }
+    };
   }
   if (action === 'syncOpenFull') {
     try {
@@ -587,6 +615,28 @@ function openSyncParseFormUrlEncoded_(body) {
     o[k2] = v2;
   }
   return o;
+}
+
+/**
+ * JSONP GET 전용 — `e.parameter` 에서 플래너 본문 조립 (`doPost` JSON과 동일 필드).
+ * - `p0` `p1` `p2`: 휴대전화 세 칸(숫자만 권장, 서버에서 비숫자 제거)
+ * - `n`: 이름(선택)
+ * - `m`: `plannerBootstrap` 시 memberCode
+ *
+ * @param {Object} e
+ * @return {{ phoneSegments: string[], name: string, memberCode: string }}
+ */
+function openSyncPlannerBodyFromGetParams_(e) {
+  e = e || {};
+  var p = e.parameter || {};
+  var p0 = String(p.p0 != null ? p.p0 : '').replace(/\D/g, '');
+  var p1 = String(p.p1 != null ? p.p1 : '').replace(/\D/g, '');
+  var p2 = String(p.p2 != null ? p.p2 : '').replace(/\D/g, '');
+  return {
+    phoneSegments: [p0, p1, p2],
+    name: String(p.n != null ? p.n : ''),
+    memberCode: String(p.m != null ? p.m : '').trim()
+  };
 }
 
 /**

@@ -178,7 +178,7 @@
 ## 12. Web App — 엔드포인트·전송·응답
 
 - **배포:** 플래너 API는 **지금 쓰는 것과 동일한 GAS 프로젝트·동일 Web App `/exec` URL**에 둔다 (`window.__SOLPATH__.gasBaseUrl`와 동일 엔드포인트). 별도 배포 URL로 쪼개지 않는다.
-- **전송:** `POST`, `Content-Type: application/json` 또는 **`text/plain` + JSON 문자열**. **`plannerMatch` / `plannerBootstrap` / `initPlannerMasterSheets` / `plannerRegistryRebuild` / `plannerDevFullReset`** 는 이 방식으로 호출한다. 전화·이름 등 민감값은 **쿼리스트링·JSONP GET에 넣지 않는다.**
+- **전송(브라우저):** 관리자 대시보드와 동일하게 **`GET` JSONP** — `?format=jsonp&callback=NAME&action=plannerMatch|…` + 쿼리 `p0`·`p1`·`p2`(휴대전화)·`n`(이름)·`m`(`plannerBootstrap` 시 `memberCode`). GAS `TextOutput`은 CORS 헤더를 붙일 수 없어 **임웹에서는 `fetch` POST를 쓰지 않는다**(`docs/GAS_WEBAPP_SHEETS.md` §2). (쿼리 노출·로그는 운영에서 감수; 동일 출처 프록시가 필요하면 별도.) **curl·서버**는 기존처럼 `POST` + JSON(`doPost`) 유지.
 - **라우팅:** 기존 `HttpOpenSync.js` `doPost`와 동일하게 본문 파싱 후 **`action` 필드**로 분기한다. `openSyncAllowedActions_()`에 위 액션 이름을 포함한다.
 
 **요청 본문 초안**
@@ -268,7 +268,7 @@ GAS 편집기 [실행]: `run_Planner_DevFullReset`.
 
 ## 14. 구현 시 남는 기술 메모
 
-- **CORS·401 (임웹 `fetch POST`):** `ContentService` `TextOutput`에는 `Access-Control-Allow-Origin`을 직접 붙일 수 없다(`docs/GAS_WEBAPP_SHEETS.md` §2.1). 브라우저가 **CORS 위반**으로 보고할 때도, 실제로는 **`script.google.com` 이 401(미배포·권한)** 을 내고 응답에 ACAO가 없어서 겹쳐 보이는 경우가 많다. **Web App 배포**: **Execute as Me(배포 계정)** + **Who has access = Anyone(익명)**. `clasp push` 후 편집기에서 **배포 → 새 버전**까지 해야 `…/exec` 가 반영된다. 레포 `gas/appsscript.json` 의 `webapp.executeAs` 는 `USER_DEPLOYING`(Me) 권장.
+- **CORS·401 (임웹):** 플래너 프론트는 관리자와 동일하게 **`GET` JSONP**로 `…/exec`를 호출한다(`front/js/plan.js`). `fetch` POST는 GAS `TextOutput` CORS 한계로 막힐 수 있다. **Web App 배포**: **Execute as Me** + **Anyone(익명)** + `clasp push` 후 **새 버전 배포**. 레포 `gas/appsscript.json` 의 `webapp.executeAs` 는 `USER_DEPLOYING`(Me) 권장.
 - **할당량·남용 방지:** 분당 호출 상한 등 수치는 구현·운영에서 정한다.
 - `planner_member_records.phone_normalized` **평문 vs 해시**는 §9와 동일하게 이후 결정.
 
