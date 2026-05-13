@@ -3451,7 +3451,7 @@ button.sp-stu-remark__item--open:hover {
   font-weight: 650;
 }
 
-/* 요일·과목: .chks 래퍼를 contents로 없애 라벨들이 한 flex 줄에만 gap으로 붙음 */
+/* 요일·과목: 아임웹 전역과 충돌 시 display:contents 간격 깨짐 방지 — inline-flex 래퍼로 고정 */
 #solpath-plan-root .sp-plan-quick__row--horiz:not(.sp-plan-quick__row--nums) {
   display: flex ;
   flex-direction: row;
@@ -3459,17 +3459,20 @@ button.sp-stu-remark__item--open:hover {
   align-items: center;
   justify-content: flex-start;
   gap: 0.35rem 0.45rem;
-  width: fit-content;
-  max-width: 100%;
+  width: auto !important;
+  max-width: 100% !important;
   box-sizing: border-box;
 }
 
 #solpath-plan-root .sp-plan-quick__row--horiz:not(.sp-plan-quick__row--nums) .sp-plan-quick__chks {
-  display: flex !important;
+  display: inline-flex !important;
   flex-direction: row !important;
-  flex-wrap: nowrap !important;
+  flex-wrap: wrap !important;
   align-items: center !important;
-  gap: 0.35rem 0.45rem !important;
+  gap: 0.35rem 0.5rem !important;
+  flex: 0 0 auto !important;
+  width: auto !important;
+  justify-content: flex-start !important;
 }
 
 #solpath-plan-root .sp-plan-quick__row--horiz.sp-plan-quick__row--nums {
@@ -4272,4 +4275,27 @@ button.sp-stu-remark__item--open:hover {
   position: relative;
   z-index: 3;
   pointer-events: auto;
+}
+
+/* ── 달력 레이아웃 픽스 ── */
+#solpath-plan-root .sp-plan-calstack {
+  width: 100% !important;
+  min-width: 0 !important;
+}
+
+#solpath-plan-root .sp-plan-month__grid,
+#solpath-plan-root .sp-plan-month__weekRow,
+#solpath-plan-root .sp-plan-month__dow {
+  width: 100% !important;
+  min-width: 0 !important;
+}
+
+#solpath-plan-root .sp-plan-month__weekRow,
+#solpath-plan-root .sp-plan-month__dow {
+  grid-template-columns: minmax(18rem, 22rem) repeat(7, minmax(7rem, 1fr)) !important;
+  box-sizing: border-box !important;
+}
+
+#solpath-plan-root .sp-plan-month .sp-plan-day {
+  min-width: 0 !important;
 }
