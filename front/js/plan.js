@@ -650,6 +650,8 @@ function plannerAssignedMinutesForDay_(st, ymd) {
 }
 
 /**
+ * 선택 요일에 해당하는 날짜를 달 안에서 **시간순**으로 두고,
+ * 과목×강 N건을 `floor(N/M)`건씩 앞쪽 M-1일에 두고, 나머지는 **마지막 날**에 몰아 넣는다(저장 없음).
  * @param {object} st
  * @param {Date} viewMonth
  * @param {number[]} weekdays 0=일 … 6=토
@@ -678,14 +680,22 @@ function plannerApplyQuickPlanToState_(st, viewMonth, weekdays, subjects, fromL,
       tasks.push({ subject: subj, lesson: L });
     }
   });
+  if (!tasks.length) return;
   if (!st.quickPlanByDate) st.quickPlanByDate = {};
-  /** 선택한 요일이 도는 날짜마다 동일한 과목·강 목록을 한 번씩 붙인다(저장 없음 · 프론트만). */
-  dates.forEach(function (key) {
+  const M = dates.length;
+  const N = tasks.length;
+  const q = Math.floor(N / M);
+  const r = N % M;
+  let ti = 0;
+  for (let j = 0; j < M; j++) {
+    const key = dates[j];
+    const cnt = q + (j === M - 1 ? r : 0);
     if (!st.quickPlanByDate[key]) st.quickPlanByDate[key] = [];
-    tasks.forEach(function (t) {
-      st.quickPlanByDate[key].push({ subject: t.subject, lesson: t.lesson });
-    });
-  });
+    for (let k = 0; k < cnt; k++) {
+      const t = tasks[ti++];
+      if (t) st.quickPlanByDate[key].push({ subject: t.subject, lesson: t.lesson });
+    }
+  }
 }
 
 /** @param {Record<string, unknown>} legacy */
