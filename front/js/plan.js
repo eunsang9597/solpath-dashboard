@@ -251,49 +251,32 @@ function plannerMergeStudentProfile_(apiPartial) {
 }
 
 /**
- * `prev_major_gpa` 한 필드 문자열(예: `국어국문학과 · 평점 3.82 / 4.5`)을 같은 칸 안 탭(칩)으로 나눈다.
+ * `prev_major_gpa` 한 필드 문자열(예: `국어국문학과 · 평점 3.82 / 4.5`)을
+ * 같은 행에서 «학과» / «학점» 2칸으로 분리하기 위한 파서.
  * @param {string} raw
- * @returns {string}
+ * @returns {{ major: string, gpa: string }}
  */
-function plannerPrevMajorGpaPillsHtml_(raw) {
+function plannerPrevMajorGpaParts_(raw) {
   const s = String(raw != null ? raw : '').trim();
-  if (!s) return '';
+  if (!s) return { major: '', gpa: '' };
   const chunks = s
     .split(/\s*·\s*/)
     .map(function (x) {
       return String(x || '').trim();
     })
     .filter(Boolean);
-  if (!chunks.length) return '';
-  /** @type {{ lbl: string, val: string }[]} */
-  const items = [];
+  let major = '';
+  let gpa = '';
   chunks.forEach(function (chunk) {
     const m = chunk.match(/^평점\s*(.*)$/i);
     if (m) {
       const rest = String(m[1] != null ? m[1] : '').trim();
-      items.push({ lbl: '평점', val: rest || '—' });
-    } else {
-      items.push({ lbl: '학과', val: chunk });
+      if (!gpa) gpa = rest;
+    } else if (!major) {
+      major = chunk;
     }
   });
-  return (
-    '<div class="sp-plan-student__pills" role="list">' +
-    items
-      .map(function (t) {
-        const aria = (t.lbl ? t.lbl + ' ' : '') + t.val;
-        return (
-          '<span class="sp-plan-student__pill" role="listitem" tabindex="0" aria-label="' +
-          esc(aria) +
-          '">' +
-          (t.lbl ? '<span class="sp-plan-student__pill-lbl">' + esc(t.lbl) + '</span>' : '') +
-          '<span class="sp-plan-student__pill-val">' +
-          esc(t.val) +
-          '</span></span>'
-        );
-      })
-      .join('') +
-    '</div>'
-  );
+  return { major: major, gpa: gpa };
 }
 
 /**
@@ -305,6 +288,7 @@ function renderPlannerStudentProfile_(root, profile) {
   const tbody = root.querySelector('#sp-plan-student-tbody');
   if (!tbody) return;
   const p = plannerMergeStudentProfile_(profile);
+  const pm = plannerPrevMajorGpaParts_(p.prev_major_gpa);
   tbody.innerHTML =
     '<tr>' +
     '<th scope="row">이름</th>' +
@@ -333,9 +317,13 @@ function renderPlannerStudentProfile_(root, profile) {
     '</td>' +
     '</tr>' +
     '<tr>' +
-    '<th scope="row">전적대 학과 · 학점</th>' +
-    '<td colspan="3" data-sp-plan-student="prev_major_gpa">' +
-    plannerPrevMajorGpaPillsHtml_(p.prev_major_gpa) +
+    '<th scope="row">전적대 학과</th>' +
+    '<td data-sp-plan-student="prev_major_gpa_major">' +
+    esc(pm.major || '—') +
+    '</td>' +
+    '<th scope="row">학점</th>' +
+    '<td data-sp-plan-student="prev_major_gpa">' +
+    esc(pm.gpa || '—') +
     '</td>' +
     '</tr>' +
     '<tr>' +
@@ -1359,10 +1347,7 @@ function renderCalendar_(root, boot) {
       cta.addEventListener('click', function (ev) {
         ev.preventDefault();
         ev.stopPropagation();
-        /* 시연: 결제 플로우 없이 세션 내 회원 UI(잠금 해제) — renderCalendar_ 재호출 시에도 유지 */
-        st.planGuestUnlockMock = true;
-        st.role = 'member';
-        if (ban) ban.setAttribute('hidden', 'hidden');
+        /* 시연: 결제 플로우 없이, 잠금(blur)만 즉시 해제 */
         const lockEl = el.querySelector('#sp-plan-day-lock');
         if (lockEl) lockEl.setAttribute('hidden', 'hidden');
       });

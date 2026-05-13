@@ -3024,49 +3024,7 @@ button.sp-stu-remark__item--open:hover {
   background: #fff;
 }
 
-#solpath-plan-root .sp-plan-student__pills {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.45rem;
-}
-
-#solpath-plan-root .sp-plan-student__pill {
-  display: inline-flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: 0.3rem 0.4rem;
-  padding: 0.38rem 0.55rem;
-  border-radius: 9px;
-  border: 1px solid #e2e8f0;
-  background: #f1f5f9;
-  box-sizing: border-box;
-  max-width: 100%;
-  outline: none;
-}
-
-#solpath-plan-root .sp-plan-student__pill:focus-visible {
-  border-color: #6366f1;
-  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.22);
-}
-
-#solpath-plan-root .sp-plan-student__pill-lbl {
-  flex: 0 0 auto;
-  font-size: calc(0.68rem + var(--sp-text-bump));
-  font-weight: 800;
-  color: #64748b;
-  letter-spacing: -0.02em;
-}
-
-#solpath-plan-root .sp-plan-student__pill-val {
-  flex: 1 1 auto;
-  min-width: 0;
-  font-size: calc(0.8rem + var(--sp-text-bump));
-  font-weight: 650;
-  color: #0f172a;
-  word-break: keep-all;
-  overflow-wrap: anywhere;
-}
+/* (이전 칩 UI 제거됨) */
 
 #solpath-plan-root .sp-plan-student__tr--study th,
 #solpath-plan-root .sp-plan-student__tr--study td {
@@ -3645,7 +3603,7 @@ button.sp-stu-remark__item--open:hover {
 
 #solpath-plan-root .sp-plan-month__weekRow {
   display: grid;
-  grid-template-columns: minmax(14rem, 19rem) repeat(7, 1fr);
+  grid-template-columns: minmax(14rem, 19rem) repeat(7, minmax(3.15rem, 1fr));
   gap: 0.35rem;
   min-height: 5.8rem;
   align-items: stretch;
