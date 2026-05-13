@@ -38,7 +38,7 @@ const GAS_MODE = {
 const MOUNT_ID = 'solpath-plan-root';
 
 /** `styles.css`가 막혀도 게이트 한 줄·가운데 유지 */
-const PLAN_GATE_FALLBACK_CSS = `#solpath-plan-root .sp-plan-gate{display:flex!important;flex-direction:column!important;align-items:center!important;margin-left:auto!important;margin-right:auto!important;width:100%!important;max-width:min(100%,52rem)!important;box-sizing:border-box!important;padding:1rem clamp(0.75rem,3vw,1.75rem) 1.25rem!important}#solpath-plan-root .sp-plan-gate__lead,#solpath-plan-root .sp-plan-gate__privacy{width:100%;max-width:100%;text-align:center;margin:0 0 0.5rem}#solpath-plan-root .sp-plan-gate__privacy{margin-bottom:1rem;color:#64748b;font-size:0.85rem}#solpath-plan-root .sp-plan-gate__pair{display:flex!important;flex-wrap:wrap!important;align-items:flex-start!important;justify-content:center!important;gap:0.75rem 2rem!important;width:100%!important;max-width:100%!important;margin-left:auto!important;margin-right:auto!important;padding-left:0.25rem!important;padding-right:0.25rem!important;overflow:visible!important;box-sizing:border-box!important}#solpath-plan-root .sp-plan-gate__stack{display:flex!important;flex-direction:column!important;gap:0.28rem!important;flex:0 0 auto!important}#solpath-plan-root .sp-plan-gate__stack--tel{align-items:flex-start!important}#solpath-plan-root .sp-plan-gate__lbl{font-size:0.75rem;font-weight:600;color:#1e293b;text-align:left;align-self:stretch}#solpath-plan-root .sp-plan-gate__tel{display:inline-flex!important;flex-wrap:nowrap!important;align-items:center!important;gap:0.35rem!important}#solpath-plan-root .sp-plan-gate__dash{color:#94a3b8;font-weight:600;flex-shrink:0}#solpath-plan-root .sp-plan-gate__input{box-sizing:border-box;padding:0.45rem 0.35rem;border:1px solid #cbd5e1;border-radius:8px;font-size:1rem}#solpath-plan-root .sp-plan-gate__input--seg3{width:3.2rem;min-width:2.6rem;text-align:center;flex-shrink:0}#solpath-plan-root .sp-plan-gate__input--seg4{width:3.8rem;min-width:3.1rem;text-align:center;flex-shrink:0}#solpath-plan-root .sp-plan-gate__input--name{width:min(100%,14rem);min-width:6.5rem;max-width:20rem;text-align:left;padding-left:0.45rem;padding-right:0.45rem}#solpath-plan-root .sp-plan-gate__err{margin:0.5rem 0 0;width:100%;max-width:100%;text-align:center;color:#b71c1c;font-size:0.8rem}#solpath-plan-root .sp-plan-gate__btn{margin-top:0.85rem;align-self:center}`;
+const PLAN_GATE_FALLBACK_CSS = `#solpath-plan-root .sp-plan-gate{display:flex!important;flex-direction:column!important;align-items:center!important;margin-left:auto!important;margin-right:auto!important;width:100%!important;max-width:min(100%,52rem)!important;box-sizing:border-box!important;padding:1rem clamp(0.75rem,3vw,1.75rem) 1.25rem!important}#solpath-plan-root .sp-plan-gate__lead,#solpath-plan-root .sp-plan-gate__privacy{width:100%;max-width:100%;text-align:center;margin:0 0 0.5rem}#solpath-plan-root .sp-plan-gate__privacy{margin-bottom:1rem;color:#64748b;font-size:0.85rem}#solpath-plan-root .sp-plan-gate__pair{display:flex!important;flex-wrap:wrap!important;align-items:flex-start!important;justify-content:center!important;gap:0.75rem 2rem!important;width:100%!important;max-width:100%!important;margin-left:auto!important;margin-right:auto!important;padding-left:0.25rem!important;padding-right:0.25rem!important;overflow:visible!important;box-sizing:border-box!important}#solpath-plan-root .sp-plan-gate__stack{display:flex!important;flex-direction:column!important;gap:0.28rem!important;flex:0 0 auto!important}#solpath-plan-root .sp-plan-gate__stack--tel{align-items:flex-start!important}#solpath-plan-root .sp-plan-gate__lbl{font-size:0.75rem;font-weight:600;color:#1e293b;text-align:left;align-self:stretch}#solpath-plan-root .sp-plan-gate__tel{display:inline-flex!important;flex-wrap:nowrap!important;align-items:center!important;gap:0.35rem!important}#solpath-plan-root .sp-plan-gate__dash{color:#94a3b8;font-weight:600;flex-shrink:0}#solpath-plan-root .sp-plan-gate__input{box-sizing:border-box;padding:0.45rem 0.35rem;border:1px solid #cbd5e1;border-radius:8px;font-size:1rem}#solpath-plan-root .sp-plan-gate__input--seg3{width:4.25rem!important;min-width:4.25rem!important;max-width:5rem!important;text-align:center;flex-shrink:0;box-sizing:border-box!important}#solpath-plan-root .sp-plan-gate__input--seg4{width:5.25rem!important;min-width:5.25rem!important;max-width:6.25rem!important;text-align:center;flex-shrink:0;box-sizing:border-box!important}#solpath-plan-root .sp-plan-gate__input--name{width:min(100%,14rem);min-width:6.5rem;max-width:20rem;text-align:left;padding-left:0.45rem;padding-right:0.45rem}#solpath-plan-root .sp-plan-gate__err{margin:0.5rem 0 0;width:100%;max-width:100%;text-align:center;color:#b71c1c;font-size:0.8rem}#solpath-plan-root .sp-plan-gate__btn{margin-top:0.85rem;align-self:center}`;
 
 function injectPlanGateFallbackCss_() {
   if (document.getElementById('sp-plan-gate-fallback-css')) return;
@@ -256,7 +256,7 @@ const GATE_HTML = `<div class="sp-plan-gate">
         <input
           class="sp-plan-gate__input sp-plan-gate__input--seg3"
           id="sp-plan-p0"
-          type="text"
+          type="tel"
           inputmode="numeric"
           maxlength="3"
           autocomplete="off"
@@ -266,7 +266,7 @@ const GATE_HTML = `<div class="sp-plan-gate">
         <input
           class="sp-plan-gate__input sp-plan-gate__input--seg4"
           id="sp-plan-p1"
-          type="text"
+          type="tel"
           inputmode="numeric"
           maxlength="4"
           autocomplete="off"
@@ -276,7 +276,7 @@ const GATE_HTML = `<div class="sp-plan-gate">
         <input
           class="sp-plan-gate__input sp-plan-gate__input--seg4"
           id="sp-plan-p2"
-          type="text"
+          type="tel"
           inputmode="numeric"
           maxlength="4"
           autocomplete="off"
@@ -346,7 +346,12 @@ function wirePlanPhoneDigitsOnly_(root) {
     const len = setSeg(el, max, el.value);
     if (len >= max && idx < 2) {
       const next = idx === 0 ? p1 : p2;
-      next.focus();
+      window.setTimeout(function () {
+        next.focus();
+        try {
+          next.setSelectionRange(0, next.value.length);
+        } catch (_e) {}
+      }, 0);
     }
   }
 
@@ -377,9 +382,7 @@ function wirePlanPhoneDigitsOnly_(root) {
         }
         return;
       }
-      if (e.key.length === 1 && !/\d/.test(e.key)) {
-        e.preventDefault();
-      }
+      /* 숫자 필터는 input(setSeg)에만 맡김. keydown에서 \\d 로 막으면 일부 모바일·레이아웃 키패드에서 숫자가 안 들어감 */
     });
 
     el.addEventListener('input', function () {

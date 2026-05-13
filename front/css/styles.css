@@ -3108,16 +3108,18 @@ button.sp-stu-remark__item--open:hover {
 }
 
 #solpath-plan-root .sp-plan-gate__input--seg3 {
-  width: 3ch;
-  min-width: 2.65rem;
-  max-width: 3.35rem;
+  box-sizing: border-box;
+  width: 4.25rem;
+  min-width: 4.25rem;
+  max-width: 5rem;
   flex-shrink: 0;
 }
 
 #solpath-plan-root .sp-plan-gate__input--seg4 {
-  width: 4ch;
-  min-width: 3.15rem;
-  max-width: 4.1rem;
+  box-sizing: border-box;
+  width: 5.25rem;
+  min-width: 5.25rem;
+  max-width: 6.25rem;
   flex-shrink: 0;
 }
 
