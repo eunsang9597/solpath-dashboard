@@ -3096,6 +3096,8 @@ button.sp-stu-remark__item--open:hover {
   border: 2px dashed #d1c4e9;
   background: #faf8ff;
   box-sizing: border-box;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 #solpath-plan-root .sp-plan-rootinner {
@@ -3328,6 +3330,7 @@ button.sp-stu-remark__item--open:hover {
   height: 100%;
   box-sizing: border-box;
   min-height: 0;
+  min-width: 0;
 }
 
 #solpath-plan-root .sp-plan-quick {
@@ -3547,11 +3550,14 @@ button.sp-stu-remark__item--open:hover {
   height: 100%;
   display: flex;
   flex-direction: column;
+  align-items: flex-start;
   gap: 0.55rem;
   padding: 0.75rem;
   box-sizing: border-box;
   min-width: 0;
+  max-width: 100%;
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 #solpath-plan-root .sp-plan-month__head {
@@ -3559,6 +3565,10 @@ button.sp-stu-remark__item--open:hover {
   align-items: center;
   justify-content: center;
   gap: 0.75rem;
+  align-self: stretch;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 #solpath-plan-root .sp-plan-month__title {
@@ -3576,7 +3586,7 @@ button.sp-stu-remark__item--open:hover {
 
 #solpath-plan-root .sp-plan-month__dow {
   display: grid;
-  grid-template-columns: minmax(9rem, 11rem) repeat(7, minmax(11rem, 1fr));
+  grid-template-columns: minmax(22rem, 28rem) repeat(7, minmax(10.5rem, 1fr));
   gap: 0.3rem;
   padding: 0 0.05rem;
   align-items: center;
@@ -3624,7 +3634,7 @@ button.sp-stu-remark__item--open:hover {
 
 #solpath-plan-root .sp-plan-month__weekRow {
   display: grid;
-  grid-template-columns: minmax(9rem, 11rem) repeat(7, minmax(11rem, 1fr));
+  grid-template-columns: minmax(22rem, 28rem) repeat(7, minmax(10.5rem, 1fr));
   gap: 0.3rem;
   min-height: 5.8rem;
   align-items: stretch;
@@ -3637,7 +3647,7 @@ button.sp-stu-remark__item--open:hover {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
-  min-width: 0;
+  min-width: min-content;
   min-height: 0;
 }
 
@@ -3650,7 +3660,7 @@ button.sp-stu-remark__item--open:hover {
   flex-direction: column;
   justify-content: center;
   gap: 0.15rem;
-  min-width: 0;
+  min-width: min-content;
   box-sizing: border-box;
   flex: 0 0 auto;
 }
@@ -3658,7 +3668,7 @@ button.sp-stu-remark__item--open:hover {
 #solpath-plan-root .sp-plan-cur {
   flex: 1 1 auto;
   min-height: 0;
-  min-width: 0;
+  min-width: min(100%, 20rem);
   border-radius: 10px;
   border: 1px solid #e2e8f0;
   background: #ffffff;
@@ -3667,10 +3677,11 @@ button.sp-stu-remark__item--open:hover {
 }
 
 #solpath-plan-root .sp-plan-cur__tbl {
-  width: 100%;
+  width: max-content;
+  min-width: 100%;
   border-collapse: collapse;
   font-size: calc(0.65rem + var(--sp-text-bump));
-  table-layout: fixed;
+  table-layout: auto;
 }
 
 #solpath-plan-root .sp-plan-cur__tbl thead th {
