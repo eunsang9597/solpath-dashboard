@@ -1435,28 +1435,42 @@ function renderCalendar_(root, boot) {
             <div class="sp-plan-lock__card">
               <div class="sp-plan-lock__title">회원 전용 기능입니다</div>
               <div class="sp-plan-lock__desc">일일 플래너(시간 배치·개인 할 일)는 회원에게만 제공됩니다.</div>
-              <button type="button" class="btn btn--primary sp-plan-lock__cta">구매하기</button>
+              <button type="button" id="sp-plan-lock-buy" class="btn btn--primary sp-plan-lock__cta">구매하기</button>
             </div>
           </div>
         </div>
       </div>`;
     root.appendChild(el);
-    el.addEventListener('click', function (e) {
-      const t = /** @type {HTMLElement|null} */ (e.target instanceof HTMLElement ? e.target : null);
-      if (!t) return;
-      const buy = t.closest ? t.closest('.sp-plan-lock__cta') : null;
-      if (buy && el.contains(buy)) {
-        e.preventDefault();
-        e.stopPropagation();
-        const st0 = root.__spPlanState;
-        if (st0 && typeof st0 === 'object') {
-          st0.planGuestUnlockMock = true;
-        }
-        const lockEl = el.querySelector('#sp-plan-day-lock');
-        if (lockEl) lockEl.setAttribute('hidden', 'hidden');
-        return;
+    function plannerGuestUnlockBuy_() {
+      const st0 = root.__spPlanState;
+      if (st0 && typeof st0 === 'object') {
+        st0.planGuestUnlockMock = true;
       }
-      if (t.getAttribute && t.getAttribute('data-sp-plan-close') === '1') {
+      const lockEl = el.querySelector('#sp-plan-day-lock');
+      if (lockEl) {
+        lockEl.setAttribute('hidden', 'hidden');
+        lockEl.setAttribute('aria-hidden', 'true');
+      }
+    }
+    const buyBtn = el.querySelector('#sp-plan-lock-buy');
+    if (buyBtn) {
+      buyBtn.addEventListener(
+        'click',
+        function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          plannerGuestUnlockBuy_();
+        },
+        true
+      );
+    }
+    el.addEventListener('click', function (e) {
+      let t = /** @type {Node|null} */ (e.target);
+      if (!t) return;
+      if (t.nodeType === 3 && t.parentNode) t = t.parentNode;
+      const h = t instanceof HTMLElement ? t : null;
+      if (!h) return;
+      if (h.getAttribute && h.getAttribute('data-sp-plan-close') === '1') {
         closeDayModal_();
       }
     });
@@ -1485,9 +1499,16 @@ function renderCalendar_(root, boot) {
     m.removeAttribute('hidden');
     const lock = m.querySelector('#sp-plan-day-lock');
     if (lock) {
-      if (st.planGuestUnlockMock) lock.setAttribute('hidden', 'hidden');
-      else if (st.role === 'guest') lock.removeAttribute('hidden');
-      else lock.setAttribute('hidden', 'hidden');
+      if (st.planGuestUnlockMock) {
+        lock.setAttribute('hidden', 'hidden');
+        lock.setAttribute('aria-hidden', 'true');
+      } else if (st.role === 'guest') {
+        lock.removeAttribute('hidden');
+        lock.removeAttribute('aria-hidden');
+      } else {
+        lock.setAttribute('hidden', 'hidden');
+        lock.setAttribute('aria-hidden', 'true');
+      }
     }
   }
 

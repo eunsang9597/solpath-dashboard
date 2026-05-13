@@ -4168,6 +4168,11 @@ button.sp-stu-remark__item--open:hover {
   padding: 1rem;
 }
 
+/* display:flex가 테마·[hidden] 기본보다 우선하면 잠금이 안 사라지는 경우 방지 */
+#solpath-plan-root .sp-plan-lock[hidden] {
+  display: none !important;
+}
+
 #solpath-plan-root .sp-plan-lock::before {
   content: "";
   position: absolute;
