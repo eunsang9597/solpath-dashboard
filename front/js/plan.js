@@ -256,8 +256,7 @@ const GATE_HTML = `<div class="sp-plan-gate">
         <input
           class="sp-plan-gate__input sp-plan-gate__input--seg3"
           id="sp-plan-p0"
-          type="tel"
-          inputmode="numeric"
+          type="text"
           maxlength="3"
           autocomplete="off"
           aria-label="휴대전화 앞자리 세 자리"
@@ -266,8 +265,7 @@ const GATE_HTML = `<div class="sp-plan-gate">
         <input
           class="sp-plan-gate__input sp-plan-gate__input--seg4"
           id="sp-plan-p1"
-          type="tel"
-          inputmode="numeric"
+          type="text"
           maxlength="4"
           autocomplete="off"
           aria-label="휴대전화 중간 네 자리"
@@ -276,8 +274,7 @@ const GATE_HTML = `<div class="sp-plan-gate">
         <input
           class="sp-plan-gate__input sp-plan-gate__input--seg4"
           id="sp-plan-p2"
-          type="tel"
-          inputmode="numeric"
+          type="text"
           maxlength="4"
           autocomplete="off"
           aria-label="휴대전화 끝 네 자리"
@@ -300,7 +297,7 @@ function readPhoneSegments_(segs) {
 }
 
 /**
- * 휴대전화 세 칸: 숫자만(키 입력·붙여넣기·IME), 3·4·4. 긴 번호 붙여넣기 시 한 번에 나눔.
+ * 휴대전화 세 칸: input·붙여넣기에서 숫자만 유지, 3·4·4. 긴 번호 붙여넣기 시 한 번에 나눔.
  * @param {HTMLElement} root
  */
 function wirePlanPhoneDigitsOnly_(root) {
@@ -382,7 +379,7 @@ function wirePlanPhoneDigitsOnly_(root) {
         }
         return;
       }
-      /* 숫자 필터는 input(setSeg)에만 맡김. keydown에서 \\d 로 막으면 일부 모바일·레이아웃 키패드에서 숫자가 안 들어감 */
+      /* 숫자 정리는 input(setSeg)만 — keydown에서 막으면 글자 조합 중 입력이 잘릴 수 있음 */
     });
 
     el.addEventListener('input', function () {
