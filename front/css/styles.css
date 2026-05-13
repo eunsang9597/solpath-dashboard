@@ -2956,11 +2956,11 @@ button.sp-stu-remark__item--open:hover {
 
 /* 플래너: 좌우 여백 줄여 가용 폭 확보 */
 #solpath-plan-root .app-shell--plan {
-  padding: 0.85rem 0.55rem 1.35rem;
+  padding: 0.8rem 0.3rem 1.15rem;
 }
 
 #solpath-plan-root .app-shell--plan .panel--hero.sp-plan-body {
-  padding: 1.05rem 1.05rem 1.1rem;
+  padding: 0.95rem 0.55rem 1rem;
 }
 
 /* 플래너: 학생 정보(상담 표 형태, 월간 위 · DB 연동 전 목업) */
@@ -3378,7 +3378,7 @@ button.sp-stu-remark__item--open:hover {
   flex: 0 0 auto;
   border: 1px solid #e9d5ff;
   border-radius: 12px;
-  padding: 0.65rem 0.75rem 0.7rem;
+  padding: 0.65rem 0.75rem 0.9rem;
   background: linear-gradient(180deg, #faf5ff 0%, #ffffff 55%);
   box-sizing: border-box;
 }
@@ -3474,7 +3474,8 @@ button.sp-stu-remark__item--open:hover {
   display: flex;
   flex-wrap: nowrap;
   align-items: center;
-  gap: 0.45rem;
+  justify-content: flex-start;
+  gap: 0.35rem;
   margin-top: 0;
 }
 
@@ -3487,19 +3488,24 @@ button.sp-stu-remark__item--open:hover {
   display: flex;
   flex-wrap: nowrap;
   align-items: center;
-  gap: 0.35rem 0.55rem;
-  flex: 1 1 auto;
+  gap: 0.35rem 0.45rem;
+  /* 늘리지 않음: 라벨 옆에 바로 붙여 한 줄로 선택 */
+  flex: 0 1 auto;
+  max-width: 100%;
   min-width: 0;
   overflow-x: auto;
   overflow-y: hidden;
   -webkit-overflow-scrolling: touch;
-  padding: 0.1rem 0;
+  padding: 0.15rem 0;
   box-sizing: border-box;
+  scrollbar-width: thin;
 }
 
 #solpath-plan-root .sp-plan-quick__chks--nums {
   flex-wrap: nowrap;
-  gap: 0.4rem 0.5rem;
+  gap: 0.45rem 0.55rem;
+  padding: 0.35rem 0.25rem 0.4rem;
+  margin-top: 0.15rem;
 }
 
 #solpath-plan-root .sp-plan-quick__chks--nums .sp-plan-quick__num,
@@ -3512,11 +3518,20 @@ button.sp-stu-remark__item--open:hover {
   flex-shrink: 0;
   margin-left: 0;
   white-space: nowrap;
+  padding-inline: 0.65rem;
+  padding-block: 0.42rem;
+}
+
+/* 강·버튼 행: 위 요일/과목과 간격 + 안쪽 여유 */
+#solpath-plan-root .sp-plan-quick__row--horiz.sp-plan-quick__row--nums {
+  padding-top: 0.35rem;
+  margin-top: 0.2rem;
+  border-top: 1px solid #f1e9ff;
 }
 
 #solpath-plan-root .sp-plan-quick__lbl {
   flex: 0 0 auto;
-  min-width: 2.5rem;
+  min-width: 2.15rem;
   font-size: calc(0.7rem + var(--sp-text-bump));
   font-weight: 800;
   color: #475569;
@@ -3542,7 +3557,7 @@ button.sp-stu-remark__item--open:hover {
 
 #solpath-plan-root .sp-plan-quick__num {
   width: 3.5rem;
-  padding: 0.35rem 0.4rem;
+  padding: 0.4rem 0.45rem;
   border: 1px solid #cbd5e1;
   border-radius: 8px;
   font-size: calc(0.85rem + var(--sp-text-bump));
