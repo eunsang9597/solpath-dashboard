@@ -69,6 +69,14 @@ code {
   box-sizing: border-box !important;
 }
 
+/* 플래너 전용: 상위가 좁아도 본문 최소 가로 + 내용만큼 넓어져 임웹에서 가로 스크롤 */
+#solpath-plan-root.solpath-mount {
+  width: max-content !important;
+  min-width: min(100%, 88rem) !important;
+  max-width: none !important;
+  box-sizing: border-box !important;
+}
+
 .app-header {
   margin-bottom: 1.5rem;
 }
@@ -3442,15 +3450,21 @@ button.sp-stu-remark__item--open:hover {
   font-weight: 650;
 }
 
-/* 요일·과목: 라벨+체크 한 덩어리(max-content), 전체 행 너비로 체크가 벌어지지 않게 */
+/* 요일·과목: .chks 래퍼를 contents로 없애 라벨들이 한 flex 줄에만 gap으로 붙음 */
 #solpath-plan-root .sp-plan-quick__row--horiz:not(.sp-plan-quick__row--nums) {
-  display: grid;
-  grid-template-columns: auto max-content;
-  column-gap: 0.4rem;
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
   align-items: center;
-  width: max-content;
+  justify-content: flex-start;
+  gap: 0.35rem 0.45rem;
+  width: fit-content;
   max-width: 100%;
   box-sizing: border-box;
+}
+
+#solpath-plan-root .sp-plan-quick__row--horiz:not(.sp-plan-quick__row--nums) .sp-plan-quick__chks {
+  display: contents;
 }
 
 #solpath-plan-root .sp-plan-quick__row--horiz.sp-plan-quick__row--nums {
@@ -3471,14 +3485,6 @@ button.sp-stu-remark__item--open:hover {
 #solpath-plan-root .sp-plan-quick__row--horiz .sp-plan-quick__lbl {
   flex: 0 0 auto;
   align-self: center;
-}
-
-#solpath-plan-root .sp-plan-quick__row--horiz:not(.sp-plan-quick__row--nums) .sp-plan-quick__chks {
-  flex: unset;
-  min-width: 0;
-  max-width: none;
-  overflow: visible;
-  flex-wrap: nowrap;
 }
 
 #solpath-plan-root .sp-plan-quick__chks {
