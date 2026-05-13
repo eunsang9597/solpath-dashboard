@@ -1118,14 +1118,6 @@ function renderCalendar_(root, boot) {
   if (!slot) return;
 
   const role = boot && boot.role === 'member' ? 'member' : 'guest';
-  if (ban) {
-    if (role === 'guest') {
-      ban.textContent = '등록된 번호로 확인되지 않아 공통 일정만 표시합니다.';
-      ban.removeAttribute('hidden');
-    } else {
-      ban.setAttribute('hidden', 'hidden');
-    }
-  }
 
   const common = boot && Array.isArray(boot.common) ? boot.common : [];
   const personal = boot && boot.personal != null && Array.isArray(boot.personal) ? boot.personal : [];
@@ -1145,7 +1137,7 @@ function renderCalendar_(root, boot) {
 
   const apiHadCalendarRows = common.length > 0 || personal.length > 0;
 
-  /** @type {{ role: 'member'|'guest', viewMonth: Date, byDate: Record<string, number>, selectedDate: string|null, apiHadCalendarRows: boolean, dayTodoOrderByDate?: Record<string, string[]>, dayTimelineSlotsByDate?: Record<string, Record<string, boolean>>, dayTimelineTodoByDate?: Record<string, Record<string, string>>, quickPlanByDate?: Record<string, { subject: string, lesson: number }[]>, modalBrushTodoId?: string, quickRegCollapsed?: boolean }} */
+  /** @type {{ role: 'member'|'guest', viewMonth: Date, byDate: Record<string, number>, selectedDate: string|null, apiHadCalendarRows: boolean, dayTodoOrderByDate?: Record<string, string[]>, dayTimelineSlotsByDate?: Record<string, Record<string, boolean>>, dayTimelineTodoByDate?: Record<string, Record<string, string>>, quickPlanByDate?: Record<string, { subject: string, lesson: number }[]>, modalBrushTodoId?: string, quickRegCollapsed?: boolean, planGuestUnlockMock?: boolean }} */
   const st = (root.__spPlanState =
     root.__spPlanState && typeof root.__spPlanState === 'object'
       ? root.__spPlanState
@@ -1160,15 +1152,29 @@ function renderCalendar_(root, boot) {
           dayTimelineTodoByDate: {},
           quickPlanByDate: {},
           modalBrushTodoId: '',
-          quickRegCollapsed: false
+          quickRegCollapsed: false,
+          planGuestUnlockMock: false
         });
   st.role = role;
+  /* 시연: 모달에서 '구매하기' 누른 뒤엔 재부트( renderCalendar_ ) 때도 API guest를 덮지 않음 */
+  if (st.planGuestUnlockMock) {
+    st.role = 'member';
+  }
   st.byDate = byDate;
   st.apiHadCalendarRows = apiHadCalendarRows;
   if (st.modalBrushTodoId == null) st.modalBrushTodoId = '';
   if (!st.quickPlanByDate) st.quickPlanByDate = {};
   if (!st.dayTimelineTodoByDate) st.dayTimelineTodoByDate = {};
   if (typeof st.quickRegCollapsed !== 'boolean') st.quickRegCollapsed = false;
+  if (typeof st.planGuestUnlockMock !== 'boolean') st.planGuestUnlockMock = false;
+  if (ban) {
+    if (st.role === 'guest') {
+      ban.textContent = '등록된 번호로 확인되지 않아 공통 일정만 표시합니다.';
+      ban.removeAttribute('hidden');
+    } else {
+      ban.setAttribute('hidden', 'hidden');
+    }
+  }
   if (!(st.viewMonth instanceof Date) || isNaN(Number(st.viewMonth))) {
     st.viewMonth = new Date();
   }
@@ -1353,7 +1359,8 @@ function renderCalendar_(root, boot) {
       cta.addEventListener('click', function (ev) {
         ev.preventDefault();
         ev.stopPropagation();
-        /* 시연: 결제 플로우 없이 세션 내 회원 UI(잠금 해제) */
+        /* 시연: 결제 플로우 없이 세션 내 회원 UI(잠금 해제) — renderCalendar_ 재호출 시에도 유지 */
+        st.planGuestUnlockMock = true;
         st.role = 'member';
         if (ban) ban.setAttribute('hidden', 'hidden');
         const lockEl = el.querySelector('#sp-plan-day-lock');
