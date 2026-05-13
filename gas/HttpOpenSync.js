@@ -59,15 +59,18 @@ function openSyncJsonpFromGet_(e, callbackName) {
     return openSyncTextOutputJsonp_(
       {
         ok: false,
-        error: 'BAD_REQUEST',
-        message: err && err.message != null ? String(err.message) : String(err)
+        error: {
+          code: 'BAD_REQUEST',
+          message: err && err.message != null ? String(err.message) : String(err)
+        }
       },
       callbackName
     );
   }
   if (action.length < 1) {
+    Logger.log('openSyncJsonpFromGet_: action empty');
     return openSyncTextOutputJsonp_(
-      { ok: false, error: 'BAD_REQUEST', message: 'action required' },
+      { ok: false, error: { code: 'BAD_REQUEST', message: 'action required' } },
       callbackName
     );
   }
@@ -155,10 +158,13 @@ function openSyncRouteAction_(action, e) {
     return dbPlannerDevFullReset_();
   }
   if (action === 'initPlannerMasterSheets') {
+    Logger.log('openSyncRouteAction_: initPlannerMasterSheets');
     var rPlInit = dbInitPlannerMasterSheets_();
     if (rPlInit && rPlInit.error) {
+      Logger.log('initPlannerMasterSheets error ' + (rPlInit.error.code || '') + ' ' + (rPlInit.error.message || ''));
       return { ok: false, error: { code: rPlInit.error.code, message: rPlInit.error.message } };
     }
+    Logger.log('initPlannerMasterSheets ok id=' + (rPlInit && rPlInit.id ? String(rPlInit.id).slice(0, 12) : '') + '…');
     return {
       ok: true,
       data: {
@@ -420,7 +426,18 @@ function openSyncRouteAction_(action, e) {
     }
     return dbStudentMgmtExportReportsBundle_(pStuBundle);
   }
-  return { ok: false, error: 'UNKNOWN_ACTION', allowed: openSyncAllowedActions_() };
+  Logger.log('openSyncRouteAction_: UNKNOWN_ACTION action=' + String(action));
+  return {
+    ok: false,
+    error: {
+      code: 'UNKNOWN_ACTION',
+      message:
+        '이 Web App 배포에 action "' +
+        String(action) +
+        '" 가 없습니다. clasp push 후 **새 버전 배포**를 했는지 확인하세요.'
+    },
+    allowed: openSyncAllowedActions_()
+  };
 }
 
 /**

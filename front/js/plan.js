@@ -110,6 +110,52 @@ function plannerGasJsonpWithParams_(baseUrl, action, extraParams, timeoutMs) {
 const PLANNER_JSONP_TIMEOUT_MS = 360000;
 
 /**
+ * GAS JSONP는 `{ error: { message } }` 와 `{ error: 'X', message: '…' }` 를 섞어 쓴다. 플래너 UI는 여기서 통일한다.
+ * @param {unknown} data
+ * @return {Record<string, unknown>}
+ */
+function plannerGasNormalizeResult_(data) {
+  if (data == null || typeof data !== 'object') {
+    return {
+      ok: false,
+      error: { code: 'INVALID_RESPONSE', message: '서버 응답이 비어 있거나 JSON이 아닙니다. Executions·Network에서 script 응답을 확인하세요.' }
+    };
+  }
+  const o = /** @type {Record<string, unknown>} */ (data);
+  if (o.ok === true) {
+    return o;
+  }
+  const err = o.error;
+  let msg = '';
+  let code = '';
+  if (err != null && typeof err === 'object' && 'message' in err && (/** @type {{ message?: unknown }} */ (err).message != null)) {
+    msg = String(/** @type {{ message?: unknown }} */ (err).message);
+    code =
+      'code' in err && (/** @type {{ code?: unknown }} */ (err).code != null)
+        ? String(/** @type {{ code?: unknown }} */ (err).code)
+        : '';
+  } else if (typeof err === 'string') {
+    code = err;
+    msg = o.message != null ? String(o.message) : err;
+  } else if (o.message != null) {
+    msg = String(o.message);
+  }
+  if (!msg.length) {
+    if (err === 'UNKNOWN_ACTION' || code === 'UNKNOWN_ACTION') {
+      msg =
+        '배포된 Web App에 이 action이 없습니다. clasp push 후 **새 버전으로 배포**했는지 확인하세요. (UNKNOWN_ACTION)';
+    } else {
+      try {
+        msg = JSON.stringify(o).slice(0, 900);
+      } catch (_e) {
+        msg = 'ok=false 이지만 상세 메시지를 꺼내지 못했습니다.';
+      }
+    }
+  }
+  return { ok: false, error: { code: code || 'GAS_ERROR', message: msg } };
+}
+
+/**
  * `HttpOpenSync.js` JSONP 분기 — 쿼리 `p0`·`p1`·`p2`·`n`·`m`(memberCode).
  * @param {Record<string, unknown>} payload
  * @return {Promise<Record<string, unknown>>}
@@ -122,7 +168,8 @@ async function plannerGasCall_(payload) {
   const action = String(payload.action != null ? payload.action : '');
   try {
     if (action === 'plannerRegistryRebuild' || action === 'plannerDevFullReset' || action === 'initPlannerMasterSheets') {
-      return await plannerGasJsonpWithParams_(url, action, null, PLANNER_JSONP_TIMEOUT_MS);
+      const raw = await plannerGasJsonpWithParams_(url, action, null, PLANNER_JSONP_TIMEOUT_MS);
+      return plannerGasNormalizeResult_(raw);
     }
     if (action === 'plannerMatch' || action === 'plannerBootstrap') {
       const segs = /** @type {unknown[]} */ (Array.isArray(payload.phoneSegments) ? payload.phoneSegments : []);
@@ -133,7 +180,8 @@ async function plannerGasCall_(payload) {
         n: String(payload.name != null ? payload.name : ''),
         m: String(payload.memberCode != null ? payload.memberCode : '')
       };
-      return await plannerGasJsonpWithParams_(url, action, extra, PLANNER_JSONP_TIMEOUT_MS);
+      const raw = await plannerGasJsonpWithParams_(url, action, extra, PLANNER_JSONP_TIMEOUT_MS);
+      return plannerGasNormalizeResult_(raw);
     }
     return { ok: false, error: { code: 'BAD_ACTION', message: '지원하지 않는 action: ' + action } };
   } catch (e) {
