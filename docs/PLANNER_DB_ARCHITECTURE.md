@@ -268,7 +268,7 @@ GAS 편집기 [실행]: `run_Planner_DevFullReset`.
 
 ## 14. 구현 시 남는 기술 메모
 
-- **CORS:** §12. 임웹 `fetch(POST)`로 응답 JSON을 읽을 수 있게 `doPost` 쪽에서 헤더·응답 형태를 맞춘다.
+- **CORS·401 (임웹 `fetch POST`):** `ContentService` `TextOutput`에는 `Access-Control-Allow-Origin`을 직접 붙일 수 없다(`docs/GAS_WEBAPP_SHEETS.md` §2.1). 브라우저가 **CORS 위반**으로 보고할 때도, 실제로는 **`script.google.com` 이 401(미배포·권한)** 을 내고 응답에 ACAO가 없어서 겹쳐 보이는 경우가 많다. **Web App 배포**: **Execute as Me(배포 계정)** + **Who has access = Anyone(익명)**. `clasp push` 후 편집기에서 **배포 → 새 버전**까지 해야 `…/exec` 가 반영된다. 레포 `gas/appsscript.json` 의 `webapp.executeAs` 는 `USER_DEPLOYING`(Me) 권장.
 - **할당량·남용 방지:** 분당 호출 상한 등 수치는 구현·운영에서 정한다.
 - `planner_member_records.phone_normalized` **평문 vs 해시**는 §9와 동일하게 이후 결정.
 

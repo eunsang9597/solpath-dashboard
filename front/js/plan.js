@@ -59,18 +59,27 @@ async function plannerPost_(payload) {
   try {
     res = await fetch(url, {
       method: 'POST',
+      mode: 'cors',
+      credentials: 'omit',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify(payload)
     });
   } catch (e) {
     const m = e && typeof e === 'object' && 'message' in e ? String(/** @type {{ message?: string }} */ (e).message) : String(e);
-    return { ok: false, error: { code: 'NETWORK', message: m } };
+    const hint =
+      ' (GAS Web App: 배포가 "Anyone(익명)" + Execute as Me 인지, `clasp push` 후 새 버전 배포했는지 확인. 401이면 브라우저가 CORS로 같이 보일 수 있음.)';
+    return { ok: false, error: { code: 'NETWORK', message: m + hint } };
   }
   if (!res.ok) {
     const t = await res.text().catch(function () {
       return '';
     });
-    return { ok: false, error: { code: 'HTTP_' + res.status, message: t.slice(0, 400) || res.statusText } };
+    const base = t.slice(0, 400) || res.statusText;
+    const hint401 =
+      res.status === 401
+        ? ' — Web App이 익명 POST를 거부한 것일 수 있음. Apps Script [배포]에서 "실행 사용자: 나" + "액세스: 모든 사용자(익명 포함)" 후 새 버전 배포.'
+        : '';
+    return { ok: false, error: { code: 'HTTP_' + res.status, message: base + hint401 } };
   }
   const txt = await res.text();
   let j;
