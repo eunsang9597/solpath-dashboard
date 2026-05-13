@@ -161,8 +161,9 @@ function esc(s) {
 
 const PLAN_DEV_HTML = `<div class="sp-plan-devbar" id="sp-plan-devbar" role="region" aria-label="제작용 도구">
   <span class="sp-plan-devbar__label">제작용</span>
-  <button type="button" class="btn btn--ghost sp-plan-devbar__btn" id="sp-plan-dev-reset">DB 초기화(학생파일 포함)</button>
+  <button type="button" class="btn btn--ghost sp-plan-devbar__btn" id="sp-plan-dev-init" title="Drive에 플래너 마스터 스프레드시트가 없으면 새로 만들고, 필요한 시트·헤더를 맞춥니다.">마스터 준비(파일·탭)</button>
   <button type="button" class="btn btn--ghost sp-plan-devbar__btn" id="sp-plan-dev-sync">동기화(레지스트리+학생파일)</button>
+  <button type="button" class="btn btn--ghost sp-plan-devbar__btn" id="sp-plan-dev-reset">DB 초기화(학생파일 포함)</button>
   <span class="sp-plan-devbar__msg" id="sp-plan-dev-msg" aria-live="polite"></span>
 </div>`;
 
@@ -391,13 +392,35 @@ function wireGate_(root) {
  */
 function wirePlanDevBar_(root) {
   const msg = root.querySelector('#sp-plan-dev-msg');
+  const initBtn = root.querySelector('#sp-plan-dev-init');
   const resetBtn = root.querySelector('#sp-plan-dev-reset');
   const syncBtn = root.querySelector('#sp-plan-dev-sync');
-  if (!resetBtn || !syncBtn) return;
+  if (!initBtn || !resetBtn || !syncBtn) return;
 
   function showDevMsg(text) {
     if (msg) msg.textContent = text || '';
   }
+
+  initBtn.addEventListener('click', async function () {
+    showDevMsg('');
+    const r = await plannerGasCall_({ action: 'initPlannerMasterSheets' });
+    if (!r || !r.ok) {
+      const m = r && r.error && r.error.message != null ? String(r.error.message) : '마스터 준비에 실패했습니다.';
+      showDevMsg(m);
+      return;
+    }
+    const d = /** @type {{ plannerSpreadsheetUrl?: string, createdNew?: boolean, alreadyConfigured?: boolean }} */ (r.data || {});
+    const url = d.plannerSpreadsheetUrl != null ? String(d.plannerSpreadsheetUrl) : '';
+    let line = '';
+    if (d.createdNew) {
+      line = '새 플래너 마스터 파일을 만들었습니다.';
+    } else if (d.alreadyConfigured) {
+      line = '연결된 마스터를 열어 필요한 탭·헤더를 확인했습니다.';
+    } else {
+      line = '마스터 준비가 완료되었습니다.';
+    }
+    showDevMsg(line + (url ? ' ' + url : ''));
+  });
 
   resetBtn.addEventListener('click', async function () {
     showDevMsg('');
