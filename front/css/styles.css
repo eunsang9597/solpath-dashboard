@@ -3082,6 +3082,16 @@ button.sp-stu-remark__item--open:hover {
   gap: 0.35rem;
 }
 
+#solpath-plan-root .sp-plan-gate__telhint {
+  margin: 0.35rem 0 0;
+  width: 100%;
+  max-width: 100%;
+  text-align: center;
+  font-size: calc(0.68rem + var(--sp-text-bump));
+  color: #64748b;
+  line-height: 1.35;
+}
+
 #solpath-plan-root .sp-plan-gate__dash {
   color: #94a3b8;
   font-weight: 600;

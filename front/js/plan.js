@@ -259,7 +259,6 @@ const GATE_HTML = `<div class="sp-plan-gate">
           type="text"
           inputmode="numeric"
           maxlength="3"
-          pattern="[0-9]*"
           autocomplete="off"
           aria-label="휴대전화 앞자리 세 자리"
         />
@@ -270,7 +269,6 @@ const GATE_HTML = `<div class="sp-plan-gate">
           type="text"
           inputmode="numeric"
           maxlength="4"
-          pattern="[0-9]*"
           autocomplete="off"
           aria-label="휴대전화 중간 네 자리"
         />
@@ -281,11 +279,11 @@ const GATE_HTML = `<div class="sp-plan-gate">
           type="text"
           inputmode="numeric"
           maxlength="4"
-          pattern="[0-9]*"
           autocomplete="off"
           aria-label="휴대전화 끝 네 자리"
         />
       </div>
+      <p class="sp-plan-gate__telhint">휴대전화 11자리(앞 3 · 가운데 4 · 끝 4). 숫자만 입력됩니다.</p>
     </div>
   </div>
   <p class="sp-plan-gate__err" id="sp-plan-gate-err" hidden></p>
@@ -299,6 +297,118 @@ function readPhoneSegments_(segs) {
     String(segs[1] != null ? segs[1] : '').replace(/\D/g, ''),
     String(segs[2] != null ? segs[2] : '').replace(/\D/g, '')
   ];
+}
+
+/**
+ * 휴대전화 세 칸: 숫자만(키 입력·붙여넣기·IME), 3·4·4. 긴 번호 붙여넣기 시 한 번에 나눔.
+ * @param {HTMLElement} root
+ */
+function wirePlanPhoneDigitsOnly_(root) {
+  const p0 = /** @type {HTMLInputElement | null} */ (root.querySelector('#sp-plan-p0'));
+  const p1 = /** @type {HTMLInputElement | null} */ (root.querySelector('#sp-plan-p1'));
+  const p2 = /** @type {HTMLInputElement | null} */ (root.querySelector('#sp-plan-p2'));
+  if (!p0 || !p1 || !p2) return;
+
+  const MAXL = [3, 4, 4];
+
+  function digitsOnly(s) {
+    return String(s != null ? s : '').replace(/\D/g, '');
+  }
+
+  function setSeg(el, max, raw) {
+    const d = digitsOnly(raw).slice(0, max);
+    if (el.value !== d) {
+      el.value = d;
+    }
+    return d.length;
+  }
+
+  /** 짧은 붙여넣기: 0번 칸부터 순서대로 채움 */
+  function fillFromStart(d) {
+    const x = digitsOnly(d);
+    if (!x.length) return;
+    p0.value = x.slice(0, 3);
+    var rest = x.slice(3);
+    p1.value = rest.slice(0, 4);
+    rest = rest.slice(4);
+    p2.value = rest.slice(0, 4);
+    if (p2.value.length < 4) p2.focus();
+    else if (p1.value.length < 4) p1.focus();
+    else p0.focus();
+  }
+
+  /**
+   * @param {HTMLInputElement} el
+   * @param {number} idx
+   */
+  function onInputCell(el, idx) {
+    const max = MAXL[idx];
+    const len = setSeg(el, max, el.value);
+    if (len >= max && idx < 2) {
+      const next = idx === 0 ? p1 : p2;
+      next.focus();
+    }
+  }
+
+  [p0, p1, p2].forEach(function (el, idx) {
+    el.addEventListener('keydown', function (e) {
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      const okNav = [
+        'Backspace',
+        'Delete',
+        'Tab',
+        'Escape',
+        'Enter',
+        'ArrowLeft',
+        'ArrowRight',
+        'ArrowUp',
+        'ArrowDown',
+        'Home',
+        'End'
+      ];
+      if (okNav.indexOf(e.key) >= 0) {
+        if (e.key === 'Backspace' && el.value.length === 0) {
+          if (idx > 0) {
+            const prev = idx === 1 ? p0 : p1;
+            prev.focus();
+            const pl = prev.value.length;
+            prev.setSelectionRange(pl, pl);
+          }
+        }
+        return;
+      }
+      if (e.key.length === 1 && !/\d/.test(e.key)) {
+        e.preventDefault();
+      }
+    });
+
+    el.addEventListener('input', function () {
+      onInputCell(el, idx);
+    });
+
+    el.addEventListener('paste', function (e) {
+      e.preventDefault();
+      const d = digitsOnly(e.clipboardData && e.clipboardData.getData('text'));
+      if (!d.length) return;
+      if (d.length >= 10) {
+        p0.value = d.slice(0, 3);
+        p1.value = d.slice(3, 7);
+        p2.value = d.slice(7, 11);
+        p2.focus();
+        return;
+      }
+      if (idx === 0) {
+        fillFromStart(d);
+      } else if (idx === 1) {
+        p1.value = d.slice(0, 4);
+        p2.value = d.slice(4, 8);
+        p2.focus();
+      } else {
+        p2.value = d.slice(0, 4);
+        p2.focus();
+      }
+    });
+  });
 }
 
 /**
@@ -372,6 +482,8 @@ function wireGate_(root) {
   const app = root.querySelector('.app-shell--plan');
   if (!btn || !gate || !app) return;
 
+  wirePlanPhoneDigitsOnly_(root);
+
   function showErr(msg) {
     if (!errEl) return;
     if (msg) {
@@ -407,6 +519,13 @@ function wireGate_(root) {
     const p1 = /** @type {HTMLInputElement | null} */ (root.querySelector('#sp-plan-p1'));
     const p2 = /** @type {HTMLInputElement | null} */ (root.querySelector('#sp-plan-p2'));
     const segs = readPhoneSegments_([p0 && p0.value, p1 && p1.value, p2 && p2.value]);
+    if (segs[0].length !== 3 || segs[1].length !== 4 || segs[2].length !== 4) {
+      showErr('휴대전화를 11자리(앞 3 · 가운데 4 · 끝 4) 숫자로만 입력해 주세요.');
+      if (p0 && segs[0].length < 3) p0.focus();
+      else if (p1 && segs[1].length < 4) p1.focus();
+      else if (p2) p2.focus();
+      return;
+    }
     const name = nameInput ? String(nameInput.value || '').trim() : '';
 
     const res = await plannerGasCall_({
