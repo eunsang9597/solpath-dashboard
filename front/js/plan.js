@@ -419,6 +419,7 @@ function renderCalendar_(root, boot) {
   const slot = root.querySelector('#sp-plan-calendar-slot');
   const ban = root.querySelector('#sp-plan-banner');
   if (!slot) return;
+
   const role = boot && boot.role === 'member' ? 'member' : 'guest';
   if (ban) {
     if (role === 'guest') {
@@ -428,47 +429,204 @@ function renderCalendar_(root, boot) {
       ban.setAttribute('hidden', 'hidden');
     }
   }
+
   const common = boot && Array.isArray(boot.common) ? boot.common : [];
   const personal = boot && boot.personal != null && Array.isArray(boot.personal) ? boot.personal : [];
-  const lines = common
-    .slice()
-    .sort(function (a, b) {
-      const da = String(a.start_date || '');
-      const db = String(b.start_date || '');
-      if (da !== db) return da < db ? -1 : da > db ? 1 : 0;
-      return (Number(a.sort_key) || 0) - (Number(b.sort_key) || 0);
-    })
-    .map(function (ev) {
-      const t = esc(ev.title || '(제목 없음)');
-      const r0 = esc(String(ev.start_date || ''));
-      const r1 = esc(String(ev.end_date || ''));
-      return `<li><span class="sp-plan-ev__date">${r0}${r1 && r1 !== r0 ? ' ~ ' + r1 : ''}</span> <span class="sp-plan-ev__title">${t}</span></li>`;
-    });
-  const pLines =
-    role === 'member' && personal.length
-      ? personal
-          .map(function (ev) {
-            const t = esc(ev && ev.title != null ? ev.title : '일정');
-            const d0 = esc(String((ev && ev.start_date) || ''));
-            const datePart = d0 ? `<span class="sp-plan-ev__date">${d0}</span> ` : '';
-            return `<li>${datePart}<span class="sp-plan-ev__title">${t}</span></li>`;
-          })
-          .join('')
-      : '';
-  slot.innerHTML = `
-    <div class="sp-plan-calwrap">
-      <section class="sp-plan-calsec" aria-label="공통 일정">
-        <div class="sp-plan-calsec__h" role="heading" aria-level="3">공통 일정</div>
-        ${lines.length ? `<ul class="sp-plan-evlist">${lines.join('')}</ul>` : '<p class="sp-plan-empty">등록된 공통 일정이 없습니다.</p>'}
-      </section>
-      ${
-        role === 'member'
-          ? `<section class="sp-plan-calsec" aria-label="나의 할 일"><div class="sp-plan-calsec__h" role="heading" aria-level="3">나의 할 일</div>${
-              pLines.length ? `<ul class="sp-plan-evlist">${pLines}</ul>` : '<p class="sp-plan-empty">등록된 할 일이 없습니다.</p>'
-            }</section>`
-          : ''
+
+  /** @type {Record<string, number>} */
+  const byDate = {};
+  common.forEach(function (ev) {
+    const d0 = String((ev && ev.start_date) || '').trim();
+    if (!d0) return;
+    byDate[d0] = (byDate[d0] || 0) + 1;
+  });
+  personal.forEach(function (ev) {
+    const d0 = String((ev && ev.start_date) || '').trim();
+    if (!d0) return;
+    byDate[d0] = (byDate[d0] || 0) + 1;
+  });
+
+  /** @type {{ role: 'member'|'guest', viewMonth: Date, byDate: Record<string, number>, selectedDate: string|null }} */
+  const st = (root.__spPlanState =
+    root.__spPlanState && typeof root.__spPlanState === 'object'
+      ? root.__spPlanState
+      : { role: role, viewMonth: new Date(), byDate: {}, selectedDate: null });
+  st.role = role;
+  st.byDate = byDate;
+  if (!(st.viewMonth instanceof Date) || isNaN(Number(st.viewMonth))) {
+    st.viewMonth = new Date();
+  }
+
+  function pad2(n) {
+    return String(n < 10 ? '0' : '') + String(n);
+  }
+
+  /** @param {Date} d */
+  function ymd(d) {
+    return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
+  }
+
+  /** @param {Date} d */
+  function ym(d) {
+    return d.getFullYear() + '년 ' + (d.getMonth() + 1) + '월';
+  }
+
+  /** @param {Date} d */
+  function monthStartSunday(d) {
+    const s = new Date(d.getFullYear(), d.getMonth(), 1);
+    const wd = s.getDay(); // 0=Sun
+    s.setDate(s.getDate() - wd);
+    s.setHours(0, 0, 0, 0);
+    return s;
+  }
+
+  function renderMonth_() {
+    const view = st.viewMonth;
+    const title = slot.querySelector('.sp-plan-month__title');
+    if (title) title.textContent = ym(view);
+
+    const grid = slot.querySelector('.sp-plan-month__grid');
+    if (!grid) return;
+    const start = monthStartSunday(view);
+    const viewY = view.getFullYear();
+    const viewM = view.getMonth();
+
+    let html = '';
+    for (let i = 0; i < 42; i++) {
+      const d = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
+      const inMonth = d.getFullYear() === viewY && d.getMonth() === viewM;
+      const key = ymd(d);
+      const n = st.byDate[key] || 0;
+      html += `
+        <button type="button" class="sp-plan-day${inMonth ? '' : ' is-out'}" data-ymd="${key}" ${inMonth ? '' : 'disabled'}>
+          <div class="sp-plan-day__top">
+            <span class="sp-plan-day__num">${d.getDate()}</span>
+            ${n ? `<span class="sp-plan-day__badge" aria-label="일정 ${n}개">${n}</span>` : ''}
+          </div>
+          <div class="sp-plan-day__dots" aria-hidden="true">${n ? '<span class="sp-plan-day__dot"></span>' : ''}</div>
+        </button>`;
+    }
+    grid.innerHTML = html;
+  }
+
+  function ensureModal_() {
+    if (root.querySelector('#sp-plan-day-modal')) return;
+    const el = document.createElement('div');
+    el.id = 'sp-plan-day-modal';
+    el.className = 'sp-plan-modal';
+    el.setAttribute('hidden', 'hidden');
+    el.innerHTML = `
+      <div class="sp-plan-modal__backdrop" data-sp-plan-close="1"></div>
+      <div class="sp-plan-modal__panel" role="dialog" aria-modal="true" aria-labelledby="sp-plan-day-modal-title">
+        <div class="sp-plan-modal__head">
+          <div class="sp-plan-modal__title" id="sp-plan-day-modal-title">일일 플래너</div>
+          <button type="button" class="btn btn--ghost sp-plan-modal__close" data-sp-plan-close="1">닫기</button>
+        </div>
+        <div class="sp-plan-modal__body">
+          <div class="sp-plan-day">
+            <section class="sp-plan-day__left" aria-label="할 일">
+              <div class="sp-plan-day__secTitle">오늘 할 일</div>
+              <div class="sp-plan-day__todo">
+                <div class="sp-plan-day__todoRow"><span class="sp-plan-chip sp-plan-chip--k">국어</span><span class="sp-plan-day__todoTxt">예시: 2020 수능 국어영역</span><span class="sp-plan-day__todoTime">1H 20M</span></div>
+                <div class="sp-plan-day__todoRow"><span class="sp-plan-chip sp-plan-chip--e">영어</span><span class="sp-plan-day__todoTxt">예시: 어휘 (p.78~90)</span><span class="sp-plan-day__todoTime">40M</span></div>
+              </div>
+            </section>
+            <section class="sp-plan-day__right" aria-label="타임라인">
+              <div class="sp-plan-day__secTitle">TIME TABLE</div>
+              <div class="sp-plan-day__timeline">
+                <div class="sp-plan-day__timelineGrid" aria-hidden="true"></div>
+              </div>
+            </section>
+          </div>
+          <div class="sp-plan-lock" id="sp-plan-day-lock" hidden>
+            <div class="sp-plan-lock__card">
+              <div class="sp-plan-lock__title">회원 전용 기능입니다</div>
+              <div class="sp-plan-lock__desc">일일 플래너(시간 배치·개인 할 일)는 회원에게만 제공됩니다.</div>
+              <button type="button" class="btn btn--primary sp-plan-lock__cta">구매하기</button>
+            </div>
+          </div>
+        </div>
+      </div>`;
+    root.appendChild(el);
+    el.addEventListener('click', function (e) {
+      const t = /** @type {HTMLElement|null} */ (e.target);
+      if (!t) return;
+      if (t && t.getAttribute && t.getAttribute('data-sp-plan-close') === '1') {
+        closeDayModal_();
       }
+    });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') {
+        const m = root.querySelector('#sp-plan-day-modal');
+        if (m && !m.hasAttribute('hidden')) {
+          closeDayModal_();
+        }
+      }
+    });
+  }
+
+  function openDayModal_(dateYmd) {
+    ensureModal_();
+    const m = root.querySelector('#sp-plan-day-modal');
+    if (!m) return;
+    st.selectedDate = String(dateYmd || '');
+    const title = m.querySelector('#sp-plan-day-modal-title');
+    if (title) title.textContent = st.selectedDate ? st.selectedDate + ' · 일일 플래너' : '일일 플래너';
+    m.removeAttribute('hidden');
+    const lock = m.querySelector('#sp-plan-day-lock');
+    if (lock) {
+      if (st.role === 'guest') lock.removeAttribute('hidden');
+      else lock.setAttribute('hidden', 'hidden');
+    }
+  }
+
+  function closeDayModal_() {
+    const m = root.querySelector('#sp-plan-day-modal');
+    if (!m) return;
+    m.setAttribute('hidden', 'hidden');
+  }
+
+  slot.innerHTML = `
+    <div class="sp-plan-month">
+      <div class="sp-plan-month__head">
+        <button type="button" class="btn btn--ghost sp-plan-month__nav" data-nav="-1" aria-label="이전 달">‹</button>
+        <div class="sp-plan-month__title">${ym(st.viewMonth)}</div>
+        <button type="button" class="btn btn--ghost sp-plan-month__nav" data-nav="1" aria-label="다음 달">›</button>
+      </div>
+      <div class="sp-plan-month__dow" role="row" aria-label="요일">
+        <div class="sp-plan-month__dowCell is-sun">SUN</div>
+        <div class="sp-plan-month__dowCell">MON</div>
+        <div class="sp-plan-month__dowCell">TUE</div>
+        <div class="sp-plan-month__dowCell">WED</div>
+        <div class="sp-plan-month__dowCell">THU</div>
+        <div class="sp-plan-month__dowCell">FRI</div>
+        <div class="sp-plan-month__dowCell is-sat">SAT</div>
+      </div>
+      <div class="sp-plan-month__grid" role="grid" aria-label="월간 달력"></div>
     </div>`;
+
+  renderMonth_();
+
+  slot.addEventListener('click', function (e) {
+    const t = /** @type {HTMLElement|null} */ (e.target instanceof HTMLElement ? e.target : null);
+    if (!t) return;
+    const nav = t.closest ? t.closest('[data-nav]') : null;
+    if (nav && nav.getAttribute) {
+      const step = Number(nav.getAttribute('data-nav')) || 0;
+      if (step) {
+        st.viewMonth = new Date(st.viewMonth.getFullYear(), st.viewMonth.getMonth() + step, 1);
+        renderMonth_();
+      }
+      return;
+    }
+    const btn = t.closest ? t.closest('.sp-plan-day') : null;
+    if (btn && btn.getAttribute && !btn.hasAttribute('disabled')) {
+      const key = btn.getAttribute('data-ymd') || '';
+      if (key) {
+        openDayModal_(key);
+      }
+    }
+  });
 }
 
 /**
