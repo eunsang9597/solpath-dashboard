@@ -2946,8 +2946,18 @@ button.sp-stu-remark__item--open:hover {
   max-width: 100%;
 }
 
+#solpath-plan-root .app-shell--plan .panel--hero.sp-plan-body {
+  padding: 0.95rem 0.55rem 1rem;
+  /* 전역 .panel--hero overflow:hidden 이 달력 가로·스크롤을 막음 → 플래너만 해제 */
+  overflow-x: auto;
+  overflow-y: visible;
+}
+
 #solpath-plan-root .app-shell--plan .sp-plan-app-main {
   margin-top: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 #solpath-plan-root .app-shell--plan .sp-plan-body {
@@ -2957,10 +2967,6 @@ button.sp-stu-remark__item--open:hover {
 /* 플래너: 좌우 여백 줄여 가용 폭 확보 */
 #solpath-plan-root .app-shell--plan {
   padding: 0.8rem 0.3rem 1.15rem;
-}
-
-#solpath-plan-root .app-shell--plan .panel--hero.sp-plan-body {
-  padding: 0.95rem 0.55rem 1rem;
 }
 
 /* 플래너: 학생 정보(상담 표 형태, 월간 위 · DB 연동 전 목업) */
@@ -3326,11 +3332,11 @@ button.sp-stu-remark__item--open:hover {
   display: flex;
   flex-direction: column;
   gap: 0.65rem;
-  width: 100%;
+  width: max-content;
+  min-width: 100%;
   height: 100%;
   box-sizing: border-box;
   min-height: 0;
-  min-width: 0;
 }
 
 #solpath-plan-root .sp-plan-quick {
@@ -3340,8 +3346,8 @@ button.sp-stu-remark__item--open:hover {
   padding: 0.5rem 0.35rem 0.75rem;
   background: linear-gradient(180deg, #faf5ff 0%, #ffffff 55%);
   box-sizing: border-box;
-  width: 100%;
-  min-width: 0;
+  width: max-content;
+  min-width: 100%;
 }
 
 #solpath-plan-root .sp-plan-quick__head {
@@ -3350,6 +3356,8 @@ button.sp-stu-remark__item--open:hover {
   justify-content: space-between;
   gap: 0.5rem;
   margin-bottom: 0.45rem;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 #solpath-plan-root .sp-plan-quick.is-collapsed .sp-plan-quick__head {
@@ -3405,8 +3413,10 @@ button.sp-stu-remark__item--open:hover {
 #solpath-plan-root .sp-plan-quick__body {
   display: flex;
   flex-direction: column;
+  align-items: flex-start;
   gap: 0.28rem;
   min-width: 0;
+  width: 100%;
 }
 
 #solpath-plan-root .sp-plan-quick.is-collapsed .sp-plan-quick__body {
@@ -3432,16 +3442,30 @@ button.sp-stu-remark__item--open:hover {
   font-weight: 650;
 }
 
-#solpath-plan-root .sp-plan-quick__row--horiz {
+/* 요일·과목: 라벨+체크 한 덩어리(max-content), 전체 행 너비로 체크가 벌어지지 않게 */
+#solpath-plan-root .sp-plan-quick__row--horiz:not(.sp-plan-quick__row--nums) {
+  display: grid;
+  grid-template-columns: auto max-content;
+  column-gap: 0.4rem;
+  align-items: center;
+  width: max-content;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+#solpath-plan-root .sp-plan-quick__row--horiz.sp-plan-quick__row--nums {
   display: flex;
   flex-direction: row;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: flex-start;
-  gap: 0.28rem;
-  margin-top: 0;
+  gap: 0.35rem 0.45rem;
   width: 100%;
   min-width: 0;
+  padding-top: 0.35rem;
+  margin-top: 0.2rem;
+  border-top: 1px solid #f1e9ff;
+  box-sizing: border-box;
 }
 
 #solpath-plan-root .sp-plan-quick__row--horiz .sp-plan-quick__lbl {
@@ -3450,7 +3474,7 @@ button.sp-stu-remark__item--open:hover {
 }
 
 #solpath-plan-root .sp-plan-quick__row--horiz:not(.sp-plan-quick__row--nums) .sp-plan-quick__chks {
-  flex: 0 0 auto;
+  flex: unset;
   min-width: 0;
   max-width: none;
   overflow: visible;
@@ -3461,7 +3485,8 @@ button.sp-stu-remark__item--open:hover {
   display: inline-flex;
   flex-wrap: nowrap;
   align-items: center;
-  gap: 0.2rem 0.32rem;
+  justify-content: flex-start;
+  gap: 0.35rem 0.45rem;
   flex: 0 0 auto;
   width: auto;
   max-width: none;
@@ -3494,13 +3519,6 @@ button.sp-stu-remark__item--open:hover {
   white-space: nowrap;
   padding-inline: 0.65rem;
   padding-block: 0.42rem;
-}
-
-/* 강·버튼 행: 위 요일/과목과 간격 + 안쪽 여유 */
-#solpath-plan-root .sp-plan-quick__row--horiz.sp-plan-quick__row--nums {
-  padding-top: 0.35rem;
-  margin-top: 0.2rem;
-  border-top: 1px solid #f1e9ff;
 }
 
 #solpath-plan-root .sp-plan-quick__lbl {
