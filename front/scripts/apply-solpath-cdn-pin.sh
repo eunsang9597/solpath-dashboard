@@ -16,7 +16,7 @@ if [[ -z "$NEW" ]]; then
   echo "SOLPATH_CDN_COMMIT에서 7~40자 16진 커밋 1줄을 찾지 못함 (주석 # 줄은 무시됨)" >&2
   exit 1
 fi
-# jsDelivr gh URL: eunsang9597·-front 는 **7자** (캐시·호환), solpath-labs-dev 는 **풀 SHA** (7자 404 회피).
+# jsDelivr gh URL: eunsang9597·-front 는 **7자** (jsDelivr가 40자 `@` 경로에서 404를 내는 경우 있음), solpath-labs-dev 는 **풀 SHA**.
 # cdnCommit·SOLPATH_PIN 주석은 풀 SHA 유지.
 NEW_SHORT="${NEW:0:7}"
 export NEW

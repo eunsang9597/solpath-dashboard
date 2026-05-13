@@ -31,7 +31,7 @@ function ensureShell() {
 }
 
 /**
- * jsDelivr URL은 7자 짧은 SHA만 200인 경우가 있어 모듈 URL과 스니펫 풀 SHA를 구분한다.
+ * 스니펫 `cdnCommit`(풀 SHA)과 실제 로드 URL의 커밋 접두(짧은 ref)가 같은지 비교한다.
  * @param {string} a
  * @param {string} b
  */
