@@ -691,6 +691,26 @@ function plannerYmdFromParts_(y, m0, day) {
   return String(y) + '-' + plannerPad2_(m0 + 1) + '-' + plannerPad2_(day);
 }
 
+/**
+ * 해당 날짜가 속한 **주(월요일 00:00 시작)** 의 타임스탬프(로컬). 빠른등록을 주 단위로 나눌 때 사용.
+ * @param {string} ymd YYYY-MM-DD
+ * @returns {number}
+ */
+function plannerMondayWeekStartTsFromYmd_(ymd) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(ymd || '').trim());
+  if (!m) return 0;
+  const y = Number(m[1]);
+  const mo = Number(m[2]) - 1;
+  const d = Number(m[3]);
+  const dt = new Date(y, mo, d);
+  if (isNaN(dt.getTime())) return 0;
+  const dow = dt.getDay();
+  const diffToMon = dow === 0 ? -6 : 1 - dow;
+  const mon = new Date(y, mo, d + diffToMon);
+  mon.setHours(0, 0, 0, 0);
+  return mon.getTime();
+}
+
 function plannerMonthYmdPrefix_(viewMonth) {
   return String(viewMonth.getFullYear()) + '-' + plannerPad2_(viewMonth.getMonth() + 1) + '-';
 }
@@ -734,8 +754,9 @@ function plannerAssignedMinutesForDay_(st, ymd) {
 }
 
 /**
- * 선택 요일에 해당하는 날짜를 달 안에서 **시간순**으로 두고,
- * 과목×강 N건을 **그 순서대로** 날짜에 돌려가며 한 건씩 붙인다(5/1이 첫 요일이면 그날부터)(저장 없음).
+ * 선택 요일만 달에서 시간순으로 모은 뒤, **달력 주(월요일 시작)** 별로 나누고
+ * 각 주 안에서는 그 주에 해당하는 요일만 순서대로 채운다(첫 주는 월 중간이면 슬롯이 1~2개일 수 있음).
+ * **과목은 서로 섞지 않고** 과목마다 동일 규칙으로 따로 배치한다(독해가 맨 뒤 날짜로 몰리지 않음)(저장 없음).
  * @param {object} st
  * @param {Date} viewMonth
  * @param {number[]} weekdays 0=일 … 6=토
@@ -758,20 +779,29 @@ function plannerApplyQuickPlanToState_(st, viewMonth, weekdays, subjects, fromL,
   if (!dates.length || !subjects.length) return;
   const lo = Math.min(Number(fromL) || 1, Number(toL) || 1);
   const hi = Math.max(Number(fromL) || 1, Number(toL) || 1);
-  const tasks = [];
-  subjects.forEach(function (subj) {
-    for (let L = lo; L <= hi; L++) {
-      tasks.push({ subject: subj, lesson: L });
-    }
-  });
-  if (!tasks.length) return;
+  if (lo > hi) return;
   if (!st.quickPlanByDate) st.quickPlanByDate = {};
-  const M = dates.length;
-  if (!M) return;
-  tasks.forEach(function (t, idx) {
-    const key = dates[idx % M];
-    if (!st.quickPlanByDate[key]) st.quickPlanByDate[key] = [];
-    st.quickPlanByDate[key].push({ subject: t.subject, lesson: t.lesson });
+  /** @type {Map<number, string[]>} */
+  const byWeek = new Map();
+  dates.forEach(function (ymd) {
+    const wk = plannerMondayWeekStartTsFromYmd_(ymd);
+    if (!byWeek.has(wk)) byWeek.set(wk, []);
+    byWeek.get(wk).push(ymd);
+  });
+  const weekStarts = Array.from(byWeek.keys()).sort(function (a, b) {
+    return a - b;
+  });
+  subjects.forEach(function (subj) {
+    let L = lo;
+    for (let wi = 0; wi < weekStarts.length && L <= hi; wi++) {
+      const bucket = (byWeek.get(weekStarts[wi]) || []).slice().sort();
+      for (let di = 0; di < bucket.length && L <= hi; di++) {
+        const key = bucket[di];
+        if (!st.quickPlanByDate[key]) st.quickPlanByDate[key] = [];
+        st.quickPlanByDate[key].push({ subject: subj, lesson: L });
+        L++;
+      }
+    }
   });
 }
 
