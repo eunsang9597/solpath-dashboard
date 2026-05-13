@@ -209,6 +209,7 @@ function esc(s) {
 
 const PLAN_DEV_HTML = `<div class="sp-plan-devbar" id="sp-plan-devbar" role="region" aria-label="제작용 도구">
   <span class="sp-plan-devbar__label">제작용</span>
+  <button type="button" class="btn btn--ghost sp-plan-devbar__btn" id="sp-plan-dev-skip-gate" title="전화·이름 확인 없이 메인 화면만 표시합니다. (추적·GAS 호출 없음)">원페이지만(게이트 생략)</button>
   <button type="button" class="btn btn--ghost sp-plan-devbar__btn" id="sp-plan-dev-init" title="Drive에 플래너 마스터 스프레드시트가 없으면 새로 만들고, 필요한 시트·헤더를 맞춥니다.">마스터 준비(파일·탭)</button>
   <button type="button" class="btn btn--ghost sp-plan-devbar__btn" id="sp-plan-dev-sync">동기화(레지스트리+학생파일)</button>
   <button type="button" class="btn btn--ghost sp-plan-devbar__btn" id="sp-plan-dev-reset">DB 초기화(학생파일 포함)</button>
@@ -440,14 +441,24 @@ function wireGate_(root) {
  */
 function wirePlanDevBar_(root) {
   const msg = root.querySelector('#sp-plan-dev-msg');
+  const skipBtn = root.querySelector('#sp-plan-dev-skip-gate');
   const initBtn = root.querySelector('#sp-plan-dev-init');
   const resetBtn = root.querySelector('#sp-plan-dev-reset');
   const syncBtn = root.querySelector('#sp-plan-dev-sync');
-  if (!initBtn || !resetBtn || !syncBtn) return;
+  if (!skipBtn || !initBtn || !resetBtn || !syncBtn) return;
 
   function showDevMsg(text) {
     if (msg) msg.textContent = text || '';
   }
+
+  skipBtn.addEventListener('click', function () {
+    showDevMsg('제작용: 게이트 생략 · GAS 없이 원페이지만 표시');
+    const gate = root.querySelector('.sp-plan-gate');
+    const app = root.querySelector('.app-shell--plan');
+    if (gate) gate.setAttribute('hidden', 'hidden');
+    if (app) app.removeAttribute('hidden');
+    renderCalendar_(root, { role: 'guest', common: [], personal: null });
+  });
 
   initBtn.addEventListener('click', async function () {
     showDevMsg('');
@@ -517,6 +528,7 @@ function main() {
   el.innerHTML = `<div class="sp-plan-rootinner">${PLAN_DEV_HTML}${GATE_HTML}${PLAN_APP_HTML}</div>`;
   const app = el.querySelector('.app-shell--plan');
   if (app) app.setAttribute('hidden', 'hidden');
+  wirePlanDevBar_(el);
   if (GAS_MODE.useMock) {
     const g = el.querySelector('.sp-plan-gate');
     if (g) {
@@ -526,7 +538,6 @@ function main() {
     return;
   }
   wireGate_(el);
-  wirePlanDevBar_(el);
 }
 
 main();
