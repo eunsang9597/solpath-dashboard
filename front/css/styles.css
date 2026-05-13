@@ -69,11 +69,12 @@ code {
   box-sizing: border-box !important;
 }
 
-/* 플래너 전용: 상위가 좁아도 본문 최소 가로 + 내용만큼 넓어져 임웹에서 가로 스크롤 */
+/* 플래너: 루트는 칼럼 폭을 채움( max-content 는 게이트·빠른등록이 좁은 박스로 붙어 왼쪽 쏠림 ).
+   달력·표 가로 스크롤은 .sp-plan-app-main / .sp-plan-body / .sp-plan-calendar-slot 의 overflow-x 로 처리. */
 #solpath-plan-root.solpath-mount {
-  width: max-content !important;
-  min-width: min(100%, 88rem) !important;
-  max-width: none !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
   box-sizing: border-box !important;
 }
 
