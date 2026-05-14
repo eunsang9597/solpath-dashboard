@@ -435,30 +435,25 @@ function plannerCurriculumMockWeekPayload_(weekIndex, weekLessonRanges) {
 }
 
 /**
- * `PlannerCurriculumWeekPayload` → 주간 커리큘럼: 과목별 색 뱃지(촘촘한 둥근 사각형).
+ * `PlannerCurriculumWeekPayload` → 표 HTML (내용은 전부 `esc` 처리).
  * @param {PlannerCurriculumWeekPayload} payload
  * @returns {string}
  */
 function plannerCurriculumWeekTableHtml_(payload) {
-  const phase = String(payload.focus_phase != null ? payload.focus_phase : '').trim();
-  let badges = '';
+  let body = '';
   (payload.rows || []).forEach(function (r) {
     if (!r || typeof r !== 'object') return;
-    const rawCode = String(r.subject_code != null ? r.subject_code : '').trim();
-    const mod = /^(grammar|logic|read|vocab)$/.test(rawCode) ? rawCode : 'misc';
     const subj = String(r.subject != null ? r.subject : '').trim();
-    const outl = String(r.lesson_outline != null ? r.lesson_outline : '').trim() || '—';
     const goal = String(r.textbook_goal != null ? r.textbook_goal : '').trim();
-    const line = (subj ? subj + ' ' : '') + outl;
-    const tip = (goal ? goal + ' · ' : '') + outl;
-    badges +=
-      '<span class="sp-plan-curBadge sp-plan-curBadge--' +
-      esc(mod) +
-      '" title="' +
-      esc(tip) +
-      '">' +
-      esc(line.trim()) +
-      '</span>';
+    const outl = String(r.lesson_outline != null ? r.lesson_outline : '').trim();
+    body +=
+      '<tr><th scope="row">' +
+      esc(subj) +
+      '</th><td class="sp-plan-cur__goal">' +
+      esc(goal) +
+      '</td><td class="sp-plan-cur__outline">' +
+      esc(outl) +
+      '</td><td class="sp-plan-cur__link"><a class="sp-plan-cur__a" href="" aria-disabled="true" tabindex="-1"></a></td></tr>';
   });
   return (
     '<div class="sp-plan-cur" data-sp-plan-cur-source="' +
@@ -466,12 +461,15 @@ function plannerCurriculumWeekTableHtml_(payload) {
     '" data-sp-plan-cur-week="' +
     String(payload.week_index) +
     '">' +
-    (phase
-      ? '<div class="sp-plan-cur__phase" title="' + esc(phase) + '">' + esc(phase) + '</div>'
-      : '') +
-    '<div class="sp-plan-cur__badges">' +
-    badges +
-    '</div></div>'
+    '<table class="sp-plan-cur__tbl">' +
+    '<thead><tr>' +
+    '<th scope="col" class="sp-plan-cur__thCat">구분</th>' +
+    '<th scope="col">교재명 · 학습 목표</th>' +
+    '<th scope="col" class="sp-plan-cur__thOut">목차</th>' +
+    '<th scope="col" class="sp-plan-cur__thLink">링크</th>' +
+    '</tr></thead><tbody>' +
+    body +
+    '</tbody></table></div>'
   );
 }
 
@@ -821,23 +819,20 @@ function plannerAppendManualTodoFromForm_(slot, st) {
   if (!st.plannerManualTodos) st.plannerManualTodos = [];
   const titleEl = slot.querySelector('#sp-manual-title');
   const dueEl = slot.querySelector('#sp-manual-due');
-  const startEl = slot.querySelector('#sp-manual-start');
   const catEl = slot.querySelector('#sp-manual-cat');
   const prioEl = slot.querySelector('#sp-manual-prio');
   const descEl = slot.querySelector('#sp-manual-desc');
   const title = titleEl && 'value' in titleEl ? String(/** @type {HTMLInputElement} */ (titleEl).value).trim() : '';
   const due = dueEl && 'value' in dueEl ? String(/** @type {HTMLInputElement} */ (dueEl).value).trim() : '';
-  const startRaw = startEl && 'value' in startEl ? String(/** @type {HTMLInputElement} */ (startEl).value).trim() : '';
   const category = catEl && 'value' in catEl ? String(/** @type {HTMLSelectElement} */ (catEl).value).trim() : 'misc';
   const priority = prioEl && 'value' in prioEl ? String(/** @type {HTMLSelectElement} */ (prioEl).value).trim() : 'normal';
   const description = descEl && 'value' in descEl ? String(/** @type {HTMLTextAreaElement} */ (descEl).value).trim() : '';
   if (!title.length) return '할 일 제목을 입력해 주세요.';
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(due)) return '마감·예정일을 선택해 주세요.';
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(due)) return '등록·예정일을 선택해 주세요.';
   const allowedP = { low: true, normal: true, high: true };
   const p = allowedP[priority] ? priority : 'normal';
   const allowedC = { grammar: true, logic: true, read: true, vocab: true, misc: true };
   const c = allowedC[category] ? category : 'misc';
-  const start_date = startRaw && /^\d{4}-\d{2}-\d{2}$/.test(startRaw) ? startRaw : due;
   let task_id = '';
   try {
     if (globalThis.crypto && typeof globalThis.crypto.randomUUID === 'function') {
@@ -854,7 +849,7 @@ function plannerAppendManualTodoFromForm_(slot, st) {
     status: 'todo',
     priority: p,
     due_date: due,
-    start_date: start_date,
+    start_date: due,
     category: c,
     sort_key: 0,
     completed_at: '',
@@ -952,8 +947,29 @@ function plannerRefreshPostPreview_(root) {
 }
 
 /**
+ * 해당 날짜 타임라인에서 `taskId`에 칠해진 10분 칸 합(분).
  * @param {object} st
+ * @param {string} ymd
+ * @param {string} taskId
+ * @returns {number}
+ */
+function plannerTaskTimelineMinutesForDay_(st, ymd, taskId) {
+  const slots = st.dayTimelineTodoByDate && st.dayTimelineTodoByDate[ymd];
+  if (!slots || typeof slots !== 'object') return 0;
+  const tid = String(taskId || '').trim();
+  if (!tid) return 0;
+  let n = 0;
+  Object.keys(slots).forEach(function (k) {
+    if (!plannerTimelineSlotKeyParse_(k)) return;
+    if (String(slots[k] != null ? slots[k] : '').trim() === tid) n++;
+  });
+  return n * PLAN_TIMELINE_CELL_MIN;
+}
+
+/**
+ * 일일 모달 왼쪽 열: 할 일 요약(과목 칩·제목·완료 표시·오늘 칠한 분).
  * @param {string} dateYmd
+ * @param {object} st
  * @returns {string}
  */
 function plannerDayTodosFromPayloadHtml_(dateYmd, st) {
@@ -975,6 +991,10 @@ function plannerDayTodosFromPayloadHtml_(dateYmd, st) {
     const cat = String(r.category || '');
     const meta = chip[cat] || { cat: cat || '기타', cls: 'sp-plan-chip--read' };
     const isB = Boolean(brush && id === brush);
+    const comp = plannerTodoCompletionGet_(st, dateYmd, id);
+    const sym = comp === 'circle' ? '○' : comp === 'triangle' ? '△' : comp === 'x' ? '×' : '·';
+    const mins = plannerTaskTimelineMinutesForDay_(st, dateYmd, id);
+    const dur = mins > 0 ? plannerFormatStudyDurationKo_(mins) : '—';
     h +=
       '<div class="sp-plan-day__todoRow' +
       (isB ? ' is-brush' : '') +
@@ -989,11 +1009,14 @@ function plannerDayTodosFromPayloadHtml_(dateYmd, st) {
       '<span class="sp-plan-day__todoTxt">' +
       esc(String(r.title || '')) +
       '</span>' +
-      '<span class="sp-plan-day__todoTime" title="연동 시 서버 타임스탬프">' +
-      esc('—') +
+      '<span class="sp-plan-day__todoCm" title="위 표에서 ○△×">' +
+      esc(sym) +
+      '</span>' +
+      '<span class="sp-plan-day__todoTime" title="오늘 시간표에 칠한 합">' +
+      esc(dur) +
       '</span></div>';
   });
-  return h;
+  return '<div class="sp-plan-dayTodoSideList">' + h + '</div>';
 }
 
 /**
@@ -1110,19 +1133,42 @@ function plannerQuickPlanCellSummaryHtml_(st, key) {
     const nums = bySub[code];
     if (!nums || !nums.length) return;
     const outline = lessonsToOutline_(nums);
-    const name = subjName[code] || esc(code);
-    lines.push('<div class="sp-plan-day__quickLine">' + esc(name) + ' ' + esc(outline) + '강</div>');
+    const name = subjName[code] || code;
+    const mod = /^(grammar|logic|read|vocab)$/.test(code) ? code : 'misc';
+    const tip = name + ' ' + outline + '강';
+    const body = name + ' ' + outline + '강';
+    lines.push(
+      '<span class="sp-plan-curBadge sp-plan-curBadge--' +
+      esc(mod) +
+      '" title="' +
+      esc(tip) +
+      '">' +
+      esc(body) +
+      '</span>'
+    );
   });
   Object.keys(bySub).forEach(function (code) {
     if (order.indexOf(code) >= 0) return;
     const nums = bySub[code];
     if (!nums || !nums.length) return;
+    const outline = lessonsToOutline_(nums);
+    const mod = 'misc';
+    const tip = code + ' ' + outline + '강';
+    const body = code + ' ' + outline + '강';
     lines.push(
-      '<div class="sp-plan-day__quickLine">' + esc(code) + ' ' + esc(lessonsToOutline_(nums)) + '강</div>'
+      '<span class="sp-plan-curBadge sp-plan-curBadge--' +
+      mod +
+      '" title="' +
+      esc(tip) +
+      '">' +
+      esc(body) +
+      '</span>'
     );
   });
   if (!lines.length) return '';
-  return '<div class="sp-plan-day__quick" aria-hidden="true">' + lines.join('') + '</div>';
+  return (
+    '<div class="sp-plan-day__quick sp-plan-day__quick--badges" aria-hidden="true">' + lines.join('') + '</div>'
+  );
 }
 
 /** @param {Record<string, unknown>} legacy */
@@ -1410,6 +1456,18 @@ function plannerRefreshDayModalStudyFooter_(root) {
 }
 
 /**
+ * 일일 모달 왼쪽 열(할 일 요약)만 다시 그립니다.
+ * @param {HTMLElement} root
+ */
+function plannerRefreshDayModalTodoSide_(root) {
+  const m = root.querySelector('#sp-plan-day-modal');
+  const side = m && m.querySelector('#sp-plan-day-todo-side');
+  const st = root.__spPlanState;
+  if (!side || !st || !st.selectedDate) return;
+  side.innerHTML = plannerDayTodosFromPayloadHtml_(st.selectedDate, st);
+}
+
+/**
  * @param {string} dateYmd
  * @param {object} st
  * @returns {string}
@@ -1541,7 +1599,6 @@ function plannerDayTimelineHtml_(st, dateYmd) {
   let html = '';
   let h;
   for (h = PLAN_TIMELINE_FIRST_H; h <= PLAN_TIMELINE_LAST_H; h++) {
-    const todoColInner = plannerHourTodoColHtmlFromSlots_(slots, dateYmd, st, h);
     let cells = '';
     for (let sub = 0; sub < PLAN_TIMELINE_CELLS_PER_HOUR; sub++) {
       const k = plannerTimelineSlotKey_(h, sub);
@@ -1568,9 +1625,6 @@ function plannerDayTimelineHtml_(st, dateYmd) {
       '">' +
       '<div class="sp-plan-hourRow__time" aria-hidden="true">' +
       esc(hourLbl) +
-      '</div>' +
-      '<div class="sp-plan-hourRow__todoCol">' +
-      todoColInner +
       '</div>' +
       '<div class="sp-plan-hourRow__cells" role="group" aria-label="' +
       esc(hourLbl) +
@@ -1616,19 +1670,6 @@ function plannerPaintSlotcellFromState_(root, btn, timegrid) {
       ':' +
       plannerPad2_(m1);
     btn.setAttribute('aria-label', esc(lab + (tid ? ' · ' + tid : '') + ' 칸'));
-    const tg = timegrid || (btn.closest ? btn.closest('#sp-plan-day-timegrid') : null);
-    const row = btn.closest ? btn.closest('.sp-plan-hourRow') : null;
-    if (tg && row) {
-      const col = row.querySelector('.sp-plan-hourRow__todoCol');
-      if (col) {
-        col.innerHTML = plannerHourTodoColHtmlFromSlots_(
-          plannerEnsureTimelineTodoSlots_(st, st.selectedDate),
-          st.selectedDate,
-          st,
-          p.hour
-        );
-      }
-    }
   }
 }
 
@@ -1661,6 +1702,16 @@ function wirePlannerDayModalUiOnce_(modalEl, root) {
         b.textContent = on ? '칠하기 ✓' : '칠하기';
       }
     });
+    const modal = todoTable.closest ? todoTable.closest('#sp-plan-day-modal') : null;
+    const side = modal && modal.querySelector('#sp-plan-day-todo-side');
+    if (side) {
+      side.querySelectorAll('.sp-plan-day__todoRow').forEach(function (row) {
+        if (!(row instanceof HTMLElement)) return;
+        const id = row.getAttribute('data-todo-id') || '';
+        const on = Boolean(brush && id === brush);
+        row.classList.toggle('is-brush', on);
+      });
+    }
   }
 
   function syncCompletionMarksInRow_(tr, st, ymd, taskId) {
@@ -1686,6 +1737,7 @@ function wirePlannerDayModalUiOnce_(modalEl, root) {
       const cur = plannerTodoCompletionGet_(st, ymd, taskId);
       plannerTodoCompletionSet_(st, ymd, taskId, cur === kind ? 'none' : kind);
       syncCompletionMarksInRow_(tr, st, ymd, taskId);
+      plannerRefreshDayModalTodoSide_(root);
       return;
     }
     const brushBtn = e.target && e.target.closest ? e.target.closest('[data-action="todo-brush"]') : null;
@@ -1702,6 +1754,7 @@ function wirePlannerDayModalUiOnce_(modalEl, root) {
     painting = false;
     lastPaintSlot = '';
     plannerRefreshDayModalStudyFooter_(root);
+    plannerRefreshDayModalTodoSide_(root);
     window.removeEventListener('pointerup', endPaintGlobal);
     window.removeEventListener('pointercancel', endPaintGlobal);
   }
@@ -1751,6 +1804,7 @@ function wirePlannerDayModalUiOnce_(modalEl, root) {
       }
       plannerPaintSlotcellFromState_(root, btn, timegrid);
       plannerRefreshDayModalStudyFooter_(root);
+      plannerRefreshDayModalTodoSide_(root);
     } else if (e.key === 'ArrowRight') {
       e.preventDefault();
       if (i < 0 || i >= cells.length - 1) return;
@@ -1907,15 +1961,6 @@ function renderCalendar_(root, boot) {
     return d.getMonth() + 1 + '/' + d.getDate();
   }
 
-  /** 해당 주(일요일 기준) ISO 주차 — 시연용 메타 표시 */
-  function isoWeekNumber_(d) {
-    const x = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
-    const dayNum = x.getUTCDay() || 7;
-    x.setUTCDate(x.getUTCDate() + 4 - dayNum);
-    const yearStart = new Date(Date.UTC(x.getUTCFullYear(), 0, 1));
-    return Math.ceil(((x.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
-  }
-
   /**
    * 시트에 `start_date` 일정이 없을 때만: 월간 점·배지 시연 (실제 todo 모달 HTML 목업과 별개 파이프)
    * @param {number} viewY
@@ -1963,11 +2008,30 @@ function renderCalendar_(root, boot) {
     const hasLocal = plannerMonthHasAnyLocalPlan_(st, view);
     const demoByDate = st.apiHadCalendarRows || hasLocal ? {} : plannerDemoDotsForViewMonth_(viewY, viewM);
 
+    /** @type {string[]} */
+    const wkMetaKo = [];
+    let weekOrd = 0;
+    const ordWords = ['첫째', '둘째', '셋째', '넷째', '다섯째', '여섯째'];
+    for (let ww = 0; ww < 6; ww++) {
+      const su = new Date(start.getFullYear(), start.getMonth(), start.getDate() + ww * 7);
+      let touches = false;
+      for (let di = 0; di < 7; di++) {
+        const dd = new Date(su.getFullYear(), su.getMonth(), su.getDate() + di);
+        if (dd.getFullYear() === viewY && dd.getMonth() === viewM) touches = true;
+      }
+      if (touches) {
+        const word = ordWords[weekOrd] != null ? ordWords[weekOrd] : String(weekOrd + 1);
+        wkMetaKo[ww] = String(viewM + 1) + '월 ' + word + '주';
+        weekOrd++;
+      } else {
+        wkMetaKo[ww] = '';
+      }
+    }
+
     let html = '';
     for (let w = 0; w < 6; w++) {
       const sun = new Date(start.getFullYear(), start.getMonth(), start.getDate() + w * 7);
       const sat = new Date(sun.getFullYear(), sun.getMonth(), sun.getDate() + 6);
-      const wk = isoWeekNumber_(sun);
       html += '<div class="sp-plan-month__weekRow">';
       html +=
         '<div class="sp-plan-month__weekLead">' +
@@ -1977,9 +2041,9 @@ function renderCalendar_(root, boot) {
         ' – ' +
         mdShort(sat) +
         '</div>' +
-        '<div class="sp-plan-month__weekMeta-wk">ISO ' +
-        wk +
-        '주</div>' +
+        (wkMetaKo[w]
+          ? '<div class="sp-plan-month__weekMeta-wk">' + esc(wkMetaKo[w]) + '</div>'
+          : '') +
         '</div>' +
         plannerCurriculumWeekTableHtml_(
           plannerCurriculumMockWeekPayload_(
@@ -2048,8 +2112,17 @@ function renderCalendar_(root, boot) {
             <section class="sp-plan-day__timeline" aria-label="할 일·시간표">
               <div class="sp-plan-day__secTitle">할 일 · 시간 (6시~23시, 10분 단위)</div>
               <p class="sp-plan-day__timelineHint">표의 「칠하기」로 할 일을 고른 뒤 10분 칸을 누르거나 드래그해 칠합니다. ○ △ ×는 완료·진행 정도(같은 기호를 다시 누르면 해제). 브러시 없이 칸만 누르면 지웁니다. Space=칸 토글 · 화살표=이동. 저장·API 없음.</p>
-              <div id="sp-plan-day-todo-table" class="sp-plan-day__todoTableSlot" aria-label="할 일 목록"></div>
-              <div class="sp-plan-day__timegrid sp-plan-day__timegrid--hourly" id="sp-plan-day-timegrid" role="group" aria-label="시간표"></div>
+              <div id="sp-plan-day-todo-table" class="sp-plan-day__todoTableSlot" aria-label="할 일 표"></div>
+              <div class="sp-plan-day__split" role="presentation">
+                <aside class="sp-plan-day__splitCol sp-plan-day__splitCol--todos" aria-label="할 일 요약">
+                  <div class="sp-plan-day__splitColHead">할 일</div>
+                  <div id="sp-plan-day-todo-side" class="sp-plan-day__todoSideSlot"></div>
+                </aside>
+                <div class="sp-plan-day__splitCol sp-plan-day__splitCol--time" aria-label="시간표 영역">
+                  <div class="sp-plan-day__splitColHead">시간표</div>
+                  <div class="sp-plan-day__timegrid sp-plan-day__timegrid--hourly" id="sp-plan-day-timegrid" role="group" aria-label="10분 단위 시간표"></div>
+                </div>
+              </div>
               <div id="sp-plan-day-study-footer" class="sp-plan-day__studyFooter" aria-live="polite"></div>
             </section>
           </div>
@@ -2115,7 +2188,9 @@ function renderCalendar_(root, boot) {
     const title = m.querySelector('#sp-plan-day-modal-title');
     if (title) title.textContent = st.selectedDate ? st.selectedDate + ' · 일일 플래너' : '일일 플래너';
     const todoTable = m.querySelector('#sp-plan-day-todo-table');
+    const todoSide = m.querySelector('#sp-plan-day-todo-side');
     if (todoTable) todoTable.innerHTML = plannerDayTodoTableHtml_(st.selectedDate, st);
+    if (todoSide) todoSide.innerHTML = plannerDayTodosFromPayloadHtml_(st.selectedDate, st);
     const timegrid = m.querySelector('#sp-plan-day-timegrid');
     if (timegrid) {
       timegrid.innerHTML = plannerDayTimelineHtml_(st, st.selectedDate);
@@ -2209,15 +2284,14 @@ function renderCalendar_(root, boot) {
     '<span class="sp-plan-todoReg__panelBadge sp-plan-todoReg__panelBadge--manual" aria-hidden="true">개별</span>' +
     '<div class="sp-plan-todoReg__panelHeadText">' +
     '<h3 class="sp-plan-todoReg__panelTitle">개별 등록</h3>' +
-    '<p class="sp-plan-todoReg__panelSub">제목·날짜·과목을 넣고 한 건씩 추가합니다. 시트 컬럼과 같은 필드입니다.</p>' +
+    '<p class="sp-plan-todoReg__panelSub">제목·등록 날짜·과목을 넣고 한 건씩 추가합니다. 그날짜가 이 할 일의 기준일입니다.</p>' +
     '</div></div>' +
     '<p class="sp-plan-manual__err" id="sp-plan-manual-err" hidden></p>' +
     '<div class="sp-plan-manual__grid">' +
     '<label class="sp-plan-manual__lbl">제목<input type="text" id="sp-manual-title" class="sp-plan-manual__input" maxlength="200" placeholder="예: 모의고사 오답" autocomplete="off"/></label>' +
-    '<label class="sp-plan-manual__lbl">마감·예정일<input type="date" id="sp-manual-due" class="sp-plan-manual__input" value="' +
+    '<label class="sp-plan-manual__lbl">등록·예정일<input type="date" id="sp-manual-due" class="sp-plan-manual__input" value="' +
     esc(defManDue) +
     '"/></label>' +
-    '<label class="sp-plan-manual__lbl">시작일(선택)<input type="date" id="sp-manual-start" class="sp-plan-manual__input" value=""/></label>' +
     '<label class="sp-plan-manual__lbl">과목<select id="sp-manual-cat" class="sp-plan-manual__select">' +
     '<option value="grammar">문법</option><option value="logic">논리</option><option value="read">독해</option><option value="vocab">어휘</option><option value="misc" selected>기타</option></select></label>' +
     '<label class="sp-plan-manual__lbl">우선순위<select id="sp-manual-prio" class="sp-plan-manual__select">' +

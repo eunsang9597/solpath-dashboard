@@ -3936,36 +3936,102 @@ button.sp-stu-remark__item--open:hover {
   min-height: 0;
   min-width: 0;
   max-width: 100%;
-  border-radius: 6px;
+  border-radius: 10px;
   border: 1px solid #e2e8f0;
-  background: #f8fafc;
-  overflow: visible;
+  background: #ffffff;
+  overflow: auto;
   box-sizing: border-box;
-  padding: 1px 2px 2px;
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  align-self: stretch;
-  justify-content: center;
+  -webkit-overflow-scrolling: touch;
 }
 
-#solpath-plan-root .sp-plan-cur__phase {
-  font-size: calc(0.58rem + var(--sp-text-bump));
-  font-weight: 750;
+#solpath-plan-root .sp-plan-cur__tbl {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: collapse;
+  font-size: calc(0.65rem + var(--sp-text-bump));
+  table-layout: auto;
+}
+
+#solpath-plan-root .sp-plan-cur__tbl thead th {
+  background: #ede9fe;
+  color: #4c1d95;
+  font-weight: 800;
+  text-align: center;
+  padding: 0.22rem 0.22rem;
+  border: 1px solid #ddd6fe;
+  line-height: 1.2;
+}
+
+#solpath-plan-root .sp-plan-cur__tbl tbody th,
+#solpath-plan-root .sp-plan-cur__tbl tbody td {
+  border: 1px solid #e2e8f0;
+  padding: 0.2rem 0.26rem;
+  vertical-align: middle;
+  line-height: 1.35;
+}
+
+#solpath-plan-root .sp-plan-cur__tbl tbody th {
+  width: 2.85rem;
+  max-width: 22%;
+  background: linear-gradient(180deg, #ede9fe 0%, #e9d5ff 100%);
   color: #5b21b6;
-  line-height: 1.15;
-  padding: 0 1px;
+  font-weight: 800;
+  text-align: center;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
-#solpath-plan-root .sp-plan-cur__badges {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 2px;
-  align-items: center;
-  align-content: flex-start;
+#solpath-plan-root .sp-plan-cur__tbl tbody td {
+  color: #1e293b;
+  font-weight: 550;
+  background: #fff;
+}
+
+#solpath-plan-root .sp-plan-cur__tbl tbody tr:nth-child(even) td {
+  background: #fafbfc;
+}
+
+#solpath-plan-root .sp-plan-cur__tbl tbody tr:nth-child(even) th {
+  background: linear-gradient(180deg, #e9d5ff 0%, #ddd6fe 100%);
+}
+
+#solpath-plan-root .sp-plan-cur__thCat {
+  width: 2.85rem;
+}
+
+#solpath-plan-root .sp-plan-cur__thOut {
+  width: 4.5rem;
+}
+
+#solpath-plan-root .sp-plan-cur__thLink {
+  width: 3.25rem;
+}
+
+#solpath-plan-root .sp-plan-cur__goal {
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+
+#solpath-plan-root .sp-plan-cur__outline {
+  text-align: center;
+  font-weight: 750;
+  color: #0f172a;
+  white-space: nowrap;
+}
+
+#solpath-plan-root .sp-plan-cur__link {
+  text-align: center;
+  white-space: nowrap;
+}
+
+#solpath-plan-root .sp-plan-cur__a {
+  display: inline-block;
+  width: 1.6rem;
+  height: 1.6rem;
+  border-radius: 8px;
+  border: 1px dashed #cbd5e1;
+  background: transparent;
+  box-sizing: border-box;
+  pointer-events: none;
 }
 
 #solpath-plan-root .sp-plan-curBadge {
@@ -4117,13 +4183,12 @@ button.sp-stu-remark__item--open:hover {
   margin-top: 0.12rem;
   padding: 0.32rem 0.38rem 0.4rem;
   border-radius: 8px;
-  background: rgba(91, 33, 182, 0.07);
+  background: rgba(248, 250, 252, 0.92);
+  border: 1px solid rgba(226, 232, 240, 0.95);
   display: flex;
   flex-direction: column;
-  gap: 0.22rem;
+  gap: 0.28rem;
   font-size: calc(0.62rem + var(--sp-text-bump));
-  font-weight: 700;
-  color: #5b21b6;
   line-height: 1.38;
   text-align: left;
   word-break: keep-all;
@@ -4131,6 +4196,14 @@ button.sp-stu-remark__item--open:hover {
   overflow-y: auto;
   max-height: 5.4rem;
   -webkit-overflow-scrolling: touch;
+}
+
+#solpath-plan-root .sp-plan-day__quick--badges .sp-plan-curBadge {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  white-space: normal;
+  text-align: center;
 }
 
 #solpath-plan-root .sp-plan-day__quickLine {
@@ -4193,8 +4266,8 @@ button.sp-stu-remark__item--open:hover {
   left: 50%;
   top: 50%;
   transform: translate(-50%, -50%);
-  width: min(980px, calc(100vw - 2rem));
-  max-height: calc(100vh - 2rem);
+  width: min(1120px, calc(100vw - 1.25rem));
+  max-height: calc(100vh - 1.25rem);
   background: #ffffff;
   border-radius: 14px;
   border: 1px solid rgba(148, 163, 184, 0.65);
@@ -4230,12 +4303,73 @@ button.sp-stu-remark__item--open:hover {
   overflow: auto;
 }
 
-/* 일일 모달: 할 일 뱃지 + 시간표 한 열 */
+#solpath-plan-root #sp-plan-day-modal .sp-plan-modal__body {
+  min-height: min(78vh, 44rem);
+}
+
+/* 일일 모달: 상단 표 + 하단(할 일 요약 | 시간표) 2열 */
 #solpath-plan-root #sp-plan-day-modal .sp-plan-modal__body > .sp-plan-day {
   display: block;
-  max-width: 52rem;
+  max-width: 56rem;
   margin-left: auto;
   margin-right: auto;
+}
+
+#solpath-plan-root .sp-plan-day__split {
+  display: grid;
+  grid-template-columns: minmax(13.5rem, 32%) 1fr;
+  gap: 0.65rem 0.85rem;
+  align-items: stretch;
+  margin-top: 0.35rem;
+}
+
+@media (max-width: 720px) {
+  #solpath-plan-root .sp-plan-day__split {
+    grid-template-columns: 1fr;
+  }
+}
+
+#solpath-plan-root .sp-plan-day__splitCol {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+#solpath-plan-root .sp-plan-day__splitColHead {
+  font-size: calc(0.72rem + var(--sp-text-bump));
+  font-weight: 800;
+  color: #4338ca;
+  letter-spacing: -0.02em;
+  padding: 0.15rem 0.1rem 0;
+}
+
+#solpath-plan-root .sp-plan-day__splitCol--time .sp-plan-day__splitColHead {
+  color: #0369a1;
+}
+
+#solpath-plan-root .sp-plan-day__todoSideSlot {
+  flex: 1 1 auto;
+  min-height: 10rem;
+  max-height: min(58vh, 34rem);
+  overflow: auto;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  padding: 0.2rem 0.35rem;
+  -webkit-overflow-scrolling: touch;
+}
+
+#solpath-plan-root .sp-plan-dayTodoSideList {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+#solpath-plan-root .sp-plan-day__splitCol--time .sp-plan-day__timegrid {
+  max-height: none;
+  flex: 1 1 auto;
+  min-height: 12rem;
 }
 
 #solpath-plan-root #sp-plan-day-modal .sp-plan-day__timeline {
@@ -4453,7 +4587,9 @@ button.sp-stu-remark__item--open:hover {
   font-size: calc(0.68rem + var(--sp-text-bump));
   color: #334155;
 }
-  max-height: min(70vh, 28rem);
+
+#solpath-plan-root .sp-plan-day__timegrid--hourly {
+  max-height: min(70vh, 36rem);
   overflow: auto;
   border-radius: 10px;
   border: 1px solid #e2e8f0;
@@ -4463,7 +4599,7 @@ button.sp-stu-remark__item--open:hover {
 
 #solpath-plan-root .sp-plan-hourRow {
   display: grid;
-  grid-template-columns: 2.35rem minmax(4.5rem, 7.5rem) 1fr;
+  grid-template-columns: 2.35rem 1fr;
   gap: 2px;
   align-items: stretch;
   border-bottom: 1px solid #f1f5f9;
@@ -4481,7 +4617,7 @@ button.sp-stu-remark__item--open:hover {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  padding: 0 0.15rem 0 0;
+  padding: 0 0.2rem 0 0;
   border-right: 1px solid #e2e8f0;
   background: #fafafa;
 }
@@ -4619,12 +4755,39 @@ button.sp-stu-remark__item--open:hover {
 
 #solpath-plan-root .sp-plan-day__todoRow {
   display: grid;
-  grid-template-columns: 4.6rem 1fr 5.5rem;
-  gap: 0.5rem;
+  grid-template-columns: auto 1fr 1.4rem minmax(3.25rem, auto);
+  gap: 0.4rem 0.45rem;
   align-items: center;
-  padding: 0.6rem 0.7rem;
+  padding: 0.55rem 0.5rem;
   border-top: 1px solid #eef2f7;
   cursor: grab;
+}
+
+#solpath-plan-root .sp-plan-day__todoTxt {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: calc(0.72rem + var(--sp-text-bump));
+  font-weight: 650;
+  color: #0f172a;
+}
+
+#solpath-plan-root .sp-plan-day__todoCm {
+  text-align: center;
+  font-size: calc(0.85rem + var(--sp-text-bump));
+  font-weight: 800;
+  color: #64748b;
+  line-height: 1;
+}
+
+#solpath-plan-root .sp-plan-day__todoTime {
+  font-size: calc(0.68rem + var(--sp-text-bump));
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+  color: #475569;
+  text-align: right;
+  white-space: nowrap;
 }
 
 #solpath-plan-root .sp-plan-day__todoRow:first-child {
@@ -4747,22 +4910,6 @@ button.sp-stu-remark__item--open:hover {
   outline: 2px solid #7c3aed;
   outline-offset: -2px;
   background: #faf5ff;
-}
-
-#solpath-plan-root .sp-plan-day__todoTxt {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-weight: 650;
-  color: #0f172a;
-}
-
-#solpath-plan-root .sp-plan-day__todoTime {
-  text-align: right;
-  color: #334155;
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
 }
 
 #solpath-plan-root .sp-plan-chip {
