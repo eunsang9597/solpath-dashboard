@@ -4364,15 +4364,45 @@ button.sp-stu-remark__item--open:hover {
 }
 
 #solpath-plan-root .sp-plan-todoSideTrack {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(1.35rem, auto);
   flex: 1;
-  align-items: stretch;
   min-width: 0;
-  min-height: 1.35rem;
   border-radius: 999px;
   overflow: hidden;
   border: 1px solid #e2e8f0;
   background: #f1f5f9;
+}
+
+#solpath-plan-root .sp-plan-todoSideTrack__bands {
+  grid-row: 1;
+  grid-column: 1;
+  display: flex;
+  align-self: stretch;
+  min-height: 1.35rem;
+  align-items: stretch;
+  border-radius: inherit;
+}
+
+#solpath-plan-root .sp-plan-todoSideTrack__lbl {
+  grid-row: 1;
+  grid-column: 1;
+  align-self: center;
+  z-index: 2;
+  margin: 0;
+  padding: 0 0.5rem;
+  box-sizing: border-box;
+  min-width: 0;
+  width: 100%;
+  font-size: calc(0.62rem + var(--sp-text-bump));
+  font-weight: 800;
+  color: #0f172a;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: auto;
+  text-shadow: 0 0 1px #fff, 0 0 2px #fff;
 }
 
 #solpath-plan-root .sp-plan-todoSideBand {

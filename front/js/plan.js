@@ -968,7 +968,7 @@ function plannerTaskTimelineMinutesForDay_(st, ymd, taskId) {
 }
 
 /**
- * 일일 모달 왼쪽: 시간표와 같은 시(h) 행 정렬. 시각은 한 줄 띠만, 내부는 10분 슬롯과 동일 키.
+ * 일일 모달 왼쪽: 시간표와 같은 시(h) 행 정렬. 시각은 한 줄 띠 + 말줄임 라벨, 내부는 10분 슬롯과 동일 키.
  * @param {string} dateYmd
  * @param {object} st
  * @returns {string}
@@ -991,12 +991,17 @@ function plannerDayTodoSideHourlyHtml_(dateYmd, st) {
       '<div class="sp-plan-todoSideTrack" role="group" aria-label="' +
       esc(hourLbl) +
       ' 공부 시간">';
+    const seenTid = {};
+    const labels = [];
+    const tips = [];
+    let bandsHtml = '';
     let sub;
     for (sub = 0; sub < PLAN_TIMELINE_CELLS_PER_HOUR; sub++) {
       const k = plannerTimelineSlotKey_(h, sub);
       const tid = slots[k] != null ? String(slots[k]).trim() : '';
       const row = tid ? map[tid] : null;
       const title = row && row.title ? String(row.title).trim() : '';
+      const disp = tid ? title || tid : '';
       const suf = tid ? plannerTodoSlotClassSuffix_(tid) : 'misc';
       const isBrush = Boolean(brush && tid && brush === tid);
       let bandCls = 'sp-plan-todoSideBand';
@@ -1007,19 +1012,36 @@ function plannerDayTodoSideHourlyHtml_(dateYmd, st) {
           (isBrush ? ' is-brushSeg' : '');
       }
       const m0 = sub * PLAN_TIMELINE_CELL_MIN;
-      const tip = tid
-        ? (title || tid) + ' · ' + plannerPad2_(h) + ':' + plannerPad2_(m0)
-        : '';
-      html +=
+      if (tid) {
+        if (!seenTid[tid]) {
+          seenTid[tid] = true;
+          labels.push(disp);
+        }
+        tips.push(plannerPad2_(h) + ':' + plannerPad2_(m0) + ' ' + (title || tid));
+      }
+      bandsHtml +=
         '<div class="' +
         bandCls +
         '" data-slot="' +
         esc(k) +
         '" data-todo-id="' +
         esc(tid) +
-        '" title="' +
-        esc(tip) +
         '"></div>';
+    }
+    const rowLabel = labels.join(' · ');
+    const rowTitle = tips.join(' · ');
+    html +=
+      '<div class="sp-plan-todoSideTrack" role="group" aria-label="' +
+      esc(hourLbl + (rowLabel ? ' · ' + rowLabel : '')) +
+      '">';
+    html += '<div class="sp-plan-todoSideTrack__bands" aria-hidden="true">' + bandsHtml + '</div>';
+    if (rowLabel) {
+      html +=
+        '<span class="sp-plan-todoSideTrack__lbl" title="' +
+        esc(rowTitle) +
+        '">' +
+        esc(rowLabel) +
+        '</span>';
     }
     html += '</div></div>';
   }
