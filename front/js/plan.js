@@ -686,9 +686,10 @@ function wirePlanPhoneDigitsOnly_(root) {
   });
 }
 
-/** 일일 타임라인: 매 정시 한 줄, 줄당 6칸(각 10분). 6시 행~22시 행 = 6:00~23:00 (저장 없음 · 프론트만) */
-const PLAN_TIMELINE_FIRST_H = 6;
-const PLAN_TIMELINE_LAST_H = 22;
+/** 일일 타임라인 행 순서(6…23, 0…5) · `시_칸` 키 · 프론트만 */
+const PLAN_TIMELINE_HOURS_ORDERED = Object.freeze([
+  6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 0, 1, 2, 3, 4, 5
+]);
 const PLAN_TIMELINE_CELLS_PER_HOUR = 6;
 const PLAN_TIMELINE_CELL_MIN = 10;
 /** 예전 30분 슬롯 마이그레이션용 */
@@ -1254,8 +1255,7 @@ function plannerMigrateNumeric30SlotsToTenMin_(slots) {
       const t = startMin + m;
       const h = Math.floor(t / 60);
       const sub = Math.floor((t % 60) / PLAN_TIMELINE_CELL_MIN);
-      if (h < PLAN_TIMELINE_FIRST_H || h > PLAN_TIMELINE_LAST_H) continue;
-      if (sub < 0 || sub >= PLAN_TIMELINE_CELLS_PER_HOUR) continue;
+      if (h < 0 || h > 23 || sub < 0 || sub >= PLAN_TIMELINE_CELLS_PER_HOUR) continue;
       out[plannerTimelineSlotKey_(h, sub)] = sv;
     }
   });
@@ -1597,8 +1597,9 @@ function plannerEnsureTimelineTodoSlots_(st, d) {
 function plannerDayTimelineHtml_(st, dateYmd) {
   const slots = plannerEnsureTimelineTodoSlots_(st, dateYmd);
   let html = '';
-  let h;
-  for (h = PLAN_TIMELINE_FIRST_H; h <= PLAN_TIMELINE_LAST_H; h++) {
+  let idx;
+  for (idx = 0; idx < PLAN_TIMELINE_HOURS_ORDERED.length; idx++) {
+    const h = PLAN_TIMELINE_HOURS_ORDERED[idx];
     let cells = '';
     for (let sub = 0; sub < PLAN_TIMELINE_CELLS_PER_HOUR; sub++) {
       const k = plannerTimelineSlotKey_(h, sub);
@@ -1618,7 +1619,7 @@ function plannerDayTimelineHtml_(st, dateYmd) {
         esc(lab + (tid ? ' · ' + tid : '') + ' 칸') +
         '"></button>';
     }
-    const hourLbl = String(h) + '시';
+    const hourLbl = plannerPad2_(h) + '시';
     html +=
       '<div class="sp-plan-hourRow" data-hour="' +
       String(h) +
@@ -2110,7 +2111,7 @@ function renderCalendar_(root, boot) {
         <div class="sp-plan-modal__body">
           <div class="sp-plan-day sp-plan-day--daily">
             <section class="sp-plan-day__timeline" aria-label="할 일·시간표">
-              <div class="sp-plan-day__secTitle">할 일 · 시간 (6시~23시, 10분 단위)</div>
+              <div class="sp-plan-day__secTitle">할 일 · 시간 (10분 단위)</div>
               <p class="sp-plan-day__timelineHint">표의 「칠하기」로 할 일을 고른 뒤 10분 칸을 누르거나 드래그해 칠합니다. ○ △ ×는 완료·진행 정도(같은 기호를 다시 누르면 해제). 브러시 없이 칸만 누르면 지웁니다. Space=칸 토글 · 화살표=이동. 저장·API 없음.</p>
               <div id="sp-plan-day-todo-table" class="sp-plan-day__todoTableSlot" aria-label="할 일 표"></div>
               <div class="sp-plan-day__split" role="presentation">

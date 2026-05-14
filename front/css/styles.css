@@ -4274,6 +4274,10 @@ button.sp-stu-remark__item--open:hover {
   flex-direction: column;
 }
 
+#solpath-plan-root #sp-plan-day-modal .sp-plan-modal__panel {
+  width: min(960px, calc(100vw - 1.25rem));
+}
+
 #solpath-plan-root .sp-plan-modal__head {
   display: flex;
   align-items: center;
@@ -4304,12 +4308,12 @@ button.sp-stu-remark__item--open:hover {
   min-height: min(78vh, 44rem);
 }
 
-/* 일일 모달: 상단 표 + 하단(할 일 요약 | 시간표) 2열 */
+/* 일일 모달: 상단 표 + 하단(할 일 요약 | 시간표) 2열 — 패널 폭에 맞춤(옆 공백 최소) */
 #solpath-plan-root #sp-plan-day-modal .sp-plan-modal__body > .sp-plan-day {
   display: block;
-  max-width: 56rem;
-  margin-left: auto;
-  margin-right: auto;
+  max-width: 100%;
+  margin-left: 0;
+  margin-right: 0;
 }
 
 #solpath-plan-root .sp-plan-day__split {
@@ -4596,8 +4600,8 @@ button.sp-stu-remark__item--open:hover {
 
 #solpath-plan-root .sp-plan-hourRow {
   display: grid;
-  grid-template-columns: 2.35rem 1fr;
-  gap: 2px;
+  grid-template-columns: minmax(3.5rem, max-content) 1fr;
+  gap: 0.35rem;
   align-items: stretch;
   border-bottom: 1px solid #f1f5f9;
   min-height: 1.75rem;
@@ -4610,11 +4614,13 @@ button.sp-stu-remark__item--open:hover {
 #solpath-plan-root .sp-plan-hourRow__time {
   font-size: calc(0.62rem + var(--sp-text-bump));
   font-weight: 800;
+  font-variant-numeric: tabular-nums;
   color: #475569;
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  padding: 0 0.2rem 0 0;
+  white-space: nowrap;
+  padding: 0 0.35rem 0 0.15rem;
   border-right: 1px solid #e2e8f0;
   background: #fafafa;
 }
