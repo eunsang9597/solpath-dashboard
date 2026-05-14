@@ -699,6 +699,19 @@ const PLAN_TIMELINE_LEGACY_STEP_MIN = 30;
 /** 일일 목록에 항상 노출. 타임라인 과목별 합계·달력 ‘시간표’ 분 배지에서는 제외 */
 const PLAN_FIXED_SLEEP_TODO_ID = '__sp_routine_sleep';
 const PLAN_FIXED_MEAL_TODO_ID = '__sp_routine_meal';
+/** DB `category` — 고정 일정(취침·식사와 같이 합산·배지 제외) */
+const PLAN_CATEGORY_FIXED = 'fixed';
+
+/**
+ * 취침·식사·고정일정(`category: fixed`) — 월간 합산·배지·과목별 공부 시간 분에 넣지 않음.
+ * @param {string} taskId
+ * @param {string} [category]
+ * @returns {boolean}
+ */
+function plannerIsExcludedFromStudyTotals_(taskId, category) {
+  if (plannerIsRoutineExcludedFromStudyTotals_(taskId)) return true;
+  return String(category != null ? category : '').trim() === PLAN_CATEGORY_FIXED;
+}
 
 /**
  * @param {string} taskId
@@ -764,7 +777,14 @@ function plannerWithFixedRoutineTodosFirst_(dateYmd, list) {
  */
 function plannerCategoryLabelKo_(cat) {
   const c = String(cat != null ? cat : '').trim() || 'misc';
-  const m = { grammar: '문법', logic: '논리', read: '독해', vocab: '어휘', misc: '기타' };
+  const m = {
+    grammar: '문법',
+    logic: '논리',
+    read: '독해',
+    vocab: '어휘',
+    misc: '기타',
+    fixed: '고정일정'
+  };
   return m[c] != null ? m[c] : c;
 }
 
@@ -777,6 +797,7 @@ function plannerTodoSideMergeKey_(r) {
   if (!r) return '';
   const id = String(r.task_id != null ? r.task_id : '').trim();
   if (plannerIsRoutineExcludedFromStudyTotals_(id)) return '\0routine\0' + id;
+  if (String(r.category != null ? r.category : '').trim() === PLAN_CATEGORY_FIXED) return '\0fixed\0' + id;
   return '\0cat\0' + (String(r.category != null ? r.category : '').trim() || 'misc');
 }
 
@@ -789,6 +810,7 @@ function plannerTodoSideSubjectLabel_(r) {
   const id = String(r.task_id != null ? r.task_id : '').trim();
   if (id === PLAN_FIXED_SLEEP_TODO_ID) return '취침';
   if (id === PLAN_FIXED_MEAL_TODO_ID) return '식사';
+  if (String(r.category != null ? r.category : '').trim() === PLAN_CATEGORY_FIXED) return '고정';
   return plannerCategoryLabelKo_(r.category);
 }
 
@@ -903,6 +925,8 @@ function plannerRebuildQuickPostPayload_(st) {
     todos.push(m);
   });
   st.plannerQuickPostBody.todos = todos;
+  st.plannerQuickPostBody.dayTimelineTodoByDate = st.dayTimelineTodoByDate || {};
+  st.plannerQuickPostBody.dayFixedBlockSlotsByDate = st.dayFixedBlockSlotsByDate || {};
   plannerSyncPayloadSortKeysFromDayOrder_(st);
 }
 
@@ -1051,9 +1075,13 @@ function plannerTaskTimelineMinutesForDay_(st, ymd, taskId) {
   if (!slots || typeof slots !== 'object') return 0;
   const tid = String(taskId || '').trim();
   if (!tid) return 0;
+  const map = plannerDayTodoIdMapForDay_(ymd, st);
+  const row = map[tid];
+  if (plannerIsExcludedFromStudyTotals_(tid, row && row.category)) return 0;
   let n = 0;
   Object.keys(slots).forEach(function (k) {
     if (!plannerTimelineSlotKeyParse_(k)) return;
+    if (plannerFixedSlotBlocked_(st, ymd, k)) return;
     if (String(slots[k] != null ? slots[k] : '').trim() === tid) n++;
   });
   return n * PLAN_TIMELINE_CELL_MIN;
@@ -1087,7 +1115,10 @@ function plannerDayTodosFromPayloadHtml_(dateYmd, st) {
     for (let k = i; k < j; k++) {
       const r = rows[k];
       const id = String(r.task_id || '');
-      const isRoutine = plannerIsRoutineExcludedFromStudyTotals_(id);
+      let rowKind = '';
+      if (id === PLAN_FIXED_SLEEP_TODO_ID) rowKind = ' sp-plan-todoSide__row--sleep';
+      else if (id === PLAN_FIXED_MEAL_TODO_ID) rowKind = ' sp-plan-todoSide__row--meal';
+      else if (String(r.category || '').trim() === PLAN_CATEGORY_FIXED) rowKind = ' sp-plan-todoSide__row--fixed';
       const title = esc(String(r.title || '').trim() || id);
       const isB = Boolean(brush && brush === id);
       const comp = plannerTodoCompletionGet_(st, dateYmd, id);
@@ -1095,7 +1126,8 @@ function plannerDayTodosFromPayloadHtml_(dateYmd, st) {
       const selO = comp === 'circle' ? ' selected' : '';
       const selTri = comp === 'triangle' ? ' selected' : '';
       const selX = comp === 'x' ? ' selected' : '';
-      body += '<tr class="sp-plan-todoSide__row' + (isRoutine ? ' sp-plan-todoSide__row--routine' : '') + (isB ? ' is-brushRow' : '') + '" data-todo-id="' + esc(id) + '">';
+      const hueCls = ' sp-plan-todoHue-' + plannerTodoHueClass_(id);
+      body += '<tr class="sp-plan-todoSide__row' + rowKind + hueCls + (isB ? ' is-brushRow' : '') + '" data-todo-id="' + esc(id) + '">';
       if (k === i) {
         body +=
           '<th class="sp-plan-todoSide__thSubj" scope="row" rowspan="' +
@@ -1159,10 +1191,14 @@ function plannerDayTodosFromPayloadHtml_(dateYmd, st) {
 function plannerAssignedMinutesForDay_(st, ymd) {
   const slots = st.dayTimelineTodoByDate && st.dayTimelineTodoByDate[ymd];
   if (!slots) return 0;
+  const map = plannerDayTodoIdMapForDay_(ymd, st);
   let n = 0;
   Object.keys(slots).forEach(function (k) {
+    if (plannerFixedSlotBlocked_(st, ymd, k)) return;
     const tid = String(slots[k] != null ? slots[k] : '').trim();
-    if (!tid || plannerIsRoutineExcludedFromStudyTotals_(tid)) return;
+    if (!tid) return;
+    const row = map[tid];
+    if (plannerIsExcludedFromStudyTotals_(tid, row && row.category)) return;
     n++;
   });
   return n * PLAN_TIMELINE_CELL_MIN;
@@ -1319,12 +1355,230 @@ function plannerMigrateLegacySlotsToTodo_(legacy) {
   return out;
 }
 
-/** @param {string} id task_id 또는 legacy 짧은 id */
-function plannerTodoSlotClassSuffix_(id) {
+/** 과목 합산·레거시: task_id 문자열에서 grammar|logic|… 토큰 */
+function plannerTodoCategoryToken_(id) {
   const s = String(id != null ? id : '');
   if (/^(grammar|logic|read|vocab)$/.test(s)) return s;
   const m = s.match(/(grammar|logic|read|vocab)/);
   return m ? m[1] : 'misc';
+}
+
+/**
+ * 타임라인 칸·할 일 행 색: task_id마다 고정 hue (`c0`…`c11`).
+ * @param {string} id
+ * @returns {string}
+ */
+function plannerTodoHueClass_(id) {
+  const s = String(id != null ? id : '');
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619) >>> 0;
+  }
+  return 'c' + String(h % 12);
+}
+
+/**
+ * brush 없음 → 칸 비움. brush 있음 → **빈 칸에만** 칠함. 이미 **다른** 할 일이 있으면 그대로 둠(덮어쓰기 금지).
+ * 같은 할 일만 칠해져 있으면 한 번 더 적용 시 토글로 지움.
+ * @param {Record<string, string>} slots
+ * @param {string} slotKey
+ * @param {string} brush
+ * @param {object} [st]
+ * @param {string} [ymd]
+ * @returns {string} 반영 후 해당 칸의 todo id 또는 ''
+ */
+function plannerTimelineSlotApplyBrush_(slots, slotKey, brush, st, ymd) {
+  const sk = String(slotKey);
+  if (st && ymd && plannerFixedSlotBlocked_(st, String(ymd), sk)) {
+    const cur0 = slots[sk] != null ? String(slots[sk]).trim() : '';
+    return cur0;
+  }
+  const b = brush ? String(brush).trim() : '';
+  const cur = slots[sk] != null ? String(slots[sk]).trim() : '';
+  if (!b) {
+    slots[sk] = '';
+    return '';
+  }
+  if (cur === b) {
+    slots[sk] = '';
+    return '';
+  }
+  if (cur && cur !== b) {
+    return cur;
+  }
+  slots[sk] = b;
+  return b;
+}
+
+/**
+ * 타임라인 `시_칸` 키 → 0..143 순번(6시 첫 칸=0).
+ * @param {string} slotKey
+ * @returns {number}
+ */
+function plannerSlotKeyToOrderIndex_(slotKey) {
+  const p = plannerTimelineSlotKeyParse_(String(slotKey));
+  if (!p) return -1;
+  const hi = PLAN_TIMELINE_HOURS_ORDERED.indexOf(p.hour);
+  if (hi < 0) return -1;
+  return hi * PLAN_TIMELINE_CELLS_PER_HOUR + p.sub;
+}
+
+/**
+ * @param {number} ix
+ * @returns {string}
+ */
+function plannerOrderIndexToSlotKey_(ix) {
+  const n = Number(ix);
+  const max = PLAN_TIMELINE_HOURS_ORDERED.length * PLAN_TIMELINE_CELLS_PER_HOUR;
+  if (!isFinite(n) || n < 0 || n >= max) return '';
+  const hi = Math.floor(n / PLAN_TIMELINE_CELLS_PER_HOUR);
+  const sub = n % PLAN_TIMELINE_CELLS_PER_HOUR;
+  const h = PLAN_TIMELINE_HOURS_ORDERED[hi];
+  return plannerTimelineSlotKey_(h, sub);
+}
+
+/**
+ * 타임라인 순번이 **정시 또는 :30** 시작(10분 격자상 `sub` 0 또는 3)인지.
+ * @param {number} ix
+ * @returns {boolean}
+ */
+function plannerFixedTimelineOrderIndexIsHalfHour_(ix) {
+  const n = Number(ix);
+  if (!isFinite(n) || n < 0) return false;
+  const max = PLAN_TIMELINE_HOURS_ORDERED.length * PLAN_TIMELINE_CELLS_PER_HOUR;
+  if (n >= max) return false;
+  const sub = n % PLAN_TIMELINE_CELLS_PER_HOUR;
+  return sub === 0 || sub === 3;
+}
+
+/**
+ * @param {boolean} [includeEndBoundary] true면 value=max(배타적 끝) 한 줄 추가 — 끝 시각용
+ * @returns {string}
+ */
+function plannerFixedTimelineSelectOptionsHtml_(includeEndBoundary) {
+  let s = '';
+  let ix;
+  const max = PLAN_TIMELINE_HOURS_ORDERED.length * PLAN_TIMELINE_CELLS_PER_HOUR;
+  for (ix = 0; ix < max; ix++) {
+    if (!plannerFixedTimelineOrderIndexIsHalfHour_(ix)) continue;
+    const k = plannerOrderIndexToSlotKey_(ix);
+    const p = plannerTimelineSlotKeyParse_(k);
+    if (!p) continue;
+    const m0 = p.sub * PLAN_TIMELINE_CELL_MIN;
+    const lab = plannerPad2_(p.hour) + ':' + plannerPad2_(m0);
+    s += '<option value="' + String(ix) + '">' + esc(lab) + '</option>';
+  }
+  if (includeEndBoundary) {
+    s += '<option value="' + String(max) + '">' + esc('타임라인 끝(24h)') + '</option>';
+  }
+  return s;
+}
+
+/**
+ * @param {object} st
+ * @param {string} ymd
+ * @param {string} slotKey
+ * @returns {boolean}
+ */
+function plannerFixedSlotBlocked_(st, ymd, slotKey) {
+  const m = st.dayFixedBlockSlotsByDate && st.dayFixedBlockSlotsByDate[ymd];
+  return Boolean(m && m[String(slotKey)]);
+}
+
+/**
+ * @param {object} st
+ * @param {Date} viewMonth
+ * @param {number[]} weekdays
+ * @param {string} title
+ * @param {number} startIx
+ * @param {number} endIx
+ * @returns {string} 빈 문자열=성공, 아니면 에러 문구
+ */
+function plannerApplyFixedScheduleForMonth_(st, viewMonth, weekdays, title, startIx, endIx) {
+  const name = String(title != null ? title : '').trim();
+  if (!name.length) return '일정 이름을 입력해 주세요.';
+  if (!weekdays.length) return '요일을 한 개 이상 선택해 주세요.';
+  const s0 = Number(startIx);
+  const s1 = Number(endIx);
+  if (!isFinite(s0) || !isFinite(s1)) return '시간을 선택해 주세요.';
+  if (s1 <= s0) return '끝 시간은 시작 시간보다 뒤여야 합니다.';
+  const maxIx = PLAN_TIMELINE_HOURS_ORDERED.length * PLAN_TIMELINE_CELLS_PER_HOUR;
+  if (!plannerFixedTimelineOrderIndexIsHalfHour_(s0)) return '시작 시각은 30분 단위만 선택할 수 있습니다.';
+  if (s1 !== maxIx && !plannerFixedTimelineOrderIndexIsHalfHour_(s1)) {
+    return '끝 시각은 30분 단위 또는 「타임라인 끝」만 선택할 수 있습니다.';
+  }
+  if (s0 < 0 || s0 >= maxIx) return '시간 범위가 올바르지 않습니다.';
+  if (s1 <= 0 || s1 > maxIx) return '시간 범위가 올바르지 않습니다.';
+  const y = viewMonth.getFullYear();
+  const m0 = viewMonth.getMonth();
+  const last = new Date(y, m0 + 1, 0).getDate();
+  const ruleId = 'fxr_' + String(Date.now()) + '_' + String(Math.floor(Math.random() * 1e6));
+  if (!st.plannerManualTodos) st.plannerManualTodos = [];
+  if (!st.dayFixedBlockSlotsByDate) st.dayFixedBlockSlotsByDate = {};
+  let d;
+  let skdx;
+  for (d = 1; d <= last; d++) {
+    const dd = new Date(y, m0, d);
+    if (weekdays.indexOf(dd.getDay()) < 0) continue;
+    const ymd = plannerYmdFromParts_(y, m0, d);
+    const task_id = '__sp_fix_' + ruleId + '_' + ymd;
+    st.plannerManualTodos.push({
+      task_id: task_id,
+      title: name,
+      description: '',
+      status: 'todo',
+      priority: 'normal',
+      due_date: ymd,
+      start_date: ymd,
+      category: PLAN_CATEGORY_FIXED,
+      sort_key: -600,
+      completed_at: '',
+      created_at: '',
+      updated_at: ''
+    });
+    if (!st.dayFixedBlockSlotsByDate[ymd]) st.dayFixedBlockSlotsByDate[ymd] = {};
+    const slots = plannerEnsureTimelineTodoSlots_(st, ymd);
+    for (skdx = s0; skdx < s1; skdx++) {
+      const k = plannerOrderIndexToSlotKey_(skdx);
+      if (!k) continue;
+      st.dayFixedBlockSlotsByDate[ymd][k] = true;
+      try {
+        delete slots[k];
+      } catch (_e) {
+        slots[k] = '';
+      }
+    }
+  }
+  plannerRebuildQuickPostPayload_(st);
+  return '';
+}
+
+/**
+ * 달력 일자 칸 하단 고정 일정(빨간 텍스트만).
+ * @param {object} st
+ * @param {string} key ymd
+ * @returns {string}
+ */
+function plannerFixedScheduleFooterHtml_(st, key) {
+  const rows = Array.isArray(st.plannerManualTodos) ? st.plannerManualTodos : [];
+  const lines = [];
+  rows.forEach(function (r) {
+    if (!r || String(r.due_date || '').trim() !== key) return;
+    if (String(r.category || '').trim() !== PLAN_CATEGORY_FIXED) return;
+    const t = String(r.title || '').trim();
+    if (t) lines.push(t);
+  });
+  if (!lines.length) return '';
+  return (
+    '<div class="sp-plan-day__fixedFoot" aria-label="고정 일정">' +
+    lines
+      .map(function (t) {
+        return '<div class="sp-plan-day__fixedLine">' + esc(t) + '</div>';
+      })
+      .join('') +
+    '</div>'
+  );
 }
 
 /**
@@ -1440,7 +1694,7 @@ function plannerHourTodoColHtmlFromSlots_(slots, dateYmd, st, hour) {
   order.forEach(function (tid) {
     const row = map[tid];
     const txt = row && row.title ? String(row.title).trim() : tid.length > 10 ? tid.slice(0, 10) + '…' : tid;
-    const suf = plannerTodoSlotClassSuffix_(tid);
+    const suf = plannerTodoHueClass_(tid);
     const short = txt.length > 10 ? txt.slice(0, 10) + '…' : txt;
     h +=
       '<span class="sp-plan-hourTodoPill sp-plan-hourTodoPill--' +
@@ -1502,11 +1756,12 @@ function plannerSubjectMinutesFromTimeline_(st, ymd) {
   const map = plannerDayTodoIdMapForDay_(ymd, st);
   Object.keys(slots).forEach(function (k) {
     if (!plannerTimelineSlotKeyParse_(k)) return;
+    if (plannerFixedSlotBlocked_(st, ymd, k)) return;
     const tid = String(slots[k] != null ? slots[k] : '').trim();
-    if (!tid || plannerIsRoutineExcludedFromStudyTotals_(tid)) return;
     const row = map[tid];
+    if (!tid || plannerIsExcludedFromStudyTotals_(tid, row && row.category)) return;
     const cat = row && row.category ? String(row.category).trim() : '';
-    const suf = cat && acc[cat] != null ? cat : plannerTodoSlotClassSuffix_(tid);
+    const suf = cat && acc[cat] != null ? cat : plannerTodoCategoryToken_(tid);
     const key = acc[suf] != null ? suf : 'misc';
     acc[key] = (acc[key] || 0) + PLAN_TIMELINE_CELL_MIN;
   });
@@ -1602,9 +1857,16 @@ function plannerRefreshDayModalTodoSide_(root) {
 /** @param {HTMLElement} timegrid */
 function plannerRovingTabindexSlotcells_(timegrid) {
   if (!timegrid) return;
-  timegrid.querySelectorAll('.sp-plan-slotcell').forEach(function (el, idx) {
-    if (el instanceof HTMLElement) {
-      el.setAttribute('tabindex', idx === 0 ? '0' : '-1');
+  const cells = timegrid.querySelectorAll('.sp-plan-slotcell');
+  let placed = false;
+  cells.forEach(function (el) {
+    if (!(el instanceof HTMLElement)) return;
+    const dis = el instanceof HTMLButtonElement && el.disabled;
+    if (!dis && !placed) {
+      el.setAttribute('tabindex', '0');
+      placed = true;
+    } else {
+      el.setAttribute('tabindex', '-1');
     }
   });
 }
@@ -1664,20 +1926,28 @@ function plannerDayTimelineHtml_(st, dateYmd) {
     let cells = '';
     for (let sub = 0; sub < PLAN_TIMELINE_CELLS_PER_HOUR; sub++) {
       const k = plannerTimelineSlotKey_(h, sub);
-      const tid = slots[k] ? String(slots[k]) : '';
-      const suf = tid ? plannerTodoSlotClassSuffix_(tid) : '';
+      const blocked = plannerFixedSlotBlocked_(st, dateYmd, k);
+      const tid = !blocked && slots[k] ? String(slots[k]).trim() : '';
+      const suf = tid ? plannerTodoHueClass_(tid) : '';
       const m0 = sub * PLAN_TIMELINE_CELL_MIN;
       const m1 = m0 + PLAN_TIMELINE_CELL_MIN;
       const lab = plannerPad2_(h) + ':' + plannerPad2_(m0) + '–' + plannerPad2_(h) + ':' + plannerPad2_(m1);
+      const cls =
+        'sp-plan-slotcell' +
+        (blocked ? ' sp-plan-slotcell--fixedBlock is-fixedBlock' : '') +
+        (tid ? ' is-on sp-plan-slotcell--todo sp-plan-slotcell--todo--' + suf : '');
+      const al = blocked ? lab + ' · 고정 일정(비활성)' : lab + (tid ? ' · ' + tid : '') + ' 칸';
       cells +=
-        '<button type="button" tabindex="-1" class="sp-plan-slotcell' +
-        (tid ? ' is-on sp-plan-slotcell--todo sp-plan-slotcell--todo--' + suf : '') +
+        '<button type="button" tabindex="-1" class="' +
+        cls +
         '" data-slot="' +
         esc(k) +
-        '" aria-pressed="' +
+        '"' +
+        (blocked ? ' disabled aria-disabled="true"' : '') +
+        ' aria-pressed="' +
         (tid ? 'true' : 'false') +
         '" aria-label="' +
-        esc(lab + (tid ? ' · ' + tid : '') + ' 칸') +
+        esc(al) +
         '"></button>';
     }
     const hourLbl = plannerPad2_(h) + '시';
@@ -1698,28 +1968,44 @@ function plannerDayTimelineHtml_(st, dateYmd) {
 }
 
 /**
- * @param {HTMLElement} root
+ * 슬롯 상태 → 버튼 DOM만 반영(브러시 적용 없음).
  * @param {HTMLButtonElement} btn
- * @param {HTMLElement|null} timegrid
+ * @param {Record<string, string>} slots
+ * @param {string} slot
+ * @param {object} [st]
+ * @param {string} [ymd]
  */
-function plannerPaintSlotcellFromState_(root, btn, timegrid) {
-  const st = root.__spPlanState;
-  if (!st || !st.selectedDate) return;
-  const slot = btn.getAttribute('data-slot');
-  if (slot == null || String(slot).indexOf('_') < 0) return;
-  const slots = plannerEnsureTimelineTodoSlots_(st, st.selectedDate);
-  const brush = st.modalBrushTodoId ? String(st.modalBrushTodoId) : '';
-  if (!brush) {
-    slots[slot] = '';
-  } else {
-    slots[slot] = brush;
+function plannerSyncSlotcellUi_(btn, slots, slot, st, ymd) {
+  const sk = String(slot);
+  if (st && ymd && plannerFixedSlotBlocked_(st, String(ymd), sk)) {
+    btn.className = 'sp-plan-slotcell sp-plan-slotcell--fixedBlock is-fixedBlock';
+    btn.setAttribute('aria-pressed', 'false');
+    btn.setAttribute('disabled', 'disabled');
+    btn.setAttribute('aria-disabled', 'true');
+    const p0 = plannerTimelineSlotKeyParse_(sk);
+    if (p0) {
+      const m0 = p0.sub * PLAN_TIMELINE_CELL_MIN;
+      const m1 = m0 + PLAN_TIMELINE_CELL_MIN;
+      const lab =
+        plannerPad2_(p0.hour) +
+        ':' +
+        plannerPad2_(m0) +
+        '–' +
+        plannerPad2_(p0.hour) +
+        ':' +
+        plannerPad2_(m1);
+      btn.setAttribute('aria-label', esc(lab + ' · 고정 일정(비활성)'));
+    }
+    return;
   }
-  const tid = slots[slot] ? String(slots[slot]) : '';
-  const suf = tid ? plannerTodoSlotClassSuffix_(tid) : '';
+  btn.removeAttribute('disabled');
+  btn.removeAttribute('aria-disabled');
+  const tid = slots[sk] != null ? String(slots[sk]).trim() : '';
+  const suf = tid ? plannerTodoHueClass_(tid) : '';
   btn.className =
     'sp-plan-slotcell' + (tid ? ' is-on sp-plan-slotcell--todo sp-plan-slotcell--todo--' + suf : '');
   btn.setAttribute('aria-pressed', tid ? 'true' : 'false');
-  const p = plannerTimelineSlotKeyParse_(slot);
+  const p = plannerTimelineSlotKeyParse_(sk);
   if (p) {
     const m0 = p.sub * PLAN_TIMELINE_CELL_MIN;
     const m1 = m0 + PLAN_TIMELINE_CELL_MIN;
@@ -1733,6 +2019,23 @@ function plannerPaintSlotcellFromState_(root, btn, timegrid) {
       plannerPad2_(m1);
     btn.setAttribute('aria-label', esc(lab + (tid ? ' · ' + tid : '') + ' 칸'));
   }
+}
+
+/**
+ * @param {HTMLElement} root
+ * @param {HTMLButtonElement} btn
+ * @param {HTMLElement|null} timegrid
+ */
+function plannerPaintSlotcellFromState_(root, btn, timegrid) {
+  const st = root.__spPlanState;
+  if (!st || !st.selectedDate) return;
+  const slot = btn.getAttribute('data-slot');
+  if (slot == null || String(slot).indexOf('_') < 0) return;
+  if (plannerFixedSlotBlocked_(st, st.selectedDate, String(slot))) return;
+  const slots = plannerEnsureTimelineTodoSlots_(st, st.selectedDate);
+  const brush = st.modalBrushTodoId ? String(st.modalBrushTodoId) : '';
+  plannerTimelineSlotApplyBrush_(slots, slot, brush, st, st.selectedDate);
+  plannerSyncSlotcellUi_(btn, slots, String(slot), st, st.selectedDate);
   plannerRefreshDayModalTodoSide_(root);
 }
 
@@ -1816,6 +2119,7 @@ function wirePlannerDayModalUiOnce_(modalEl, root) {
   timegrid.addEventListener('pointerdown', function (e) {
     const btn = e.target && e.target.closest ? e.target.closest('.sp-plan-slotcell') : null;
     if (!btn || !timegrid.contains(btn) || !(btn instanceof HTMLButtonElement)) return;
+    if (btn.disabled) return;
     painting = true;
     lastPaintSlot = '';
     plannerPaintSlotcellFromState_(root, btn, timegrid);
@@ -1830,6 +2134,7 @@ function wirePlannerDayModalUiOnce_(modalEl, root) {
     const el = document.elementFromPoint(e.clientX, e.clientY);
     const btn = el && el.closest ? el.closest('.sp-plan-slotcell') : null;
     if (!btn || !timegrid.contains(btn) || !(btn instanceof HTMLButtonElement)) return;
+    if (btn.disabled) return;
     const sk = btn.getAttribute('data-slot') || '';
     if (sk === lastPaintSlot) return;
     lastPaintSlot = sk;
@@ -1845,38 +2150,59 @@ function wirePlannerDayModalUiOnce_(modalEl, root) {
       e.preventDefault();
       const st = root.__spPlanState;
       if (!st || !st.selectedDate) return;
+      if (btn.disabled) return;
       const slot = btn.getAttribute('data-slot');
       if (slot == null) return;
       const slots = plannerEnsureTimelineTodoSlots_(st, st.selectedDate);
-      const cur = slots[slot] ? String(slots[slot]) : '';
-      if (cur) {
-        slots[slot] = '';
-      } else if (st.modalBrushTodoId) {
-        slots[slot] = String(st.modalBrushTodoId);
-      } else {
-        return;
-      }
-      plannerPaintSlotcellFromState_(root, btn, timegrid);
+      const brush = st.modalBrushTodoId ? String(st.modalBrushTodoId) : '';
+      plannerTimelineSlotApplyBrush_(slots, String(slot), brush, st, st.selectedDate);
+      plannerSyncSlotcellUi_(btn, slots, String(slot), st, st.selectedDate);
       plannerRefreshDayModalStudyFooter_(root);
       plannerRefreshDayModalTodoSide_(root);
     } else if (e.key === 'ArrowRight') {
       e.preventDefault();
-      if (i < 0 || i >= cells.length - 1) return;
-      const next = cells[i + 1];
-      if (next instanceof HTMLButtonElement) plannerFocusSlotcell_(timegrid, next);
+      let j = i + 1;
+      while (j < cells.length) {
+        const next = cells[j];
+        if (next instanceof HTMLButtonElement && !next.disabled) {
+          plannerFocusSlotcell_(timegrid, next);
+          break;
+        }
+        j++;
+      }
     } else if (e.key === 'ArrowLeft') {
       e.preventDefault();
-      if (i <= 0) return;
-      const next = cells[i - 1];
-      if (next instanceof HTMLButtonElement) plannerFocusSlotcell_(timegrid, next);
+      let j = i - 1;
+      while (j >= 0) {
+        const next = cells[j];
+        if (next instanceof HTMLButtonElement && !next.disabled) {
+          plannerFocusSlotcell_(timegrid, next);
+          break;
+        }
+        j--;
+      }
     } else if (e.key === 'ArrowDown') {
       e.preventDefault();
-      const next = cells[i + PLAN_TIMELINE_CELLS_PER_HOUR];
-      if (next instanceof HTMLButtonElement) plannerFocusSlotcell_(timegrid, next);
+      let j = i + PLAN_TIMELINE_CELLS_PER_HOUR;
+      while (j < cells.length) {
+        const next = cells[j];
+        if (next instanceof HTMLButtonElement && !next.disabled) {
+          plannerFocusSlotcell_(timegrid, next);
+          break;
+        }
+        j++;
+      }
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
-      const next = cells[i - PLAN_TIMELINE_CELLS_PER_HOUR];
-      if (next instanceof HTMLButtonElement) plannerFocusSlotcell_(timegrid, next);
+      let j = i - PLAN_TIMELINE_CELLS_PER_HOUR;
+      while (j >= 0) {
+        const next = cells[j];
+        if (next instanceof HTMLButtonElement && !next.disabled) {
+          plannerFocusSlotcell_(timegrid, next);
+          break;
+        }
+        j--;
+      }
     }
   });
   const memoTa = modalEl.querySelector('#sp-plan-day-memo');
@@ -1902,20 +2228,22 @@ function plannerManualTodosCountForDay_(st, ymd) {
   let n = 0;
   for (let i = 0; i < m.length; i++) {
     const row = m[i];
-    if (row && String(row.due_date || '').trim() === ymd) n++;
+    if (!row || String(row.due_date || '').trim() !== ymd) continue;
+    if (String(row.category || '').trim() === PLAN_CATEGORY_FIXED) continue;
+    n++;
   }
   return n;
 }
 
 /**
- * 달력 **배지 숫자**용: 해당 날짜 **목록에 보이는 할 일** 건수에서 취침·식사 고정 행 제외.
+ * 달력 **배지 숫자**용: 해당 날짜 **목록에 보이는 할 일** 건수에서 취침·식사·고정일정 제외.
  * @param {object} st
  * @param {string} ymd
  * @returns {number}
  */
 function plannerCalendarUserTodoCountForBadge_(st, ymd) {
   return plannerOrderedDayTodos_(st, ymd).filter(function (r) {
-    return r && !plannerIsRoutineExcludedFromStudyTotals_(r.task_id);
+    return r && !plannerIsExcludedFromStudyTotals_(r.task_id, r.category);
   }).length;
 }
 
@@ -1962,6 +2290,7 @@ function renderCalendar_(root, boot) {
           dayTodoCompletionByDate: {},
           dayTimelineSlotsByDate: {},
           dayTimelineTodoByDate: {},
+          dayFixedBlockSlotsByDate: {},
           dayMemoByDate: {},
           quickPlanByDate: {},
           plannerManualTodos: [],
@@ -1985,6 +2314,7 @@ function renderCalendar_(root, boot) {
     plannerRebuildQuickPostPayload_(st);
   }
   if (!st.dayTimelineTodoByDate) st.dayTimelineTodoByDate = {};
+  if (!st.dayFixedBlockSlotsByDate) st.dayFixedBlockSlotsByDate = {};
   if (!st.dayMemoByDate) st.dayMemoByDate = {};
   if (!st.dayTodoCompletionByDate) st.dayTodoCompletionByDate = {};
   if (typeof st.quickRegCollapsed !== 'boolean') st.quickRegCollapsed = false;
@@ -2119,6 +2449,7 @@ function renderCalendar_(root, boot) {
           </div>
           <div class="sp-plan-day__dots" aria-hidden="true">${dots}</div>
           ${plannerQuickPlanCellSummaryHtml_(st, key)}
+          ${plannerFixedScheduleFooterHtml_(st, key)}
         </button>`;
       }
       html += '</div>';
@@ -2264,6 +2595,8 @@ function renderCalendar_(root, boot) {
       ? plannerYmdFromParts_(vmMan.getFullYear(), vmMan.getMonth(), 1)
       : plannerYmdFromParts_(new Date().getFullYear(), new Date().getMonth(), 1);
 
+  const fixedTimeOptsStart = plannerFixedTimelineSelectOptionsHtml_(false);
+  const fixedTimeOptsEnd = plannerFixedTimelineSelectOptionsHtml_(true);
   slot.innerHTML =
     '<div class="sp-plan-calstack">' +
     '<section class="sp-plan-todoReg sp-plan-quick' +
@@ -2318,6 +2651,42 @@ function renderCalendar_(root, boot) {
     '<button type="button" class="btn btn--primary sp-plan-quick__apply" id="sp-quick-apply">이 달에 반영</button>' +
     '<button type="button" class="btn btn--ghost sp-plan-quick__clear" id="sp-quick-clear">이 달 지우기</button>' +
     '</div></div></div>' +
+    '<div class="sp-plan-todoReg__panel sp-plan-todoReg__panel--fixed" id="sp-plan-fixed-reg" aria-label="고정 일정">' +
+    '<div class="sp-plan-todoReg__panelHead">' +
+    '<span class="sp-plan-todoReg__panelBadge sp-plan-todoReg__panelBadge--fixed" aria-hidden="true">고정</span>' +
+    '<div class="sp-plan-todoReg__panelHeadText">' +
+    '<h3 class="sp-plan-todoReg__panelTitle">고정 일정</h3>' +
+    '<p class="sp-plan-todoReg__panelSub">선택한 요일마다 같은 시간대는 시간표에서 비활성(회색)으로 막고, 고정 항목이 할 일 목록에 들어갑니다. 시작·끝 시각은 30분 단위로 고릅니다(막힌 칸은 기존과 같이 10분 격자). 취침·식사처럼 합산·달력 숫자 배지에는 포함되지 않습니다.</p>' +
+    '</div></div>' +
+    '<p class="sp-plan-quick__err" id="sp-plan-fixed-err" hidden></p>' +
+    '<div class="sp-plan-quick__row sp-plan-quick__row--horiz">' +
+    '<span class="sp-plan-quick__lbl">요일</span>' +
+    '<div class="sp-plan-quick__chks" role="group" aria-label="고정 일정 요일">' +
+    '<label class="sp-plan-quick__chk"><input type="checkbox" name="sp-fixed-dow" value="1"/>월</label>' +
+    '<label class="sp-plan-quick__chk"><input type="checkbox" name="sp-fixed-dow" value="2"/>화</label>' +
+    '<label class="sp-plan-quick__chk"><input type="checkbox" name="sp-fixed-dow" value="3"/>수</label>' +
+    '<label class="sp-plan-quick__chk"><input type="checkbox" name="sp-fixed-dow" value="4"/>목</label>' +
+    '<label class="sp-plan-quick__chk"><input type="checkbox" name="sp-fixed-dow" value="5"/>금</label>' +
+    '<label class="sp-plan-quick__chk"><input type="checkbox" name="sp-fixed-dow" value="6"/>토</label>' +
+    '<label class="sp-plan-quick__chk"><input type="checkbox" name="sp-fixed-dow" value="0"/>일</label>' +
+    '</div></div>' +
+    '<div class="sp-plan-fixed__nameRow">' +
+    '<label class="sp-plan-fixed__nameLbl"><span class="sp-plan-quick__lbl">이름</span>' +
+    '<input type="text" id="sp-fixed-title" class="sp-plan-manual__input" maxlength="200" placeholder="예: 학원 이동" autocomplete="off"/></label>' +
+    '</div>' +
+    '<div class="sp-plan-quick__row sp-plan-quick__row--horiz">' +
+    '<span class="sp-plan-quick__lbl">시간</span>' +
+    '<div class="sp-plan-fixed__timeSelects">' +
+    '<label class="sp-plan-fixed__timeLbl">시작<select id="sp-fixed-start" class="sp-plan-manual__select">' +
+    fixedTimeOptsStart +
+    '</select></label>' +
+    '<label class="sp-plan-fixed__timeLbl">끝<select id="sp-fixed-end" class="sp-plan-manual__select">' +
+    fixedTimeOptsEnd +
+    '</select></label>' +
+    '</div></div>' +
+    '<div class="sp-plan-fixed__applyRow">' +
+    '<button type="button" class="btn btn--primary" id="sp-fixed-apply">이 달에 반영</button>' +
+    '</div></div>' +
     '<div class="sp-plan-todoReg__panel sp-plan-todoReg__panel--manual" id="sp-plan-manual-reg" aria-label="개별 등록">' +
     '<div class="sp-plan-todoReg__panelHead">' +
     '<span class="sp-plan-todoReg__panelBadge sp-plan-todoReg__panelBadge--manual" aria-hidden="true">개별</span>' +
@@ -2363,6 +2732,15 @@ function renderCalendar_(root, boot) {
 
   renderMonth_();
 
+  const fss0 = slot.querySelector('#sp-fixed-start');
+  const fse0 = slot.querySelector('#sp-fixed-end');
+  if (fss0 instanceof HTMLSelectElement) fss0.selectedIndex = 0;
+  if (fse0 instanceof HTMLSelectElement) {
+    const o6 = fse0.querySelector('option[value="6"]');
+    if (o6 instanceof HTMLOptionElement) fse0.value = '6';
+    else if (fse0.options.length) fse0.selectedIndex = Math.min(2, fse0.options.length - 1);
+  }
+
   if (!slot.__spPlanCalWired) {
     slot.__spPlanCalWired = true;
     slot.addEventListener('click', function (e) {
@@ -2376,6 +2754,15 @@ function renderCalendar_(root, boot) {
           const nowCollapsed = sec.classList.toggle('is-collapsed');
           st.quickRegCollapsed = nowCollapsed;
           btn.setAttribute('aria-expanded', nowCollapsed ? 'false' : 'true');
+          if (!nowCollapsed) {
+            const bodyEl = sec.querySelector('#sp-plan-todo-reg-body');
+            if (bodyEl instanceof HTMLElement) {
+              bodyEl.scrollTop = 0;
+              requestAnimationFrame(function () {
+                bodyEl.scrollTop = 0;
+              });
+            }
+          }
         }
         return;
       }
@@ -2433,6 +2820,45 @@ function renderCalendar_(root, boot) {
           if (modal && st.selectedDate && !modal.hasAttribute('hidden')) {
             openDayModal_(st.selectedDate);
           }
+        }
+        return;
+      }
+      const fixedApply = t.id === 'sp-fixed-apply' ? t : t.closest ? t.closest('#sp-fixed-apply') : null;
+      if (fixedApply) {
+        const errF = slot.querySelector('#sp-plan-fixed-err');
+        const box = slot.querySelector('#sp-plan-fixed-reg');
+        if (errF) {
+          errF.textContent = '';
+          errF.setAttribute('hidden', 'hidden');
+        }
+        const titleEl = slot.querySelector('#sp-fixed-title');
+        const startEl = slot.querySelector('#sp-fixed-start');
+        const endEl = slot.querySelector('#sp-fixed-end');
+        const title =
+          titleEl && 'value' in titleEl ? String(/** @type {HTMLInputElement} */ (titleEl).value).trim() : '';
+        const weekdays = [];
+        if (box) {
+          box.querySelectorAll('input[name="sp-fixed-dow"]:checked').forEach(function (cb) {
+            weekdays.push(Number(/** @type {HTMLInputElement} */ (cb).value));
+          });
+        }
+        const sIx = startEl && 'value' in startEl ? String(/** @type {HTMLSelectElement} */ (startEl).value) : '';
+        const eIx = endEl && 'value' in endEl ? String(/** @type {HTMLSelectElement} */ (endEl).value) : '';
+        const msg = plannerApplyFixedScheduleForMonth_(st, st.viewMonth, weekdays, title, Number(sIx), Number(eIx));
+        if (errF) {
+          if (msg) {
+            errF.textContent = msg;
+            errF.removeAttribute('hidden');
+          } else {
+            errF.textContent = '';
+            errF.setAttribute('hidden', 'hidden');
+          }
+        }
+        plannerRefreshPostPreview_(root);
+        renderMonth_();
+        const modalF = root.querySelector('#sp-plan-day-modal');
+        if (modalF && st.selectedDate && !modalF.hasAttribute('hidden')) {
+          openDayModal_(st.selectedDate);
         }
         return;
       }
