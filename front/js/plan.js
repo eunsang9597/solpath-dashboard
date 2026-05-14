@@ -749,8 +749,8 @@ function plannerClearQuickTodoOrderForMonth_(st, viewMonth) {
 }
 
 /**
- * `quickPlanByDate` → 나중에 GAS POST에 넣을 **본문 형태**만 프론트에 유지 (`연동은 나중`).
- * 필드명은 `DB_PLANNER_PERSONAL_TODO_HEADERS` 와 맞춤.
+ * `quickPlanByDate` + `plannerManualTodos` → 나중에 GAS POST에 넣을 **본문 형태**만 프론트에 유지 (`연동은 나중`).
+ * 필드명은 `DB_PLANNER_PERSONAL_TODO_HEADERS` 와 맞춤 (`gas/DB/dbSchema.js`).
  * @param {object} st
  */
 function plannerRebuildQuickPostPayload_(st) {
@@ -789,8 +789,82 @@ function plannerRebuildQuickPostPayload_(st) {
       });
     });
   });
+  /** @type {Record<string, number>} */
+  const maxSkByDue = {};
+  todos.forEach(function (t) {
+    const d = String((t && t.due_date) || '').trim();
+    if (!d) return;
+    const sk = Number(t.sort_key) || 0;
+    if (maxSkByDue[d] == null || sk > maxSkByDue[d]) maxSkByDue[d] = sk;
+  });
+  const manual = Array.isArray(st.plannerManualTodos) ? st.plannerManualTodos : [];
+  manual.forEach(function (m) {
+    if (!m || typeof m !== 'object') return;
+    const d = String(m.due_date != null ? m.due_date : '').trim();
+    if (!d) return;
+    const next = (maxSkByDue[d] != null ? maxSkByDue[d] : -1) + 1;
+    maxSkByDue[d] = next;
+    m.sort_key = next;
+    todos.push(m);
+  });
   st.plannerQuickPostBody.todos = todos;
   plannerSyncPayloadSortKeysFromDayOrder_(st);
+}
+
+/**
+ * 일반 등록 폼 → `plannerManualTodos` 에 append 후 페이로드 재생성.
+ * @param {HTMLElement} slot `#sp-plan-calendar-slot`
+ * @param {object} st
+ * @returns {string} 빈 문자열 = 성공, 아니면 에러 메시지
+ */
+function plannerAppendManualTodoFromForm_(slot, st) {
+  if (!st.plannerManualTodos) st.plannerManualTodos = [];
+  const titleEl = slot.querySelector('#sp-manual-title');
+  const dueEl = slot.querySelector('#sp-manual-due');
+  const startEl = slot.querySelector('#sp-manual-start');
+  const catEl = slot.querySelector('#sp-manual-cat');
+  const prioEl = slot.querySelector('#sp-manual-prio');
+  const descEl = slot.querySelector('#sp-manual-desc');
+  const title = titleEl && 'value' in titleEl ? String(/** @type {HTMLInputElement} */ (titleEl).value).trim() : '';
+  const due = dueEl && 'value' in dueEl ? String(/** @type {HTMLInputElement} */ (dueEl).value).trim() : '';
+  const startRaw = startEl && 'value' in startEl ? String(/** @type {HTMLInputElement} */ (startEl).value).trim() : '';
+  const category = catEl && 'value' in catEl ? String(/** @type {HTMLSelectElement} */ (catEl).value).trim() : 'misc';
+  const priority = prioEl && 'value' in prioEl ? String(/** @type {HTMLSelectElement} */ (prioEl).value).trim() : 'normal';
+  const description = descEl && 'value' in descEl ? String(/** @type {HTMLTextAreaElement} */ (descEl).value).trim() : '';
+  if (!title.length) return '할 일 제목을 입력해 주세요.';
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(due)) return '마감·예정일을 선택해 주세요.';
+  const allowedP = { low: true, normal: true, high: true };
+  const p = allowedP[priority] ? priority : 'normal';
+  const allowedC = { grammar: true, logic: true, read: true, vocab: true, misc: true };
+  const c = allowedC[category] ? category : 'misc';
+  const start_date = startRaw && /^\d{4}-\d{2}-\d{2}$/.test(startRaw) ? startRaw : due;
+  let task_id = '';
+  try {
+    if (globalThis.crypto && typeof globalThis.crypto.randomUUID === 'function') {
+      task_id = 'man_' + due + '_' + globalThis.crypto.randomUUID();
+    }
+  } catch (_e) {
+    task_id = '';
+  }
+  if (!task_id) task_id = 'man_' + due + '_' + String(Date.now()) + '_' + String(Math.floor(Math.random() * 1e6));
+  st.plannerManualTodos.push({
+    task_id: task_id,
+    title: title,
+    description: description,
+    status: 'todo',
+    priority: p,
+    due_date: due,
+    start_date: start_date,
+    category: c,
+    sort_key: 0,
+    completed_at: '',
+    created_at: '',
+    updated_at: ''
+  });
+  plannerRebuildQuickPostPayload_(st);
+  if (titleEl) /** @type {HTMLInputElement} */ (titleEl).value = '';
+  if (descEl) /** @type {HTMLTextAreaElement} */ (descEl).value = '';
+  return '';
 }
 
 /**
@@ -885,13 +959,14 @@ function plannerRefreshPostPreview_(root) {
 function plannerDayTodosFromPayloadHtml_(dateYmd, st) {
   const rows = plannerOrderedDayTodos_(st, dateYmd);
   if (!rows.length) {
-    return '<p class="sp-plan-day__todoEmpty">빠른 등록으로 반영한 할 일이 이 날짜에 없습니다. 적용 후 아래 POST 미리보기에서 전체를 확인할 수 있습니다.</p>';
+    return '<p class="sp-plan-day__todoEmpty">이 날짜에 할 일이 없습니다. 위 <strong>할 일 등록</strong>에서 빠른 등록 또는 개별 등록으로 추가한 뒤, POST 미리보기에서 확인할 수 있습니다.</p>';
   }
   const chip = {
     grammar: { cat: '문법', cls: 'sp-plan-chip--grammar' },
     logic: { cat: '논리', cls: 'sp-plan-chip--logic' },
     read: { cat: '독해', cls: 'sp-plan-chip--read' },
-    vocab: { cat: '어휘', cls: 'sp-plan-chip--vocab' }
+    vocab: { cat: '어휘', cls: 'sp-plan-chip--vocab' },
+    misc: { cat: '기타', cls: 'sp-plan-chip--misc' }
   };
   const brush = st.modalBrushTodoId ? String(st.modalBrushTodoId) : '';
   let h = '';
@@ -1342,7 +1417,7 @@ function plannerRefreshDayModalStudyFooter_(root) {
 function plannerDayTodoTableHtml_(dateYmd, st) {
   const rows = plannerOrderedDayTodos_(st, dateYmd);
   if (!rows.length) {
-    return '<p class="sp-plan-day__todoTableEmpty">이 날짜에 할 일이 없습니다. 빠른 등록으로 추가하면 아래 표에서 선택·완료 표시를 할 수 있습니다.</p>';
+    return '<p class="sp-plan-day__todoTableEmpty">이 날짜에 할 일이 없습니다. <strong>할 일 등록</strong>에서 빠른 등록 또는 개별 등록으로 추가하면 아래 표에서 선택·완료 표시를 할 수 있습니다.</p>';
   }
   const brush = st.modalBrushTodoId ? String(st.modalBrushTodoId) : '';
   let body = '';
@@ -1699,6 +1774,41 @@ function wirePlannerDayModalUiOnce_(modalEl, root) {
 }
 
 /**
+ * 일반 등록(`plannerManualTodos`) 중 해당 날짜 건수.
+ * @param {object} st
+ * @param {string} ymd
+ * @returns {number}
+ */
+function plannerManualTodosCountForDay_(st, ymd) {
+  const m = st.plannerManualTodos;
+  if (!Array.isArray(m)) return 0;
+  let n = 0;
+  for (let i = 0; i < m.length; i++) {
+    const row = m[i];
+    if (row && String(row.due_date || '').trim() === ymd) n++;
+  }
+  return n;
+}
+
+/**
+ * 해당 월에 빠른 등록 또는 일반 등록 할 일이 하나라도 있으면 true (시연 점 숨김용).
+ * @param {object} st
+ * @param {Date} viewMonth
+ */
+function plannerMonthHasAnyLocalPlan_(st, viewMonth) {
+  if (plannerMonthHasQuickPlan_(st, viewMonth)) return true;
+  const pfx = plannerMonthYmdPrefix_(viewMonth);
+  const m = st.plannerManualTodos;
+  if (!Array.isArray(m)) return false;
+  for (let i = 0; i < m.length; i++) {
+    const row = m[i];
+    const d = row && String(row.due_date || '').trim();
+    if (d && d.indexOf(pfx) === 0) return true;
+  }
+  return false;
+}
+
+/**
  * @param {HTMLElement} root
  * @param {{ role: string, common: object[], personal: object[] | null }} boot
  */
@@ -1727,7 +1837,7 @@ function renderCalendar_(root, boot) {
 
   const apiHadCalendarRows = common.length > 0 || personal.length > 0;
 
-  /** @type {{ role: 'member'|'guest', viewMonth: Date, byDate: Record<string, number>, selectedDate: string|null, apiHadCalendarRows: boolean, dayTodoOrderByDate?: Record<string, string[]>, dayTodoCompletionByDate?: Record<string, Record<string, string>>, dayTimelineSlotsByDate?: Record<string, Record<string, boolean>>, dayTimelineTodoByDate?: Record<string, Record<string, string>>, quickPlanByDate?: Record<string, { subject: string, lesson: number }[]>, plannerQuickPostBody?: { action: string, todos: object[] }, modalBrushTodoId?: string, quickRegCollapsed?: boolean, planGuestUnlockMock?: boolean }} */
+  /** @type {{ role: 'member'|'guest', viewMonth: Date, byDate: Record<string, number>, selectedDate: string|null, apiHadCalendarRows: boolean, dayTodoOrderByDate?: Record<string, string[]>, dayTodoCompletionByDate?: Record<string, Record<string, string>>, dayTimelineSlotsByDate?: Record<string, Record<string, boolean>>, dayTimelineTodoByDate?: Record<string, Record<string, string>>, quickPlanByDate?: Record<string, { subject: string, lesson: number }[]>, plannerManualTodos?: object[], plannerQuickPostBody?: { action: string, todos: object[] }, modalBrushTodoId?: string, quickRegCollapsed?: boolean, planGuestUnlockMock?: boolean }} */
   const st = (root.__spPlanState =
     root.__spPlanState && typeof root.__spPlanState === 'object'
       ? root.__spPlanState
@@ -1742,6 +1852,7 @@ function renderCalendar_(root, boot) {
           dayTimelineSlotsByDate: {},
           dayTimelineTodoByDate: {},
           quickPlanByDate: {},
+          plannerManualTodos: [],
           plannerQuickPostBody: { action: 'plannerPersonalTodosApply', todos: [] },
           modalBrushTodoId: '',
           quickRegCollapsed: false,
@@ -1756,6 +1867,7 @@ function renderCalendar_(root, boot) {
   st.apiHadCalendarRows = apiHadCalendarRows;
   if (st.modalBrushTodoId == null) st.modalBrushTodoId = '';
   if (!st.quickPlanByDate) st.quickPlanByDate = {};
+  if (!st.plannerManualTodos) st.plannerManualTodos = [];
   if (!st.plannerQuickPostBody || typeof st.plannerQuickPostBody !== 'object') {
     st.plannerQuickPostBody = { action: 'plannerPersonalTodosApply', todos: [] };
     plannerRebuildQuickPostPayload_(st);
@@ -1848,8 +1960,8 @@ function renderCalendar_(root, boot) {
     const viewY = view.getFullYear();
     const viewM = view.getMonth();
 
-    const hasQuick = plannerMonthHasQuickPlan_(st, view);
-    const demoByDate = st.apiHadCalendarRows || hasQuick ? {} : plannerDemoDotsForViewMonth_(viewY, viewM);
+    const hasLocal = plannerMonthHasAnyLocalPlan_(st, view);
+    const demoByDate = st.apiHadCalendarRows || hasLocal ? {} : plannerDemoDotsForViewMonth_(viewY, viewM);
 
     let html = '';
     for (let w = 0; w < 6; w++) {
@@ -1892,12 +2004,14 @@ function renderCalendar_(root, boot) {
         const wkCls = di === 0 ? ' is-sun' : di === 6 ? ' is-sat' : '';
         const apiN = st.byDate[key] || 0;
         const qn = st.quickPlanByDate && st.quickPlanByDate[key] ? st.quickPlanByDate[key].length : 0;
+        const mn = plannerManualTodosCountForDay_(st, key);
         const demN = demoByDate[key] || 0;
         const asg = plannerAssignedMinutesForDay_(st, key) > 0 ? 1 : 0;
-        const badge = apiN + qn + demN + asg;
+        const badge = apiN + qn + mn + demN + asg;
         let dots = '';
         if (apiN) dots += '<span class="sp-plan-day__dot sp-plan-day__dot--api" title="일정"></span>';
         if (qn) dots += '<span class="sp-plan-day__dot sp-plan-day__dot--quick" title="빠른등록"></span>';
+        if (mn) dots += '<span class="sp-plan-day__dot sp-plan-day__dot--manual" title="개별 등록"></span>';
         if (asg) dots += '<span class="sp-plan-day__dot sp-plan-day__dot--assign" title="시간표"></span>';
         if (demN) dots += '<span class="sp-plan-day__dot sp-plan-day__dot--demo" title="시연"></span>';
         html += `
@@ -2030,21 +2144,37 @@ function renderCalendar_(root, boot) {
     m.setAttribute('hidden', 'hidden');
   }
 
+  const vmMan = st.viewMonth;
+  const defManDue =
+    vmMan instanceof Date && !isNaN(Number(vmMan.getTime()))
+      ? plannerYmdFromParts_(vmMan.getFullYear(), vmMan.getMonth(), 1)
+      : plannerYmdFromParts_(new Date().getFullYear(), new Date().getMonth(), 1);
+
   slot.innerHTML =
     '<div class="sp-plan-calstack">' +
-    '<section class="sp-plan-quick' +
+    '<section class="sp-plan-todoReg sp-plan-quick' +
     (st.quickRegCollapsed ? ' is-collapsed' : '') +
-    '" id="sp-plan-quick-reg" aria-label="빠른 등록">' +
-    '<div class="sp-plan-quick__head">' +
+    '" id="sp-plan-quick-reg" aria-label="할 일 등록">' +
+    '<header class="sp-plan-todoReg__outerHead sp-plan-quick__head">' +
     '<div class="sp-plan-quick__headL">' +
     '<button type="button" class="sp-plan-quick__collapse" id="sp-quick-toggle" aria-expanded="' +
     (st.quickRegCollapsed ? 'false' : 'true') +
-    '" aria-controls="sp-plan-quick-body" title="빠른 등록 접기·펼치기">' +
+    '" aria-controls="sp-plan-todo-reg-body" title="할 일 등록 영역 접기·펼치기">' +
     '<span class="sp-plan-quick__chev" aria-hidden="true">▼</span>' +
     '</button>' +
-    '<span class="sp-plan-quick__title">빠른 등록</span></div>' +
-    '<span class="sp-plan-quick__note">시트 저장 전 · POST 본문만 생성</span></div>' +
-    '<div id="sp-plan-quick-body" class="sp-plan-quick__body">' +
+    '<div class="sp-plan-todoReg__headMain">' +
+    '<span class="sp-plan-todoReg__outerTitle">할 일 등록</span>' +
+    '<span class="sp-plan-todoReg__outerSub">빠른 배치와 개별 입력 · 시트 저장 전 미리보기</span>' +
+    '</div></div>' +
+    '<span class="sp-plan-todoReg__pill">로컬만</span></header>' +
+    '<div id="sp-plan-todo-reg-body" class="sp-plan-quick__body sp-plan-todoReg__scroll">' +
+    '<div class="sp-plan-todoReg__panel sp-plan-todoReg__panel--quick">' +
+    '<div class="sp-plan-todoReg__panelHead">' +
+    '<span class="sp-plan-todoReg__panelBadge" aria-hidden="true">빠른</span>' +
+    '<div class="sp-plan-todoReg__panelHeadText">' +
+    '<h3 class="sp-plan-todoReg__panelTitle">빠른 등록</h3>' +
+    '<p class="sp-plan-todoReg__panelSub">선택한 요일에 강 번호를 나눠 한 달 치 할 일을 만듭니다.</p>' +
+    '</div></div>' +
     '<p class="sp-plan-quick__err" id="sp-plan-quick-err" hidden></p>' +
     '<div class="sp-plan-quick__row sp-plan-quick__row--horiz">' +
     '<span class="sp-plan-quick__lbl">요일</span>' +
@@ -2073,9 +2203,30 @@ function renderCalendar_(root, boot) {
     '<input type="number" id="sp-lesson-to" class="sp-plan-quick__num" min="1" max="99" value="20" />' +
     '<button type="button" class="btn btn--primary sp-plan-quick__apply" id="sp-quick-apply">이 달에 반영</button>' +
     '<button type="button" class="btn btn--ghost sp-plan-quick__clear" id="sp-quick-clear">이 달 지우기</button>' +
+    '</div></div></div>' +
+    '<div class="sp-plan-todoReg__panel sp-plan-todoReg__panel--manual" id="sp-plan-manual-reg" aria-label="개별 등록">' +
+    '<div class="sp-plan-todoReg__panelHead">' +
+    '<span class="sp-plan-todoReg__panelBadge sp-plan-todoReg__panelBadge--manual" aria-hidden="true">개별</span>' +
+    '<div class="sp-plan-todoReg__panelHeadText">' +
+    '<h3 class="sp-plan-todoReg__panelTitle">개별 등록</h3>' +
+    '<p class="sp-plan-todoReg__panelSub">제목·날짜·과목을 넣고 한 건씩 추가합니다. 시트 컬럼과 같은 필드입니다.</p>' +
     '</div></div>' +
-    '<div class="sp-plan-quick__postPreview">' +
-    '<div class="sp-plan-quick__postPreviewLbl">POST용 todo 미리보기 (연동 전 · <code>plannerQuickPostBody</code>)</div>' +
+    '<p class="sp-plan-manual__err" id="sp-plan-manual-err" hidden></p>' +
+    '<div class="sp-plan-manual__grid">' +
+    '<label class="sp-plan-manual__lbl">제목<input type="text" id="sp-manual-title" class="sp-plan-manual__input" maxlength="200" placeholder="예: 모의고사 오답" autocomplete="off"/></label>' +
+    '<label class="sp-plan-manual__lbl">마감·예정일<input type="date" id="sp-manual-due" class="sp-plan-manual__input" value="' +
+    esc(defManDue) +
+    '"/></label>' +
+    '<label class="sp-plan-manual__lbl">시작일(선택)<input type="date" id="sp-manual-start" class="sp-plan-manual__input" value=""/></label>' +
+    '<label class="sp-plan-manual__lbl">과목<select id="sp-manual-cat" class="sp-plan-manual__select">' +
+    '<option value="grammar">문법</option><option value="logic">논리</option><option value="read">독해</option><option value="vocab">어휘</option><option value="misc" selected>기타</option></select></label>' +
+    '<label class="sp-plan-manual__lbl">우선순위<select id="sp-manual-prio" class="sp-plan-manual__select">' +
+    '<option value="low">낮음</option><option value="normal" selected>보통</option><option value="high">높음</option></select></label>' +
+    '</div>' +
+    '<label class="sp-plan-manual__lbl sp-plan-manual__lbl--block">메모(선택)<textarea id="sp-manual-desc" class="sp-plan-manual__textarea" rows="2" maxlength="2000"></textarea></label>' +
+    '<button type="button" class="btn btn--primary sp-plan-manual__add" id="sp-manual-add">할 일 추가</button></div>' +
+    '<div class="sp-plan-quick__postPreview sp-plan-todoReg__postPreview">' +
+    '<div class="sp-plan-quick__postPreviewLbl">POST 미리보기 · <code>plannerPersonalTodosApply</code> (빠른+개별 합본)</div>' +
     '<pre class="sp-plan-quick__postPre" id="sp-plan-post-preview"></pre>' +
     '</div></div></section>' +
     '<div class="sp-plan-month" id="sp-plan-month-wrap">' +
@@ -2171,6 +2322,27 @@ function renderCalendar_(root, boot) {
           if (modal && st.selectedDate && !modal.hasAttribute('hidden')) {
             openDayModal_(st.selectedDate);
           }
+        }
+        return;
+      }
+      const manualAdd = t.id === 'sp-manual-add' ? t : t.closest ? t.closest('#sp-manual-add') : null;
+      if (manualAdd) {
+        const errM = slot.querySelector('#sp-plan-manual-err');
+        const msg = plannerAppendManualTodoFromForm_(slot, st);
+        if (errM) {
+          if (msg) {
+            errM.textContent = msg;
+            errM.removeAttribute('hidden');
+          } else {
+            errM.textContent = '';
+            errM.setAttribute('hidden', 'hidden');
+          }
+        }
+        plannerRefreshPostPreview_(root);
+        renderMonth_();
+        const modal2 = root.querySelector('#sp-plan-day-modal');
+        if (modal2 && st.selectedDate && !modal2.hasAttribute('hidden')) {
+          openDayModal_(st.selectedDate);
         }
         return;
       }
