@@ -3106,12 +3106,19 @@ button.sp-stu-remark__item--open:hover {
 }
 
 #solpath-plan-root .app-shell--plan .sp-plan-calendar-slot {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.65rem;
   min-height: 22rem;
+  min-width: 0;
+  width: 100%;
   border-radius: 12px;
   border: 2px dashed #d1c4e9;
   background: #faf8ff;
   box-sizing: border-box;
   overflow-x: auto;
+  overflow-y: visible;
   -webkit-overflow-scrolling: touch;
 }
 
@@ -3337,15 +3344,10 @@ button.sp-stu-remark__item--open:hover {
 }
 
 /* --- 플래너: 월간 달력(6주 고정) + 일일 모달(뼈대) --- */
+/* 달력+빠른등록을 한 덩어리로 두지 않고, 슬롯(#sp-plan-calendar-slot) 직계 자식으로 펼쳐
+   내용 너비(max-content)가 슬롯 overflow-x에 걸리게 함 */
 #solpath-plan-root .sp-plan-calstack {
-  display: flex;
-  flex-direction: column;
-  gap: 0.65rem;
-  width: max-content;
-  min-width: 100%;
-  height: 100%;
-  box-sizing: border-box;
-  min-height: 0;
+  display: contents;
 }
 
 #solpath-plan-root .sp-plan-todoReg.sp-plan-quick {
@@ -3812,7 +3814,8 @@ button.sp-stu-remark__item--open:hover {
 }
 
 #solpath-plan-root .sp-plan-month {
-  width: 100%;
+  width: max-content;
+  min-width: 100%;
   height: 100%;
   display: flex;
   flex-direction: column;
@@ -3820,10 +3823,8 @@ button.sp-stu-remark__item--open:hover {
   gap: 0.55rem;
   padding: 0.75rem;
   box-sizing: border-box;
-  min-width: 0;
-  max-width: 100%;
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
+  overflow-x: visible;
+  overflow-y: visible;
 }
 
 #solpath-plan-root .sp-plan-month__head {
@@ -3852,7 +3853,7 @@ button.sp-stu-remark__item--open:hover {
 
 #solpath-plan-root .sp-plan-month__dow {
   display: grid;
-  grid-template-columns: minmax(10.5rem, 15rem) repeat(7, minmax(7.5rem, 1fr)) !important;
+  grid-template-columns: minmax(10.5rem, max-content) repeat(7, minmax(7.5rem, 1fr)) !important;
   gap: 0.3rem;
   padding: 0 0.05rem;
   align-items: center;
@@ -3900,7 +3901,7 @@ button.sp-stu-remark__item--open:hover {
 
 #solpath-plan-root .sp-plan-month__weekRow {
   display: grid;
-  grid-template-columns: minmax(10.5rem, 15rem) repeat(7, minmax(7.5rem, 1fr)) !important;
+  grid-template-columns: minmax(10.5rem, max-content) repeat(7, minmax(7.5rem, 1fr)) !important;
   gap: 0.3rem;
   min-height: 5.8rem;
   align-items: stretch;
@@ -3934,19 +3935,15 @@ button.sp-stu-remark__item--open:hover {
 #solpath-plan-root .sp-plan-cur {
   flex: 1 1 auto;
   min-height: 0;
-  min-width: 0;
-  max-width: 100%;
   border-radius: 10px;
   border: 1px solid #e2e8f0;
   background: #ffffff;
-  overflow: auto;
+  overflow: visible;
   box-sizing: border-box;
-  -webkit-overflow-scrolling: touch;
 }
 
 #solpath-plan-root .sp-plan-cur__tbl {
   width: max-content;
-  min-width: 100%;
   border-collapse: collapse;
   font-size: calc(0.65rem + var(--sp-text-bump));
   table-layout: auto;
@@ -5047,23 +5044,12 @@ button.sp-stu-remark__item--open:hover {
   gap: 0.35rem 1rem !important;
 }
 
-/* 5. 달력 calstack/grid/weekRow width 고정값 해제 */
-#solpath-plan-root .sp-plan-calstack {
-  width: 100% !important;
-  min-width: 0 !important;
-}
-
-#solpath-plan-root .sp-plan-month__grid,
-#solpath-plan-root .sp-plan-month__weekRow,
-#solpath-plan-root .sp-plan-month__dow {
-  width: 100% !important;
-  min-width: 0 !important;
-}
+/* 5. 달력 행·헤더는 내용 너비(max-content)로 키우고, 가로 스크롤은 #sp-plan-calendar-slot 에서만 */
 
 /* 6. 달력 grid 컬럼 비율 — 커리큘럼(뱃지) 왼쪽 + 일자 칸 너비 */
 #solpath-plan-root .sp-plan-month__weekRow,
 #solpath-plan-root .sp-plan-month__dow {
-  grid-template-columns: minmax(10.5rem, 15rem) repeat(7, minmax(8rem, 1fr)) !important;
+  grid-template-columns: minmax(10.5rem, max-content) repeat(7, minmax(8rem, 1fr)) !important;
   box-sizing: border-box !important;
 }
 
