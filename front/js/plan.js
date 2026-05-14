@@ -968,56 +968,73 @@ function plannerTaskTimelineMinutesForDay_(st, ymd, taskId) {
 }
 
 /**
- * 일일 모달 왼쪽 열: 할 일 요약(과목 칩·제목·완료 표시·오늘 칠한 분).
+ * 일일 모달 왼쪽: 시간표와 같은 시(h) 행 정렬. 시각은 한 줄 띠만, 내부는 10분 슬롯과 동일 키.
+ * @param {string} dateYmd
+ * @param {object} st
+ * @returns {string}
+ */
+function plannerDayTodoSideHourlyHtml_(dateYmd, st) {
+  const slots = plannerEnsureTimelineTodoSlots_(st, dateYmd);
+  const map = plannerDayTodoIdMapForDay_(dateYmd, st);
+  const brush = st.modalBrushTodoId ? String(st.modalBrushTodoId) : '';
+  let html = '<div class="sp-plan-dayTodoSideHourly" aria-label="시간별 공부 시간">';
+  let idx;
+  for (idx = 0; idx < PLAN_TIMELINE_HOURS_ORDERED.length; idx++) {
+    const h = PLAN_TIMELINE_HOURS_ORDERED[idx];
+    const hourLbl = plannerPad2_(h) + '시';
+    html += '<div class="sp-plan-hourRow sp-plan-todoSideRow" data-hour="' + String(h) + '">';
+    html +=
+      '<div class="sp-plan-hourRow__time sp-plan-todoSideRow__timeGhost" aria-hidden="true">' +
+      esc(hourLbl) +
+      '</div>';
+    html +=
+      '<div class="sp-plan-todoSideTrack" role="group" aria-label="' +
+      esc(hourLbl) +
+      ' 공부 시간">';
+    let sub;
+    for (sub = 0; sub < PLAN_TIMELINE_CELLS_PER_HOUR; sub++) {
+      const k = plannerTimelineSlotKey_(h, sub);
+      const tid = slots[k] != null ? String(slots[k]).trim() : '';
+      const row = tid ? map[tid] : null;
+      const title = row && row.title ? String(row.title).trim() : '';
+      const suf = tid ? plannerTodoSlotClassSuffix_(tid) : 'misc';
+      const isBrush = Boolean(brush && tid && brush === tid);
+      let bandCls = 'sp-plan-todoSideBand';
+      if (tid) {
+        bandCls +=
+          ' is-on sp-plan-todoSideBand--todo sp-plan-todoSideBand--todo--' +
+          suf +
+          (isBrush ? ' is-brushSeg' : '');
+      }
+      const m0 = sub * PLAN_TIMELINE_CELL_MIN;
+      const tip = tid
+        ? (title || tid) + ' · ' + plannerPad2_(h) + ':' + plannerPad2_(m0)
+        : '';
+      html +=
+        '<div class="' +
+        bandCls +
+        '" data-slot="' +
+        esc(k) +
+        '" data-todo-id="' +
+        esc(tid) +
+        '" title="' +
+        esc(tip) +
+        '"></div>';
+    }
+    html += '</div></div>';
+  }
+  html += '</div>';
+  return html;
+}
+
+/**
+ * 일일 모달 왼쪽 열: 시간표와 행 정렬, 한 줄 띠 표시(위 표·공부 시간 체크와 동일 슬롯).
  * @param {string} dateYmd
  * @param {object} st
  * @returns {string}
  */
 function plannerDayTodosFromPayloadHtml_(dateYmd, st) {
-  const rows = plannerOrderedDayTodos_(st, dateYmd);
-  if (!rows.length) {
-    return '<p class="sp-plan-day__todoEmpty">이 날짜에 할 일이 없습니다. 위 <strong>할 일 등록</strong>에서 빠른 등록 또는 개별 등록으로 추가한 뒤, POST 미리보기에서 확인할 수 있습니다.</p>';
-  }
-  const chip = {
-    grammar: { cat: '문법', cls: 'sp-plan-chip--grammar' },
-    logic: { cat: '논리', cls: 'sp-plan-chip--logic' },
-    read: { cat: '독해', cls: 'sp-plan-chip--read' },
-    vocab: { cat: '어휘', cls: 'sp-plan-chip--vocab' },
-    misc: { cat: '기타', cls: 'sp-plan-chip--misc' }
-  };
-  const brush = st.modalBrushTodoId ? String(st.modalBrushTodoId) : '';
-  let h = '';
-  rows.forEach(function (r) {
-    const id = String(r.task_id || '');
-    const cat = String(r.category || '');
-    const meta = chip[cat] || { cat: cat || '기타', cls: 'sp-plan-chip--read' };
-    const isB = Boolean(brush && id === brush);
-    const comp = plannerTodoCompletionGet_(st, dateYmd, id);
-    const sym = comp === 'circle' ? '○' : comp === 'triangle' ? '△' : comp === 'x' ? '×' : '·';
-    const mins = plannerTaskTimelineMinutesForDay_(st, dateYmd, id);
-    const dur = mins > 0 ? plannerFormatStudyDurationKo_(mins) : '—';
-    h +=
-      '<div class="sp-plan-day__todoRow' +
-      (isB ? ' is-brush' : '') +
-      '" draggable="true" data-todo-id="' +
-      esc(id) +
-      '">' +
-      '<span class="sp-plan-chip ' +
-      esc(meta.cls) +
-      '">' +
-      esc(meta.cat) +
-      '</span>' +
-      '<span class="sp-plan-day__todoTxt">' +
-      esc(String(r.title || '')) +
-      '</span>' +
-      '<span class="sp-plan-day__todoCm" title="위 표에서 ○△×">' +
-      esc(sym) +
-      '</span>' +
-      '<span class="sp-plan-day__todoTime" title="오늘 시간표에 칠한 합">' +
-      esc(dur) +
-      '</span></div>';
-  });
-  return '<div class="sp-plan-dayTodoSideList">' + h + '</div>';
+  return plannerDayTodoSideHourlyHtml_(dateYmd, st);
 }
 
 /**
@@ -1082,7 +1099,7 @@ function plannerApplyQuickPlanToState_(st, viewMonth, weekdays, subjects, fromL,
 }
 
 /**
- * 달력 칸에 빠른등록 요약(짧은 문자열) — 점/배지 외에 일자 안에 보이게.
+ * 달력 칸에 빠른등록 요약 — `sp-plan-curBadge` span을 일자 버튼 직계 자식으로 나열(래퍼 없음).
  * @param {object} st
  * @param {string} key ymd
  * @returns {string}
@@ -1167,9 +1184,7 @@ function plannerQuickPlanCellSummaryHtml_(st, key) {
     );
   });
   if (!lines.length) return '';
-  return (
-    '<div class="sp-plan-day__quick sp-plan-day__quick--badges" aria-hidden="true">' + lines.join('') + '</div>'
-  );
+  return lines.join('');
 }
 
 /** @param {Record<string, unknown>} legacy */
@@ -1424,7 +1439,7 @@ function plannerDayModalSubjectStatsHtml_(st, ymd) {
     return (
       '<div class="sp-plan-studyFooter__inner">' +
       '<div class="sp-plan-studyFooter__title">타임라인 과목별 공부 시간</div>' +
-      '<p class="sp-plan-studyFooter__empty">아직 칠한 10분 칸이 없습니다. 할 일을 선택한 뒤 시간표에 칠하면 여기에 합계가 나타납니다.</p>' +
+      '<p class="sp-plan-studyFooter__empty">아직 표시한 10분 칸이 없습니다. 「공부 시간 체크」로 할 일을 고른 뒤 시간표에 표시하면 여기에 합계가 나타납니다.</p>' +
       '</div>'
     );
   }
@@ -1515,8 +1530,8 @@ function plannerDayTodoTableHtml_(dateYmd, st) {
       (isB ? ' is-brush' : '') +
       '" data-action="todo-brush" aria-pressed="' +
       (isB ? 'true' : 'false') +
-      '" aria-label="이 할 일로 시간 칠하기">' +
-      (isB ? '칠하기 ✓' : '칠하기') +
+      '" aria-label="이 할 일로 공부 시간 체크">' +
+      (isB ? '체크 ✓' : '체크') +
       '</button></td>' +
       markCell('circle', '○', '동그라미·진행 약함') +
       markCell('triangle', '△', '세모·진행 중') +
@@ -1528,7 +1543,7 @@ function plannerDayTodoTableHtml_(dateYmd, st) {
     '<table class="sp-plan-todoTable">' +
     '<thead><tr>' +
     '<th scope="col" class="sp-plan-todoTable__colTitle">할 일</th>' +
-    '<th scope="col" class="sp-plan-todoTable__colBrush">시간 칠하기</th>' +
+    '<th scope="col" class="sp-plan-todoTable__colBrush">공부 시간 체크</th>' +
     '<th scope="col" class="sp-plan-todoTable__colMark"><span aria-hidden="true">○</span><span class="sp-plan-vh">동그라미</span></th>' +
     '<th scope="col" class="sp-plan-todoTable__colMark"><span aria-hidden="true">△</span><span class="sp-plan-vh">세모</span></th>' +
     '<th scope="col" class="sp-plan-todoTable__colMark"><span aria-hidden="true">×</span><span class="sp-plan-vh">엑스</span></th>' +
@@ -1672,6 +1687,7 @@ function plannerPaintSlotcellFromState_(root, btn, timegrid) {
       plannerPad2_(m1);
     btn.setAttribute('aria-label', esc(lab + (tid ? ' · ' + tid : '') + ' 칸'));
   }
+  plannerRefreshDayModalTodoSide_(root);
 }
 
 /**
@@ -1700,17 +1716,17 @@ function wirePlannerDayModalUiOnce_(modalEl, root) {
       if (b instanceof HTMLElement) {
         b.classList.toggle('is-brush', on);
         b.setAttribute('aria-pressed', on ? 'true' : 'false');
-        b.textContent = on ? '칠하기 ✓' : '칠하기';
+        b.textContent = on ? '체크 ✓' : '체크';
       }
     });
     const modal = todoTable.closest ? todoTable.closest('#sp-plan-day-modal') : null;
     const side = modal && modal.querySelector('#sp-plan-day-todo-side');
     if (side) {
-      side.querySelectorAll('.sp-plan-day__todoRow').forEach(function (row) {
-        if (!(row instanceof HTMLElement)) return;
-        const id = row.getAttribute('data-todo-id') || '';
-        const on = Boolean(brush && id === brush);
-        row.classList.toggle('is-brush', on);
+      side.querySelectorAll('.sp-plan-todoSideBand').forEach(function (el) {
+        if (!(el instanceof HTMLElement)) return;
+        const tid = el.getAttribute('data-todo-id') || '';
+        const on = Boolean(brush && tid && brush === tid);
+        el.classList.toggle('is-brushSeg', on);
       });
     }
   }
@@ -2112,7 +2128,6 @@ function renderCalendar_(root, boot) {
           <div class="sp-plan-day sp-plan-day--daily">
             <section class="sp-plan-day__timeline" aria-label="할 일·시간표">
               <div class="sp-plan-day__secTitle">할 일 · 시간 (10분 단위)</div>
-              <p class="sp-plan-day__timelineHint">표의 「칠하기」로 할 일을 고른 뒤 10분 칸을 누르거나 드래그해 칠합니다. ○ △ ×는 완료·진행 정도(같은 기호를 다시 누르면 해제). 브러시 없이 칸만 누르면 지웁니다. Space=칸 토글 · 화살표=이동. 저장·API 없음.</p>
               <div id="sp-plan-day-todo-table" class="sp-plan-day__todoTableSlot" aria-label="할 일 표"></div>
               <div class="sp-plan-day__split" role="presentation">
                 <aside class="sp-plan-day__splitCol sp-plan-day__splitCol--todos" aria-label="할 일 요약">
