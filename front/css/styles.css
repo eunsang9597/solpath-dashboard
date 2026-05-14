@@ -4103,11 +4103,12 @@ button.sp-stu-remark__item--open:hover {
   flex-direction: column;
   gap: 0.28rem;
   box-sizing: border-box;
-  min-width: 7.5rem !important;  
+  min-width: 0;
   width: 100%;
-  max-width: none !important;
+  max-width: 100%;
   position: relative;
-  overflow: visible;
+  overflow: hidden;
+  align-items: stretch;
 }
 
 #solpath-plan-root .sp-plan-day:hover {
@@ -4131,6 +4132,7 @@ button.sp-stu-remark__item--open:hover {
   min-height: 1.25rem;
   position: relative;
   width: 100%;
+  min-width: 0;
   flex-shrink: 0;
 }
 
@@ -4174,16 +4176,22 @@ button.sp-stu-remark__item--open:hover {
   align-items: center;
   gap: 0.25rem;
   min-height: 0.6rem;
+  min-width: 0;
+  flex-shrink: 0;
 }
 
-/* 빠른등록 요약: 래퍼 없이 .sp-plan-day 직계 .sp-plan-curBadge */
+/* 빠른등록 요약: plan.js 직계 .sp-plan-curBadge — 셀 폭 안에서 말줄임 */
 #solpath-plan-root .sp-plan-month .sp-plan-day > .sp-plan-curBadge {
   display: block;
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
   box-sizing: border-box;
-  white-space: normal;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   text-align: center;
-  flex-shrink: 0;
+  flex: 0 1 auto;
 }
 
 #solpath-plan-root .sp-plan-day__dot {
@@ -4212,11 +4220,6 @@ button.sp-stu-remark__item--open:hover {
 #solpath-plan-root .sp-plan-day__dot--assign {
   background: #0ea5e9;
   box-shadow: 0 0 0 2px rgba(14, 165, 233, 0.22);
-}
-
-#solpath-plan-root .sp-plan-day__dot--demo {
-  background: #f59e0b;
-  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.18);
 }
 
 #solpath-plan-root .sp-plan-modal {
@@ -4291,6 +4294,7 @@ button.sp-stu-remark__item--open:hover {
   max-width: 100%;
   margin-left: 0;
   margin-right: 0;
+  min-width: 0;
 }
 
 #solpath-plan-root .sp-plan-day__split {
@@ -4299,6 +4303,7 @@ button.sp-stu-remark__item--open:hover {
   gap: 0.65rem 0.85rem;
   align-items: stretch;
   margin-top: 0.35rem;
+  min-width: 0;
 }
 
 @media (max-width: 720px) {
@@ -4341,6 +4346,8 @@ button.sp-stu-remark__item--open:hover {
   background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
   padding: 0.2rem 0.35rem;
   -webkit-overflow-scrolling: touch;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 #solpath-plan-root .sp-plan-dayTodoSideList {
@@ -4349,101 +4356,48 @@ button.sp-stu-remark__item--open:hover {
   gap: 0;
 }
 
-/* 일일 모달 왼쪽: 시간표와 같은 시(h) 행 — UI는 한 줄 띠(내부만 10분 단위) */
+/* 일일 모달 왼쪽: 시간표와 동일 시·6칸 격자(읽기 전용 미러, 점선 칸) */
 #solpath-plan-root .sp-plan-dayTodoSideHourly {
   padding: 2px;
   min-height: 0;
+  min-width: 0;
   background: #fff;
   border-radius: 8px;
+  box-sizing: border-box;
 }
 
-#solpath-plan-root .sp-plan-todoSideRow .sp-plan-todoSideRow__timeGhost {
-  color: transparent;
-  user-select: none;
-  -webkit-user-select: none;
-}
-
-#solpath-plan-root .sp-plan-todoSideTrack {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: minmax(1.35rem, auto);
-  flex: 1;
-  min-width: 0;
-  border-radius: 999px;
-  overflow: hidden;
-  border: 1px solid #e2e8f0;
-  background: #f1f5f9;
-}
-
-#solpath-plan-root .sp-plan-todoSideTrack__bands {
-  grid-row: 1;
-  grid-column: 1;
+#solpath-plan-root #sp-plan-day-todo-side .sp-plan-slotcell--mirror {
+  pointer-events: none;
+  cursor: default;
+  border-style: dashed;
+  border-color: #94a3b8;
+  border-radius: 3px;
   display: flex;
-  align-self: stretch;
-  min-height: 1.35rem;
-  align-items: stretch;
-  border-radius: inherit;
-}
-
-#solpath-plan-root .sp-plan-todoSideTrack__lbl {
-  grid-row: 1;
-  grid-column: 1;
-  align-self: center;
-  z-index: 2;
-  margin: 0;
-  padding: 0 0.5rem;
+  align-items: center;
+  justify-content: center;
+  padding: 0 1px;
   box-sizing: border-box;
   min-width: 0;
+}
+
+#solpath-plan-root #sp-plan-day-todo-side .sp-plan-slotcell--mirror .sp-plan-slotcellMirror__txt {
+  display: block;
   width: 100%;
-  font-size: calc(0.62rem + var(--sp-text-bump));
-  font-weight: 800;
-  color: #0f172a;
+  min-width: 0;
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  pointer-events: auto;
-  text-shadow: 0 0 1px #fff, 0 0 2px #fff;
+  font-size: calc(0.48rem + var(--sp-text-bump));
+  font-weight: 800;
+  line-height: 1.15;
+  text-align: center;
+  color: #0f172a;
 }
 
-#solpath-plan-root .sp-plan-todoSideBand {
-  flex: 1 1 0;
-  min-width: 0;
-  min-height: 100%;
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-  border: none;
-  border-radius: 0;
-  background: transparent;
-  pointer-events: none;
-}
-
-#solpath-plan-root .sp-plan-todoSideBand.is-on {
-  box-shadow: none;
-}
-
-#solpath-plan-root .sp-plan-todoSideBand--todo--grammar.is-on {
-  background: linear-gradient(180deg, #eef2ff 0%, #c7d2fe 100%);
-}
-
-#solpath-plan-root .sp-plan-todoSideBand--todo--logic.is-on {
-  background: linear-gradient(180deg, #ecfdf5 0%, #99f6e4 100%);
-}
-
-#solpath-plan-root .sp-plan-todoSideBand--todo--read.is-on {
-  background: linear-gradient(180deg, #eff6ff 0%, #bfdbfe 100%);
-}
-
-#solpath-plan-root .sp-plan-todoSideBand--todo--vocab.is-on {
-  background: linear-gradient(180deg, #fffbeb 0%, #fde68a 100%);
-}
-
-#solpath-plan-root .sp-plan-todoSideBand--todo--misc.is-on {
-  background: linear-gradient(180deg, #f8fafc 0%, #e2e8f0 100%);
-}
-
-#solpath-plan-root .sp-plan-todoSideBand.is-brushSeg {
-  box-shadow: inset 0 0 0 2px rgba(124, 58, 237, 0.85);
+#solpath-plan-root #sp-plan-day-todo-side .sp-plan-slotcell--mirror.is-brushSeg {
+  outline: 2px solid #7c3aed;
+  outline-offset: -1px;
   z-index: 1;
 }
 
@@ -4458,6 +4412,30 @@ button.sp-stu-remark__item--open:hover {
   border-radius: 12px;
   padding: 0.55rem 0.6rem 0.65rem;
   background: #f8fafc;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+/* plan.js 일일 모달 래퍼 계층: flex/grid 자식 min-width:auto 가 말줄임·축소를 막음 → 0 전달 */
+#solpath-plan-root #sp-plan-day-modal .sp-plan-modal__body > .sp-plan-day,
+#solpath-plan-root #sp-plan-day-modal .sp-plan-day__todoTableSlot,
+#solpath-plan-root #sp-plan-day-modal .sp-plan-day__split,
+#solpath-plan-root #sp-plan-day-modal .sp-plan-day__splitCol,
+#solpath-plan-root #sp-plan-day-modal .sp-plan-day__splitCol--todos,
+#solpath-plan-root #sp-plan-day-modal .sp-plan-day__splitCol--time,
+#solpath-plan-root #sp-plan-day-modal .sp-plan-day__todoSideSlot,
+#solpath-plan-root #sp-plan-day-modal .sp-plan-dayTodoSideHourly,
+#solpath-plan-root #sp-plan-day-modal .sp-plan-day__timegrid--hourly {
+  min-width: 0;
+}
+
+#solpath-plan-root #sp-plan-day-modal .sp-plan-dayTodoSideHourly {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+#solpath-plan-root #sp-plan-day-modal .sp-plan-todoSideRow.sp-plan-hourRow {
+  min-width: 0;
 }
 
 #solpath-plan-root .sp-plan-vh {
@@ -4535,6 +4513,11 @@ button.sp-stu-remark__item--open:hover {
   outline: 2px solid rgba(124, 58, 237, 0.35);
   outline-offset: -2px;
   background: #faf5ff;
+}
+
+#solpath-plan-root .sp-plan-todoTable__row--routine .sp-plan-todoTable__thTitleCell {
+  color: #64748b;
+  font-weight: 600;
 }
 
 #solpath-plan-root .sp-plan-todoTable__thTitleCell {
@@ -4665,6 +4648,40 @@ button.sp-stu-remark__item--open:hover {
   color: #334155;
 }
 
+#solpath-plan-root .sp-plan-day__memo {
+  margin-top: 0.75rem;
+  padding-top: 0.65rem;
+  border-top: 1px solid #e2e8f0;
+}
+
+#solpath-plan-root .sp-plan-day__memoHead {
+  font-size: calc(0.72rem + var(--sp-text-bump));
+  font-weight: 800;
+  color: #475569;
+  margin-bottom: 0.35rem;
+}
+
+#solpath-plan-root .sp-plan-day__memoTa {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 4.5rem;
+  padding: 0.5rem 0.6rem;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  font: inherit;
+  font-size: calc(0.8rem + var(--sp-text-bump));
+  line-height: 1.4;
+  color: #0f172a;
+  resize: vertical;
+}
+
+#solpath-plan-root .sp-plan-day__memoTa:focus {
+  outline: 2px solid #a855f7;
+  outline-offset: 1px;
+  border-color: #c4b5fd;
+}
+
 #solpath-plan-root .sp-plan-day__timegrid--hourly {
   max-height: min(70vh, 36rem);
   overflow: auto;
@@ -4676,11 +4693,12 @@ button.sp-stu-remark__item--open:hover {
 
 #solpath-plan-root .sp-plan-hourRow {
   display: grid;
-  grid-template-columns: minmax(3.5rem, max-content) 1fr;
+  grid-template-columns: minmax(3.5rem, max-content) minmax(0, 1fr);
   gap: 0.35rem;
   align-items: stretch;
   border-bottom: 1px solid #f1f5f9;
   min-height: 1.75rem;
+  min-width: 0;
 }
 
 #solpath-plan-root .sp-plan-hourRow:last-child {
@@ -5126,9 +5144,4 @@ button.sp-stu-remark__item--open:hover {
 #solpath-plan-root .sp-plan-month__dow {
   grid-template-columns: max-content repeat(7, minmax(8rem, 1fr)) !important;
   box-sizing: border-box !important;
-}
-
-/* 7. 달력 일자 버튼 min-width 고정값 해제 */
-#solpath-plan-root .sp-plan-month .sp-plan-day {
-  min-width: 0 !important;
 }
