@@ -758,6 +758,40 @@ function plannerWithFixedRoutineTodosFirst_(dateYmd, list) {
   return prefix.concat(list || []);
 }
 
+/**
+ * @param {string} cat
+ * @returns {string}
+ */
+function plannerCategoryLabelKo_(cat) {
+  const c = String(cat != null ? cat : '').trim() || 'misc';
+  const m = { grammar: '문법', logic: '논리', read: '독해', vocab: '어휘', misc: '기타' };
+  return m[c] != null ? m[c] : c;
+}
+
+/**
+ * 왼쪽 표에서 **과목 열 rowspan** 기준: 루틴(취침·식사)은 각각 분리, 그 외는 같은 category 연속만 병합.
+ * @param {{ task_id?: string, category?: string }|null} r
+ * @returns {string}
+ */
+function plannerTodoSideMergeKey_(r) {
+  if (!r) return '';
+  const id = String(r.task_id != null ? r.task_id : '').trim();
+  if (plannerIsRoutineExcludedFromStudyTotals_(id)) return '\0routine\0' + id;
+  return '\0cat\0' + (String(r.category != null ? r.category : '').trim() || 'misc');
+}
+
+/**
+ * @param {{ task_id?: string, category?: string }|null} r
+ * @returns {string}
+ */
+function plannerTodoSideSubjectLabel_(r) {
+  if (!r) return '';
+  const id = String(r.task_id != null ? r.task_id : '').trim();
+  if (id === PLAN_FIXED_SLEEP_TODO_ID) return '취침';
+  if (id === PLAN_FIXED_MEAL_TODO_ID) return '식사';
+  return plannerCategoryLabelKo_(r.category);
+}
+
 function plannerPad2_(n) {
   return String(n < 10 ? '0' : '') + String(n);
 }
@@ -883,17 +917,13 @@ function plannerAppendManualTodoFromForm_(slot, st) {
   const titleEl = slot.querySelector('#sp-manual-title');
   const dueEl = slot.querySelector('#sp-manual-due');
   const catEl = slot.querySelector('#sp-manual-cat');
-  const prioEl = slot.querySelector('#sp-manual-prio');
   const descEl = slot.querySelector('#sp-manual-desc');
   const title = titleEl && 'value' in titleEl ? String(/** @type {HTMLInputElement} */ (titleEl).value).trim() : '';
   const due = dueEl && 'value' in dueEl ? String(/** @type {HTMLInputElement} */ (dueEl).value).trim() : '';
   const category = catEl && 'value' in catEl ? String(/** @type {HTMLSelectElement} */ (catEl).value).trim() : 'misc';
-  const priority = prioEl && 'value' in prioEl ? String(/** @type {HTMLSelectElement} */ (prioEl).value).trim() : 'normal';
   const description = descEl && 'value' in descEl ? String(/** @type {HTMLTextAreaElement} */ (descEl).value).trim() : '';
   if (!title.length) return '할 일 제목을 입력해 주세요.';
   if (!/^\d{4}-\d{2}-\d{2}$/.test(due)) return '등록·예정일을 선택해 주세요.';
-  const allowedP = { low: true, normal: true, high: true };
-  const p = allowedP[priority] ? priority : 'normal';
   const allowedC = { grammar: true, logic: true, read: true, vocab: true, misc: true };
   const c = allowedC[category] ? category : 'misc';
   let task_id = '';
@@ -910,7 +940,7 @@ function plannerAppendManualTodoFromForm_(slot, st) {
     title: title,
     description: description,
     status: 'todo',
-    priority: p,
+    priority: 'normal',
     due_date: due,
     start_date: due,
     category: c,
@@ -1030,85 +1060,96 @@ function plannerTaskTimelineMinutesForDay_(st, ymd, taskId) {
 }
 
 /**
- * 일일 모달 왼쪽: 시간표와 동일 시·6칸(10분) 격자, 읽기 전용 미러. 할 일명은 칸 안 말줄임.
- * @param {string} dateYmd
- * @param {object} st
- * @returns {string}
- */
-function plannerDayTodoSideHourlyHtml_(dateYmd, st) {
-  const slots = plannerEnsureTimelineTodoSlots_(st, dateYmd);
-  const map = plannerDayTodoIdMapForDay_(dateYmd, st);
-  const brush = st.modalBrushTodoId ? String(st.modalBrushTodoId) : '';
-  let html = '<div class="sp-plan-dayTodoSideHourly" aria-label="시간별 공부 시간">';
-  let idx;
-  for (idx = 0; idx < PLAN_TIMELINE_HOURS_ORDERED.length; idx++) {
-    const h = PLAN_TIMELINE_HOURS_ORDERED[idx];
-    const hourLbl = plannerPad2_(h) + '시';
-    html += '<div class="sp-plan-hourRow sp-plan-todoSideRow" data-hour="' + String(h) + '">';
-    html +=
-      '<div class="sp-plan-hourRow__time" aria-hidden="true">' +
-      esc(hourLbl) +
-      '</div>';
-    html +=
-      '<div class="sp-plan-hourRow__cells" role="group" aria-label="' +
-      esc(hourLbl) +
-      ' 할 일">';
-    let sub;
-    for (sub = 0; sub < PLAN_TIMELINE_CELLS_PER_HOUR; sub++) {
-      const k = plannerTimelineSlotKey_(h, sub);
-      const tid = slots[k] != null ? String(slots[k]).trim() : '';
-      const row = tid ? map[tid] : null;
-      const title = row && row.title ? String(row.title).trim() : '';
-      const suf = tid ? plannerTodoSlotClassSuffix_(tid) : 'misc';
-      const isBrush = Boolean(brush && tid && brush === tid);
-      let cls = 'sp-plan-slotcell sp-plan-slotcell--mirror';
-      if (tid) {
-        cls += ' is-on sp-plan-slotcell--todo sp-plan-slotcell--todo--' + suf;
-        if (isBrush) cls += ' is-brushSeg';
-      }
-      const m0 = sub * PLAN_TIMELINE_CELL_MIN;
-      const m1 = m0 + PLAN_TIMELINE_CELL_MIN;
-      const lab =
-        plannerPad2_(h) +
-        ':' +
-        plannerPad2_(m0) +
-        '–' +
-        plannerPad2_(h) +
-        ':' +
-        plannerPad2_(m1);
-      const tip = tid ? (title || tid) + ' · ' + lab : lab;
-      const show = tid ? title || tid : '';
-      html +=
-        '<div class="' +
-        cls +
-        '" data-slot="' +
-        esc(k) +
-        '" data-todo-id="' +
-        esc(tid) +
-        '" title="' +
-        esc(tip) +
-        '" role="img" aria-label="' +
-        esc(tip) +
-        '">';
-      if (tid) {
-        html += '<span class="sp-plan-slotcellMirror__txt">' + esc(show) + '</span>';
-      }
-      html += '</div>';
-    }
-    html += '</div></div>';
-  }
-  html += '</div>';
-  return html;
-}
-
-/**
- * 일일 모달 왼쪽 열: 시간표와 동일 격자(읽기 전용 미러).
+ * 일일 모달 왼쪽: 과목(연속 동일 과목 rowspan) · 할 일 · 달성도(select) · 공부시간 체크.
  * @param {string} dateYmd
  * @param {object} st
  * @returns {string}
  */
 function plannerDayTodosFromPayloadHtml_(dateYmd, st) {
-  return plannerDayTodoSideHourlyHtml_(dateYmd, st);
+  const rows = plannerOrderedDayTodos_(st, dateYmd);
+  const brush = st.modalBrushTodoId ? String(st.modalBrushTodoId) : '';
+  if (!rows.length) {
+    return (
+      '<p class="sp-plan-todoSideEmpty" role="status">이 날짜에 표시할 할 일이 없습니다.</p>'
+    );
+  }
+  let body = '';
+  let i = 0;
+  while (i < rows.length) {
+    const r0 = rows[i];
+    const mk = plannerTodoSideMergeKey_(r0);
+    let j = i + 1;
+    while (j < rows.length && plannerTodoSideMergeKey_(rows[j]) === mk) {
+      j++;
+    }
+    const rowspan = j - i;
+    const subjHead = esc(plannerTodoSideSubjectLabel_(r0));
+    for (let k = i; k < j; k++) {
+      const r = rows[k];
+      const id = String(r.task_id || '');
+      const isRoutine = plannerIsRoutineExcludedFromStudyTotals_(id);
+      const title = esc(String(r.title || '').trim() || id);
+      const isB = Boolean(brush && brush === id);
+      const comp = plannerTodoCompletionGet_(st, dateYmd, id);
+      const selNone = comp === 'none' ? ' selected' : '';
+      const selO = comp === 'circle' ? ' selected' : '';
+      const selTri = comp === 'triangle' ? ' selected' : '';
+      const selX = comp === 'x' ? ' selected' : '';
+      body += '<tr class="sp-plan-todoSide__row' + (isRoutine ? ' sp-plan-todoSide__row--routine' : '') + (isB ? ' is-brushRow' : '') + '" data-todo-id="' + esc(id) + '">';
+      if (k === i) {
+        body +=
+          '<th class="sp-plan-todoSide__thSubj" scope="row" rowspan="' +
+          String(rowspan) +
+          '">' +
+          subjHead +
+          '</th>';
+      }
+      body +=
+        '<td class="sp-plan-todoSide__tdTodo">' +
+        '<span class="sp-plan-todoSide__title">' +
+        title +
+        '</span>' +
+        '<button type="button" class="sp-plan-todoSide__brushBtn' +
+        (isB ? ' is-brush' : '') +
+        '" data-action="todo-brush" aria-pressed="' +
+        (isB ? 'true' : 'false') +
+        '" aria-label="이 할 일로 시간표에 표시">' +
+        (isB ? '체크 ✓' : '체크') +
+        '</button></td>' +
+        '<td class="sp-plan-todoSide__tdMark">' +
+        '<label class="sp-plan-todoSide__markLbl"><span class="sp-plan-vh">달성도</span>' +
+        '<select class="sp-plan-todoSide__markSel" data-todo-id="' +
+        esc(id) +
+        '" aria-label="' +
+        esc(String(r.title || '').trim() || id) +
+        ' 달성도">' +
+        '<option value="none"' +
+        selNone +
+        '>선택</option>' +
+        '<option value="circle"' +
+        selO +
+        '>○</option>' +
+        '<option value="triangle"' +
+        selTri +
+        '>△</option>' +
+        '<option value="x"' +
+        selX +
+        '>×</option>' +
+        '</select></label></td></tr>';
+    }
+    i = j;
+  }
+  return (
+    '<div class="sp-plan-todoSideWrap">' +
+    '<table class="sp-plan-todoSideTable">' +
+    '<thead><tr>' +
+    '<th scope="col" class="sp-plan-todoSide__colSubj">과목</th>' +
+    '<th scope="col" class="sp-plan-todoSide__colTodo">할 일</th>' +
+    '<th scope="col" class="sp-plan-todoSide__colMark">달성도</th>' +
+    '</tr></thead><tbody>' +
+    body +
+    '</tbody></table></div>'
+  );
 }
 
 /**
@@ -1515,7 +1556,7 @@ function plannerDayModalSubjectStatsHtml_(st, ymd) {
     return (
       '<div class="sp-plan-studyFooter__inner">' +
       '<div class="sp-plan-studyFooter__title">타임라인 과목별 공부 시간</div>' +
-      '<p class="sp-plan-studyFooter__empty">아직 표시한 10분 칸이 없습니다. 「공부 시간 체크」로 할 일을 고른 뒤 시간표에 표시하면 여기에 합계가 나타납니다.</p>' +
+      '<p class="sp-plan-studyFooter__empty">아직 표시한 10분 칸이 없습니다. 왼쪽 할 일 목록에서 「체크」로 할 일을 고른 뒤 시간표에 칠하면 여기에 합계가 나타납니다.</p>' +
       '</div>'
     );
   }
@@ -1556,76 +1597,6 @@ function plannerRefreshDayModalTodoSide_(root) {
   const st = root.__spPlanState;
   if (!side || !st || !st.selectedDate) return;
   side.innerHTML = plannerDayTodosFromPayloadHtml_(st.selectedDate, st);
-}
-
-/**
- * @param {string} dateYmd
- * @param {object} st
- * @returns {string}
- */
-function plannerDayTodoTableHtml_(dateYmd, st) {
-  const rows = plannerOrderedDayTodos_(st, dateYmd);
-  const brush = st.modalBrushTodoId ? String(st.modalBrushTodoId) : '';
-  let body = '';
-  rows.forEach(function (r) {
-    const id = String(r.task_id || '');
-    const isRoutine = plannerIsRoutineExcludedFromStudyTotals_(id);
-    const title = esc(String(r.title || '').trim() || id);
-    const isB = Boolean(brush && brush === id);
-    const comp = plannerTodoCompletionGet_(st, dateYmd, id);
-    function markCell(kind, sym, aria) {
-      const active = comp === kind ? ' is-active' : '';
-      return (
-        '<td class="sp-plan-todoTable__tdMark">' +
-        '<button type="button" class="sp-plan-todoMark sp-plan-todoMark--' +
-        kind +
-        active +
-        '" data-completion="' +
-        kind +
-        '" aria-label="' +
-        esc(aria) +
-        (active ? ' (선택됨)' : '') +
-        '">' +
-        sym +
-        '</button></td>'
-      );
-    }
-    body +=
-      '<tr class="sp-plan-todoTable__row' +
-      (isRoutine ? ' sp-plan-todoTable__row--routine' : '') +
-      (isB ? ' is-brushRow' : '') +
-      '" data-todo-id="' +
-      esc(id) +
-      '">' +
-      '<th scope="row" class="sp-plan-todoTable__thTitleCell">' +
-      title +
-      '</th>' +
-      '<td class="sp-plan-todoTable__tdBrush">' +
-      '<button type="button" class="sp-plan-todoTable__brushBtn' +
-      (isB ? ' is-brush' : '') +
-      '" data-action="todo-brush" aria-pressed="' +
-      (isB ? 'true' : 'false') +
-      '" aria-label="이 할 일로 공부 시간 체크">' +
-      (isB ? '체크 ✓' : '체크') +
-      '</button></td>' +
-      markCell('circle', '○', '동그라미·진행 약함') +
-      markCell('triangle', '△', '세모·진행 중') +
-      markCell('x', '×', '엑스·완료 또는 보류') +
-      '</tr>';
-  });
-  return (
-    '<div class="sp-plan-todoTableWrap">' +
-    '<table class="sp-plan-todoTable">' +
-    '<thead><tr>' +
-    '<th scope="col" class="sp-plan-todoTable__colTitle">할 일</th>' +
-    '<th scope="col" class="sp-plan-todoTable__colBrush">공부 시간 체크</th>' +
-    '<th scope="col" class="sp-plan-todoTable__colMark"><span aria-hidden="true">○</span><span class="sp-plan-vh">동그라미</span></th>' +
-    '<th scope="col" class="sp-plan-todoTable__colMark"><span aria-hidden="true">△</span><span class="sp-plan-vh">세모</span></th>' +
-    '<th scope="col" class="sp-plan-todoTable__colMark"><span aria-hidden="true">×</span><span class="sp-plan-vh">엑스</span></th>' +
-    '</tr></thead><tbody>' +
-    body +
-    '</tbody></table></div>'
-  );
 }
 
 /** @param {HTMLElement} timegrid */
@@ -1766,23 +1737,25 @@ function plannerPaintSlotcellFromState_(root, btn, timegrid) {
 }
 
 /**
- * 일일 모달: 할 일 표(브러시·○△×) · 10분 칸 드래그 칠하기(POST 없음)
+ * 일일 모달: 왼쪽 할 일 표(체크·달성도) · 오른쪽 10분 칸(POST 없음)
  * @param {HTMLElement} modalEl
  * @param {HTMLElement} root
  */
 function wirePlannerDayModalUiOnce_(modalEl, root) {
   if (modalEl.__spPlanDayUiWired) return;
   modalEl.__spPlanDayUiWired = true;
-  const todoTable = modalEl.querySelector('#sp-plan-day-todo-table');
+  const todoSide = modalEl.querySelector('#sp-plan-day-todo-side');
   const timegrid = modalEl.querySelector('#sp-plan-day-timegrid');
-  if (!todoTable || !timegrid) return;
+  if (!todoSide || !timegrid) return;
 
   let painting = false;
   let lastPaintSlot = '';
 
   function syncBrushTable_(st) {
     const brush = st.modalBrushTodoId ? String(st.modalBrushTodoId) : '';
-    todoTable.querySelectorAll('.sp-plan-todoTable__row').forEach(function (tr) {
+    const side = modalEl.querySelector('#sp-plan-day-todo-side');
+    if (!side) return;
+    side.querySelectorAll('.sp-plan-todoSide__row').forEach(function (tr) {
       if (!(tr instanceof HTMLElement)) return;
       const id = tr.getAttribute('data-todo-id') || '';
       const on = Boolean(brush && id === brush);
@@ -1794,51 +1767,40 @@ function wirePlannerDayModalUiOnce_(modalEl, root) {
         b.textContent = on ? '체크 ✓' : '체크';
       }
     });
-    const modal = todoTable.closest ? todoTable.closest('#sp-plan-day-modal') : null;
-    const side = modal && modal.querySelector('#sp-plan-day-todo-side');
-    if (side) {
-      side.querySelectorAll('.sp-plan-slotcell--mirror').forEach(function (el) {
-        if (!(el instanceof HTMLElement)) return;
-        const tid = el.getAttribute('data-todo-id') || '';
-        const on = Boolean(brush && tid && brush === tid);
-        el.classList.toggle('is-brushSeg', on);
-      });
-    }
   }
 
-  function syncCompletionMarksInRow_(tr, st, ymd, taskId) {
-    const comp = plannerTodoCompletionGet_(st, ymd, taskId);
-    tr.querySelectorAll('[data-completion]').forEach(function (btn) {
-      if (!(btn instanceof HTMLElement)) return;
-      const kind = btn.getAttribute('data-completion') || '';
-      btn.classList.toggle('is-active', kind === comp);
-    });
-  }
+  modalEl.addEventListener('click', function (e) {
+    const side = modalEl.querySelector('#sp-plan-day-todo-side');
+    if (!side || !e.target) return;
+    const t = /** @type {HTMLElement} */ (e.target instanceof HTMLElement ? e.target : null);
+    if (!t || !side.contains(t)) return;
+    const brushBtn = t.closest ? t.closest('[data-action="todo-brush"]') : null;
+    if (!brushBtn || !side.contains(brushBtn)) return;
+    const tr = brushBtn.closest ? brushBtn.closest('.sp-plan-todoSide__row') : null;
+    if (!(tr instanceof HTMLElement)) return;
+    const st = root.__spPlanState;
+    if (!st || !st.selectedDate) return;
+    const id = tr.getAttribute('data-todo-id') || '';
+    st.modalBrushTodoId = st.modalBrushTodoId === id ? '' : id;
+    syncBrushTable_(st);
+  });
 
-  todoTable.addEventListener('click', function (e) {
+  modalEl.addEventListener('change', function (e) {
+    const sel = e.target;
+    if (!(sel instanceof HTMLSelectElement)) return;
+    if (!sel.classList.contains('sp-plan-todoSide__markSel')) return;
+    const side = modalEl.querySelector('#sp-plan-day-todo-side');
+    if (!side || !side.contains(sel)) return;
     const st = root.__spPlanState;
     if (!st || !st.selectedDate) return;
     const ymd = st.selectedDate;
-    const markBtn = e.target && e.target.closest ? e.target.closest('[data-completion]') : null;
-    if (markBtn && todoTable.contains(markBtn)) {
-      const tr = markBtn.closest ? markBtn.closest('.sp-plan-todoTable__row') : null;
-      if (!(tr instanceof HTMLElement)) return;
-      const taskId = tr.getAttribute('data-todo-id') || '';
-      const kind = /** @type {'circle'|'triangle'|'x'} */ (markBtn.getAttribute('data-completion') || '');
-      if (kind !== 'circle' && kind !== 'triangle' && kind !== 'x') return;
-      const cur = plannerTodoCompletionGet_(st, ymd, taskId);
-      plannerTodoCompletionSet_(st, ymd, taskId, cur === kind ? 'none' : kind);
-      syncCompletionMarksInRow_(tr, st, ymd, taskId);
-      plannerRefreshDayModalTodoSide_(root);
-      return;
-    }
-    const brushBtn = e.target && e.target.closest ? e.target.closest('[data-action="todo-brush"]') : null;
-    if (brushBtn && todoTable.contains(brushBtn)) {
-      const tr = brushBtn.closest ? brushBtn.closest('.sp-plan-todoTable__row') : null;
-      if (!(tr instanceof HTMLElement)) return;
-      const id = tr.getAttribute('data-todo-id') || '';
-      st.modalBrushTodoId = st.modalBrushTodoId === id ? '' : id;
-      syncBrushTable_(st);
+    const taskId = sel.getAttribute('data-todo-id') || '';
+    if (!taskId) return;
+    const v = String(sel.value || 'none');
+    if (v === 'circle' || v === 'triangle' || v === 'x') {
+      plannerTodoCompletionSet_(st, ymd, taskId, /** @type {'circle'|'triangle'|'x'} */ (v));
+    } else {
+      plannerTodoCompletionSet_(st, ymd, taskId, 'none');
     }
   });
 
@@ -2181,8 +2143,7 @@ function renderCalendar_(root, boot) {
         <div class="sp-plan-modal__body">
           <div class="sp-plan-day sp-plan-day--daily">
             <section class="sp-plan-day__timeline" aria-label="할 일·시간표">
-              <div class="sp-plan-day__secTitle">할 일 · 시간 (10분 단위)</div>
-              <div id="sp-plan-day-todo-table" class="sp-plan-day__todoTableSlot" aria-label="할 일 표"></div>
+              <div class="sp-plan-day__secTitle">할 일 목록 · 시간표 (10분 단위)</div>
               <div class="sp-plan-day__split" role="presentation">
                 <aside class="sp-plan-day__splitCol sp-plan-day__splitCol--todos" aria-label="할 일 요약">
                   <div class="sp-plan-day__splitColHead">할 일</div>
@@ -2261,9 +2222,7 @@ function renderCalendar_(root, boot) {
     st.selectedDate = String(dateYmd || '');
     const title = m.querySelector('#sp-plan-day-modal-title');
     if (title) title.textContent = st.selectedDate ? st.selectedDate + ' · 일일 플래너' : '일일 플래너';
-    const todoTable = m.querySelector('#sp-plan-day-todo-table');
     const todoSide = m.querySelector('#sp-plan-day-todo-side');
-    if (todoTable) todoTable.innerHTML = plannerDayTodoTableHtml_(st.selectedDate, st);
     if (todoSide) todoSide.innerHTML = plannerDayTodosFromPayloadHtml_(st.selectedDate, st);
     const timegrid = m.querySelector('#sp-plan-day-timegrid');
     if (timegrid) {
@@ -2374,8 +2333,6 @@ function renderCalendar_(root, boot) {
     '"/></label>' +
     '<label class="sp-plan-manual__lbl">과목<select id="sp-manual-cat" class="sp-plan-manual__select">' +
     '<option value="grammar">문법</option><option value="logic">논리</option><option value="read">독해</option><option value="vocab">어휘</option><option value="misc" selected>기타</option></select></label>' +
-    '<label class="sp-plan-manual__lbl">우선순위<select id="sp-manual-prio" class="sp-plan-manual__select">' +
-    '<option value="low">낮음</option><option value="normal" selected>보통</option><option value="high">높음</option></select></label>' +
     '</div>' +
     '<label class="sp-plan-manual__lbl sp-plan-manual__lbl--block">메모(선택)<textarea id="sp-manual-desc" class="sp-plan-manual__textarea" rows="2" maxlength="2000"></textarea></label>' +
     '<button type="button" class="btn btn--primary sp-plan-manual__add" id="sp-manual-add">할 일 추가</button></div>' +
