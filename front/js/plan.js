@@ -88,6 +88,32 @@ function plannerApplyAdminVisibility_(root) {
 }
 
 /**
+ * 게이트 통과 전: 학생 정보·월간 플랜·달력(`#sp-plan-app-main`) 전부 숨김.
+ * @param {HTMLElement} root
+ */
+function plannerSetGatePending_(root) {
+  root.classList.add('is-plan-gate-pending');
+  const main = root.querySelector('#sp-plan-app-main');
+  if (main) {
+    main.setAttribute('hidden', 'hidden');
+    main.setAttribute('aria-hidden', 'true');
+  }
+}
+
+/**
+ * 확인·원페이지만 후: 게이트 아래 본문(학생 정보·달력) 표시.
+ * @param {HTMLElement} root
+ */
+function plannerRevealPlanMain_(root) {
+  root.classList.remove('is-plan-gate-pending');
+  const main = root.querySelector('#sp-plan-app-main');
+  if (main) {
+    main.removeAttribute('hidden');
+    main.removeAttribute('aria-hidden');
+  }
+}
+
+/**
  * 헤더 플래너 아이콘 5회 연속 클릭(약 2.6초 안) → 어드민 ON/OFF 토글(다시 5회면 해제) · sessionStorage 유지.
  * @param {HTMLElement} root
  */
@@ -561,9 +587,10 @@ const PLAN_APP_SHELL_START = `<div class="app-shell app-shell--plan">
         <p class="sp-plan-desc">공통 일정과 나만의 할 일을 달력에서 한눈에 볼 수 있게 연결할 예정입니다.</p>
       </div>
     </div>
-  </header>`;
+  </header>
+</div>`;
 
-const PLAN_APP_MAIN_AND_CLOSE = `  <main class="app-main sp-plan-app-main" id="sp-plan-app-main" hidden>
+const PLAN_APP_MAIN_AND_CLOSE = `<main class="app-main sp-plan-app-main app-shell app-shell--plan sp-plan-shell-body" id="sp-plan-app-main" hidden>
     <p class="sp-plan-banner" id="sp-plan-banner" hidden></p>
     <div class="panel panel--hero sp-plan-body">
       <section class="sp-plan-student" id="sp-plan-student-info" aria-labelledby="sp-plan-student-info-title">
@@ -578,8 +605,7 @@ const PLAN_APP_MAIN_AND_CLOSE = `  <main class="app-main sp-plan-app-main" id="s
       <div class="sp-plan-monthly-title" id="sp-plan-monthly-label">월간 플랜</div>
       <div class="sp-plan-calendar-slot" id="sp-plan-calendar-slot" role="region" aria-labelledby="sp-plan-monthly-label"></div>
     </div>
-  </main>
-</div>`;
+  </main>`;
 
 const GATE_HTML = `<div class="sp-plan-gate">
   <p class="sp-plan-gate__lead">솔패스 수강 이력이 있는 번호를 입력해 주세요. 입력 정보는 본인 확인·플래너 제공에만 사용됩니다.</p>
@@ -3036,7 +3062,8 @@ function wireGate_(root) {
       boot.data || {}
     );
     gate.setAttribute('hidden', 'hidden');
-    appMain.removeAttribute('hidden');
+    gate.setAttribute('aria-hidden', 'true');
+    plannerRevealPlanMain_(root);
     renderPlannerStudentProfile_(root, d.student_profile);
     renderCalendar_(root, { role: d.role || 'guest', common: d.common || [], personal: d.personal != null ? d.personal : null });
   }
@@ -3102,8 +3129,11 @@ function wirePlanDevBar_(root) {
     showDevMsg('제작용: 게이트 생략 · GAS 없이 원페이지만 표시');
     const gate = root.querySelector('.sp-plan-gate');
     const appMain = root.querySelector('#sp-plan-app-main');
-    if (gate) gate.setAttribute('hidden', 'hidden');
-    if (appMain) appMain.removeAttribute('hidden');
+    if (gate) {
+      gate.setAttribute('hidden', 'hidden');
+      gate.setAttribute('aria-hidden', 'true');
+    }
+    plannerRevealPlanMain_(root);
     renderCalendar_(root, { role: 'guest', common: [], personal: null });
     renderPlannerStudentProfile_(root, MOCK_PLANNER_STUDENT_PROFILE);
   });
@@ -3180,6 +3210,7 @@ function main() {
     el.__spPlanAdminMode = false;
   }
   wirePlannerAdminUnlockOnce_(el);
+  plannerSetGatePending_(el);
   renderPlannerStudentProfile_(el, MOCK_PLANNER_STUDENT_PROFILE);
   wirePlanDevBar_(el);
   plannerApplyAdminVisibility_(el);

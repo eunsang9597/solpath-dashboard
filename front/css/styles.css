@@ -2962,6 +2962,20 @@ button.sp-stu-remark__item--open:hover {
     0 0 0 4px #7c3aed;
 }
 
+/* 게이트 전: 학생 정보·월간 플랜·달력 본문 전부 숨김(임웹 등 [hidden] 무력화 대비) */
+#solpath-plan-root.is-plan-gate-pending #sp-plan-app-main,
+#solpath-plan-root #sp-plan-app-main[hidden] {
+  display: none !important;
+}
+
+/* 어드민 OFF: 제작용 바·할 일 등록 — .sp-plan-devbar { display:flex } 가 [hidden] 을 덮는 경우 대비 */
+#solpath-plan-root:not(.is-plan-admin) #sp-plan-devbar,
+#solpath-plan-root #sp-plan-devbar[hidden],
+#solpath-plan-root:not(.is-plan-admin) #sp-plan-quick-reg,
+#solpath-plan-root #sp-plan-quick-reg[hidden] {
+  display: none !important;
+}
+
 #solpath-plan-root .app-shell--plan .brand {
   margin-bottom: 0;
 }
