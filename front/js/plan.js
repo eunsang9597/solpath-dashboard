@@ -48,6 +48,76 @@ function injectPlanGateFallbackCss_() {
   document.head.appendChild(el);
 }
 
+const PLAN_SESSION_ADMIN_KEY = 'sp_plan_admin_mode';
+
+/**
+ * 어드민: 제작용 바 · 할 일 등록(빠른·고정·개별·POST 미리보기) 표시.
+ * @param {HTMLElement} root `#solpath-plan-root`
+ */
+function plannerApplyAdminVisibility_(root) {
+  const admin = Boolean(root.__spPlanAdminMode);
+  root.classList.toggle('is-plan-admin', admin);
+  const dev = root.querySelector('#sp-plan-devbar');
+  const reg = root.querySelector('#sp-plan-quick-reg');
+  const tap = root.querySelector('#sp-plan-admin-tap');
+  if (tap) {
+    tap.setAttribute(
+      'aria-label',
+      admin ? '어드민 모드 켜짐 · 다시 5회 누르면 해제' : '플래너 · 5회 연속 누르면 어드민'
+    );
+    tap.setAttribute('aria-pressed', admin ? 'true' : 'false');
+  }
+  if (dev) {
+    if (admin) {
+      dev.removeAttribute('hidden');
+      dev.removeAttribute('aria-hidden');
+    } else {
+      dev.setAttribute('hidden', 'hidden');
+      dev.setAttribute('aria-hidden', 'true');
+    }
+  }
+  if (reg) {
+    if (admin) {
+      reg.removeAttribute('hidden');
+      reg.removeAttribute('aria-hidden');
+    } else {
+      reg.setAttribute('hidden', 'hidden');
+      reg.setAttribute('aria-hidden', 'true');
+    }
+  }
+}
+
+/**
+ * 헤더 플래너 아이콘 5회 연속 클릭(약 2.6초 안) → 어드민 ON/OFF 토글(다시 5회면 해제) · sessionStorage 유지.
+ * @param {HTMLElement} root
+ */
+function wirePlannerAdminUnlockOnce_(root) {
+  if (root.__spPlanAdminUnlockWired) return;
+  root.__spPlanAdminUnlockWired = true;
+  const tap = root.querySelector('#sp-plan-admin-tap');
+  if (!tap) return;
+  let count = 0;
+  let lastAt = 0;
+  const resetMs = 2600;
+  tap.addEventListener('click', function (e) {
+    e.preventDefault();
+    const now = Date.now();
+    if (now - lastAt > resetMs) count = 0;
+    lastAt = now;
+    count++;
+    if (count < 5) return;
+    count = 0;
+    lastAt = 0;
+    root.__spPlanAdminMode = !root.__spPlanAdminMode;
+    try {
+      sessionStorage.setItem(PLAN_SESSION_ADMIN_KEY, root.__spPlanAdminMode ? '1' : '0');
+    } catch (_e) {
+      /* ignore */
+    }
+    plannerApplyAdminVisibility_(root);
+  });
+}
+
 /**
  * 관리자 `app.js` / `studentMgmt.js` 와 동일: `GET` JSONP.
  * @param {string} baseUrl
@@ -473,7 +543,7 @@ function plannerCurriculumWeekTableHtml_(payload) {
   );
 }
 
-const PLAN_DEV_HTML = `<div class="sp-plan-devbar" id="sp-plan-devbar" role="region" aria-label="제작용 도구">
+const PLAN_DEV_HTML = `<div class="sp-plan-devbar" id="sp-plan-devbar" role="region" aria-label="제작용 도구" hidden aria-hidden="true">
   <span class="sp-plan-devbar__label">제작용</span>
   <button type="button" class="btn btn--ghost sp-plan-devbar__btn" id="sp-plan-dev-skip-gate" title="전화·이름 확인 없이 메인 화면만 표시합니다. (추적·GAS 호출 없음)">원페이지만(게이트 생략)</button>
   <button type="button" class="btn btn--ghost sp-plan-devbar__btn" id="sp-plan-dev-init" title="Drive에 플래너 마스터 스프레드시트가 없으면 새로 만들고, 필요한 시트·헤더를 맞춥니다.">마스터 준비(파일·탭)</button>
@@ -482,17 +552,18 @@ const PLAN_DEV_HTML = `<div class="sp-plan-devbar" id="sp-plan-devbar" role="reg
   <span class="sp-plan-devbar__msg" id="sp-plan-dev-msg" aria-live="polite"></span>
 </div>`;
 
-const PLAN_APP_HTML = `<div class="app-shell app-shell--plan">
+const PLAN_APP_SHELL_START = `<div class="app-shell app-shell--plan">
   <header class="app-header">
     <div class="brand">
-      <span class="brand-mark" aria-hidden="true"></span>
+      <button type="button" class="brand-mark sp-plan-adminTap" id="sp-plan-admin-tap" aria-label="플래너"></button>
       <div>
         <div class="brand__title" style="color:#4a148c">솔루션 학습 플래너</div>
         <p class="sp-plan-desc">공통 일정과 나만의 할 일을 달력에서 한눈에 볼 수 있게 연결할 예정입니다.</p>
       </div>
     </div>
-  </header>
-  <main class="app-main sp-plan-app-main">
+  </header>`;
+
+const PLAN_APP_MAIN_AND_CLOSE = `  <main class="app-main sp-plan-app-main" id="sp-plan-app-main" hidden>
     <p class="sp-plan-banner" id="sp-plan-banner" hidden></p>
     <div class="panel panel--hero sp-plan-body">
       <section class="sp-plan-student" id="sp-plan-student-info" aria-labelledby="sp-plan-student-info-title">
@@ -1205,9 +1276,28 @@ function plannerAssignedMinutesForDay_(st, ymd) {
 }
 
 /**
+ * 해당 날짜 빠른 등록 배열에 이미 같은 과목·강 번호가 있는지.
+ * @param {{ subject: string, lesson: number }[]|undefined} arr
+ * @param {string} subject
+ * @param {number} lesson
+ * @returns {boolean}
+ */
+function plannerQuickPlanDayHasLesson_(arr, subject, lesson) {
+  if (!Array.isArray(arr)) return false;
+  const s = String(subject != null ? subject : '').trim();
+  const L = Number(lesson);
+  if (!s || !isFinite(L) || L <= 0) return false;
+  return arr.some(function (it) {
+    if (!it || typeof it !== 'object') return false;
+    return String(it.subject != null ? it.subject : '').trim() === s && Number(it.lesson) === L;
+  });
+}
+
+/**
  * 선택 요일만 달에서 **1일→말일 순**으로 `dates`에 모은 뒤, 과목마다 강 `fromL`~`toL` 총 N건을
  * **날짜마다 가능한 한 균등**하게 나눈다: 각 날에는 `⌊N/M⌋` 또는 `⌊N/M⌋+1`강(앞쪽 날부터 +1 분배).
- * 과목끼리는 섞지 않는다(저장 없음).
+ * 과목끼리는 섞지 않는다. **기존 `quickPlanByDate` 해당 달 데이터는 지우지 않고** 이 배치만 더하며,
+ * 같은 날·같은 과목·같은 강 번호는 중복으로 넣지 않는다.
  * @param {object} st
  * @param {Date} viewMonth
  * @param {number[]} weekdays 0=일 … 6=토
@@ -1216,7 +1306,6 @@ function plannerAssignedMinutesForDay_(st, ymd) {
  * @param {number} toL
  */
 function plannerApplyQuickPlanToState_(st, viewMonth, weekdays, subjects, fromL, toL) {
-  plannerClearQuickPlanForMonth_(st, viewMonth);
   const y = viewMonth.getFullYear();
   const m0 = viewMonth.getMonth();
   const last = new Date(y, m0 + 1, 0).getDate();
@@ -1243,7 +1332,9 @@ function plannerApplyQuickPlanToState_(st, viewMonth, weekdays, subjects, fromL,
       const key = dates[di];
       if (!st.quickPlanByDate[key]) st.quickPlanByDate[key] = [];
       for (let k = 0; k < cnt && Lrun <= hi; k++) {
-        st.quickPlanByDate[key].push({ subject: subj, lesson: Lrun });
+        if (!plannerQuickPlanDayHasLesson_(st.quickPlanByDate[key], subj, Lrun)) {
+          st.quickPlanByDate[key].push({ subject: subj, lesson: Lrun });
+        }
         Lrun++;
       }
     }
@@ -2620,7 +2711,7 @@ function renderCalendar_(root, boot) {
     '<span class="sp-plan-todoReg__panelBadge" aria-hidden="true">빠른</span>' +
     '<div class="sp-plan-todoReg__panelHeadText">' +
     '<h3 class="sp-plan-todoReg__panelTitle">빠른 등록</h3>' +
-    '<p class="sp-plan-todoReg__panelSub">선택한 요일에 강 번호를 나눠 한 달 치 할 일을 만듭니다.</p>' +
+    '<p class="sp-plan-todoReg__panelSub">선택한 요일에 강 번호를 나눠 이 달에 할 일을 한 번에 더합니다. 이미 반영된 빠른 등록은 지우지 않고 합치며, 같은 날·같은 과목·같은 강 번호만 중복으로 넣지 않습니다.</p>' +
     '</div></div>' +
     '<p class="sp-plan-quick__err" id="sp-plan-quick-err" hidden></p>' +
     '<div class="sp-plan-quick__row sp-plan-quick__row--horiz">' +
@@ -2901,6 +2992,8 @@ function renderCalendar_(root, boot) {
       }
     });
   }
+
+  plannerApplyAdminVisibility_(root);
 }
 
 /**
@@ -2911,8 +3004,8 @@ function wireGate_(root) {
   const errEl = root.querySelector('#sp-plan-gate-err');
   const nameInput = root.querySelector('#sp-plan-name');
   const gate = root.querySelector('.sp-plan-gate');
-  const app = root.querySelector('.app-shell--plan');
-  if (!btn || !gate || !app) return;
+  const appMain = root.querySelector('#sp-plan-app-main');
+  if (!btn || !gate || !appMain) return;
 
   wirePlanPhoneDigitsOnly_(root);
 
@@ -2943,7 +3036,7 @@ function wireGate_(root) {
       boot.data || {}
     );
     gate.setAttribute('hidden', 'hidden');
-    app.removeAttribute('hidden');
+    appMain.removeAttribute('hidden');
     renderPlannerStudentProfile_(root, d.student_profile);
     renderCalendar_(root, { role: d.role || 'guest', common: d.common || [], personal: d.personal != null ? d.personal : null });
   }
@@ -3008,9 +3101,9 @@ function wirePlanDevBar_(root) {
   skipBtn.addEventListener('click', function () {
     showDevMsg('제작용: 게이트 생략 · GAS 없이 원페이지만 표시');
     const gate = root.querySelector('.sp-plan-gate');
-    const app = root.querySelector('.app-shell--plan');
+    const appMain = root.querySelector('#sp-plan-app-main');
     if (gate) gate.setAttribute('hidden', 'hidden');
-    if (app) app.removeAttribute('hidden');
+    if (appMain) appMain.removeAttribute('hidden');
     renderCalendar_(root, { role: 'guest', common: [], personal: null });
     renderPlannerStudentProfile_(root, MOCK_PLANNER_STUDENT_PROFILE);
   });
@@ -3080,11 +3173,16 @@ function main() {
   const el = document.getElementById(MOUNT_ID);
   if (!el) return;
   injectPlanGateFallbackCss_();
-  el.innerHTML = `<div class="sp-plan-rootinner">${PLAN_DEV_HTML}${GATE_HTML}${PLAN_APP_HTML}</div>`;
+  el.innerHTML = `<div class="sp-plan-rootinner">${PLAN_DEV_HTML}${PLAN_APP_SHELL_START}${GATE_HTML}${PLAN_APP_MAIN_AND_CLOSE}</div>`;
+  try {
+    el.__spPlanAdminMode = sessionStorage.getItem(PLAN_SESSION_ADMIN_KEY) === '1';
+  } catch (_e) {
+    el.__spPlanAdminMode = false;
+  }
+  wirePlannerAdminUnlockOnce_(el);
   renderPlannerStudentProfile_(el, MOCK_PLANNER_STUDENT_PROFILE);
-  const app = el.querySelector('.app-shell--plan');
-  if (app) app.setAttribute('hidden', 'hidden');
   wirePlanDevBar_(el);
+  plannerApplyAdminVisibility_(el);
   if (GAS_MODE.useMock) {
     const g = el.querySelector('.sp-plan-gate');
     if (g) {
