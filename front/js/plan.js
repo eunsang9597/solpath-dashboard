@@ -797,7 +797,7 @@ async function plannerPersonalTodosApplyClick_(root, opts) {
       msgEl.textContent = '회원 확인 후에만 저장할 수 있습니다.';
       msgEl.removeAttribute('hidden');
     }
-    return;
+    return false;
   }
   plannerPrepareClientStateBeforeApply_(root);
   plannerRebuildQuickPostPayload_(st);
@@ -820,7 +820,7 @@ async function plannerPersonalTodosApplyClick_(root, opts) {
   if (!res || !res.ok) {
     const m = res && res.error && res.error.message != null ? String(res.error.message) : '저장에 실패했습니다.';
     if (msgEl) msgEl.textContent = m;
-    return;
+    return false;
   }
   const boot = await plannerGasCall_({
     action: 'plannerBootstrap',
@@ -847,6 +847,7 @@ async function plannerPersonalTodosApplyClick_(root, opts) {
       msgEl.setAttribute('hidden', 'hidden');
     }, 2200);
   }
+  return true;
 }
 
 function wirePlannerPersonalTodosApplyOnce_(root) {
@@ -877,6 +878,148 @@ function wirePlannerPersonalTodosApplyOnce_(root) {
       void plannerClearMonthScheduleClick_(root);
     }
   });
+}
+
+/**
+ * 해당 날·보는 달 타임라인 페인트 캐시 제거 → 다음 모달/b bootstrap 시 `monthTodos`에서 재구축.
+ * @param {object} st
+ * @param {string} ymd
+ */
+function plannerInvalidateDayTimelineCache_(st, ymd) {
+  if (!st || !st.dayTimelineTodoByDate) return;
+  const day = String(ymd || '').trim();
+  if (!day) return;
+  try {
+    delete st.dayTimelineTodoByDate[day];
+  } catch (_e) {
+    st.dayTimelineTodoByDate[day] = {};
+  }
+}
+
+/**
+ * @param {object} st
+ * @param {Date} viewMonth
+ */
+function plannerInvalidateTimelineCacheForViewMonth_(st, viewMonth) {
+  if (!st || !st.dayTimelineTodoByDate) return;
+  const pfx = plannerMonthYmdPrefix_(viewMonth);
+  Object.keys(st.dayTimelineTodoByDate).forEach(function (k) {
+    if (k.indexOf(pfx) !== 0) return;
+    try {
+      delete st.dayTimelineTodoByDate[k];
+    } catch (_e) {
+      st.dayTimelineTodoByDate[k] = {};
+    }
+  });
+}
+
+/**
+ * 「일정 삭제하기」 실패 시 복구용 — 해당 월 `monthTodos`·일별 캐시 스냅샷.
+ * @param {object} st
+ * @param {Date} viewMonth
+ * @returns {{ monthTodos: object[], dayTimelineTodoByDate: Record<string, Record<string, string>>, dayFixedBlockSlotsByDate: Record<string, Record<string, boolean>>, dayMemoByDate: Record<string, string> }}
+ */
+function plannerSnapshotViewMonthPlannerState_(st, viewMonth) {
+  plannerEnsureMonthTodos_(st);
+  const pfx = plannerMonthYmdPrefix_(viewMonth);
+  /** @type {object[]} */
+  const monthTodos = [];
+  st.monthTodos.forEach(function (r) {
+    if (!r || typeof r !== 'object') return;
+    if (String(r.date != null ? r.date : '').trim().indexOf(pfx) !== 0) return;
+    const copy = Object.assign({}, r);
+    if (r._fromServer) copy._fromServer = true;
+    monthTodos.push(copy);
+  });
+  /** @type {Record<string, Record<string, string>>} */
+  const dayTimelineTodoByDate = {};
+  if (st.dayTimelineTodoByDate) {
+    Object.keys(st.dayTimelineTodoByDate).forEach(function (k) {
+      if (k.indexOf(pfx) !== 0) return;
+      dayTimelineTodoByDate[k] = Object.assign({}, st.dayTimelineTodoByDate[k]);
+    });
+  }
+  /** @type {Record<string, Record<string, boolean>>} */
+  const dayFixedBlockSlotsByDate = {};
+  if (st.dayFixedBlockSlotsByDate) {
+    Object.keys(st.dayFixedBlockSlotsByDate).forEach(function (k) {
+      if (k.indexOf(pfx) !== 0) return;
+      dayFixedBlockSlotsByDate[k] = Object.assign({}, st.dayFixedBlockSlotsByDate[k]);
+    });
+  }
+  /** @type {Record<string, string>} */
+  const dayMemoByDate = {};
+  if (st.dayMemoByDate) {
+    Object.keys(st.dayMemoByDate).forEach(function (k) {
+      if (k.indexOf(pfx) !== 0) return;
+      dayMemoByDate[k] = String(st.dayMemoByDate[k]);
+    });
+  }
+  return {
+    monthTodos: monthTodos,
+    dayTimelineTodoByDate: dayTimelineTodoByDate,
+    dayFixedBlockSlotsByDate: dayFixedBlockSlotsByDate,
+    dayMemoByDate: dayMemoByDate
+  };
+}
+
+/**
+ * @param {object} st
+ * @param {Date} viewMonth
+ * @param {{ monthTodos: object[], dayTimelineTodoByDate: Record<string, Record<string, string>>, dayFixedBlockSlotsByDate: Record<string, Record<string, boolean>>, dayMemoByDate: Record<string, string> }} snap
+ */
+function plannerRestoreViewMonthPlannerState_(st, viewMonth, snap) {
+  if (!st || !snap) return;
+  const pfx = plannerMonthYmdPrefix_(viewMonth);
+  plannerEnsureMonthTodos_(st);
+  st.monthTodos = st.monthTodos.filter(function (r) {
+    if (!r || typeof r !== 'object') return false;
+    return String(r.date != null ? r.date : '').trim().indexOf(pfx) !== 0;
+  });
+  snap.monthTodos.forEach(function (r) {
+    st.monthTodos.push(Object.assign({}, r));
+  });
+  if (!st.dayTimelineTodoByDate) st.dayTimelineTodoByDate = {};
+  Object.keys(st.dayTimelineTodoByDate).forEach(function (k) {
+    if (k.indexOf(pfx) === 0) {
+      try {
+        delete st.dayTimelineTodoByDate[k];
+      } catch (_e) {
+        st.dayTimelineTodoByDate[k] = {};
+      }
+    }
+  });
+  Object.keys(snap.dayTimelineTodoByDate).forEach(function (k) {
+    st.dayTimelineTodoByDate[k] = Object.assign({}, snap.dayTimelineTodoByDate[k]);
+  });
+  if (!st.dayFixedBlockSlotsByDate) st.dayFixedBlockSlotsByDate = {};
+  Object.keys(st.dayFixedBlockSlotsByDate).forEach(function (k) {
+    if (k.indexOf(pfx) === 0) {
+      try {
+        delete st.dayFixedBlockSlotsByDate[k];
+      } catch (_e) {
+        st.dayFixedBlockSlotsByDate[k] = {};
+      }
+    }
+  });
+  Object.keys(snap.dayFixedBlockSlotsByDate).forEach(function (k) {
+    st.dayFixedBlockSlotsByDate[k] = Object.assign({}, snap.dayFixedBlockSlotsByDate[k]);
+  });
+  if (!st.dayMemoByDate) st.dayMemoByDate = {};
+  Object.keys(st.dayMemoByDate).forEach(function (k) {
+    if (k.indexOf(pfx) === 0) {
+      try {
+        delete st.dayMemoByDate[k];
+      } catch (_e) {
+        st.dayMemoByDate[k] = '';
+      }
+    }
+  });
+  Object.keys(snap.dayMemoByDate).forEach(function (k) {
+    st.dayMemoByDate[k] = snap.dayMemoByDate[k];
+  });
+  plannerRebuildFixedBlockSlotsForMonth_(st, viewMonth);
+  plannerRebuildQuickPostPayload_(st);
 }
 
 /**
@@ -925,6 +1068,7 @@ async function plannerClearMonthScheduleClick_(root) {
     return;
   }
   const vm = st.viewMonth instanceof Date && !isNaN(st.viewMonth.getTime()) ? st.viewMonth : new Date();
+  const snap = plannerSnapshotViewMonthPlannerState_(st, vm);
   plannerClearAllTodosForViewMonth_(st, vm);
   plannerRefreshPostPreview_(root);
   if (typeof root.__spPlanRerenderMonth === 'function') {
@@ -934,7 +1078,21 @@ async function plannerClearMonthScheduleClick_(root) {
   if (modal && st.selectedDate && !modal.hasAttribute('hidden') && typeof root.__spPlanRefreshOpenDayModal === 'function') {
     root.__spPlanRefreshOpenDayModal();
   }
-  await plannerPersonalTodosApplyClick_(root, { msgEl: msgEl });
+  const ok = await plannerPersonalTodosApplyClick_(root, { msgEl: msgEl });
+  if (!ok) {
+    plannerRestoreViewMonthPlannerState_(st, vm, snap);
+    plannerRefreshPostPreview_(root);
+    if (typeof root.__spPlanRerenderMonth === 'function') {
+      root.__spPlanRerenderMonth();
+    }
+    if (modal && st.selectedDate && !modal.hasAttribute('hidden') && typeof root.__spPlanRefreshOpenDayModal === 'function') {
+      root.__spPlanRefreshOpenDayModal();
+    }
+    if (msgEl) {
+      msgEl.textContent = '서버에 삭제를 반영하지 못했습니다. 화면을 이전 상태로 되돌렸습니다.';
+      msgEl.removeAttribute('hidden');
+    }
+  }
 }
 
 /** @param {string} s */
@@ -2297,6 +2455,7 @@ function plannerApplyBootstrapPersonal_(st, personal, role) {
   plannerSyncDayMemoByDateFromMonthTodos_(st);
   if (st.viewMonth instanceof Date && !isNaN(st.viewMonth.getTime())) {
     plannerRebuildFixedBlockSlotsForMonth_(st, st.viewMonth);
+    plannerInvalidateTimelineCacheForViewMonth_(st, st.viewMonth);
   }
   plannerRebuildQuickPostPayload_(st);
 }
@@ -4871,6 +5030,7 @@ function renderCalendar_(root, boot) {
     const m = root.querySelector('#sp-plan-day-modal');
     if (!m) return;
     st.selectedDate = String(dateYmd || '');
+    plannerInvalidateDayTimelineCache_(st, st.selectedDate);
     const title = m.querySelector('#sp-plan-day-modal-title');
     if (title) title.textContent = st.selectedDate ? st.selectedDate + ' · 일일 플래너' : '일일 플래너';
     const todoSide = m.querySelector('#sp-plan-day-todo-side');
