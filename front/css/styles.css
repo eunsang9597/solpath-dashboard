@@ -3016,7 +3016,7 @@ button.sp-stu-remark__item--open:hover {
   padding: 0.8rem 0.3rem 1.15rem;
 }
 
-/* 플래너: 학생 정보(상담 표 형태, 월간 위 · DB 연동 전 목업) */
+/* 플래너: 학생 정보(상담 표 · registry `student_profile`) */
 #solpath-plan-root .sp-plan-student {
   margin: 0 0 1.1rem;
   padding: 0;
@@ -3036,6 +3036,51 @@ button.sp-stu-remark__item--open:hover {
   font-size: calc(0.72rem + var(--sp-text-bump));
   color: #64748b;
   line-height: 1.4;
+}
+
+#solpath-plan-root .sp-plan-student__code {
+  font-size: 0.92em;
+  padding: 0.05rem 0.28rem;
+  border-radius: 4px;
+  background: #f1f5f9;
+  color: #475569;
+}
+
+#solpath-plan-root .sp-plan-student__saveRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.65rem 0.75rem;
+  border-top: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+
+#solpath-plan-root .sp-plan-student__saveMsg {
+  font-size: calc(0.78rem + var(--sp-text-bump));
+  color: #334155;
+}
+
+#solpath-plan-root .sp-plan-student__input {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  padding: 0.45rem 0.5rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font: inherit;
+  font-size: calc(0.82rem + var(--sp-text-bump));
+  font-weight: 500;
+  color: #0f172a;
+  background: #fff;
+}
+
+#solpath-plan-root .sp-plan-student__textarea {
+  display: block;
+  min-height: 4.5rem;
+  resize: vertical;
+  line-height: 1.5;
 }
 
 #solpath-plan-root .sp-plan-student__wrap {
@@ -3685,6 +3730,19 @@ button.sp-stu-remark__item--open:hover {
   font-size: 0.9em;
 }
 
+#solpath-plan-root .sp-plan-quick__postActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.45rem;
+}
+
+#solpath-plan-root .sp-plan-quick__applyMsg {
+  font-size: calc(0.75rem + var(--sp-text-bump));
+  color: #334155;
+}
+
 #solpath-plan-root .sp-plan-quick__postPre {
   margin: 0;
   max-height: 14rem;
@@ -3832,6 +3890,59 @@ button.sp-stu-remark__item--open:hover {
   font-weight: 700;
 }
 
+#solpath-plan-root .sp-plan-quick__row--stack {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.35rem;
+  width: 100%;
+  margin-bottom: 0.35rem;
+  box-sizing: border-box;
+}
+
+#solpath-plan-root .sp-plan-quick__dowGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(6.5rem, 1fr));
+  gap: 0.35rem 0.45rem;
+  width: 100%;
+}
+
+#solpath-plan-root .sp-plan-quick__dowItem {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+#solpath-plan-root .sp-plan-quick__dowCnt {
+  width: 100%;
+  padding: 0.35rem 0.45rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: calc(0.78rem + var(--sp-text-bump));
+  font-variant-numeric: tabular-nums;
+  box-sizing: border-box;
+}
+
+#solpath-plan-root .sp-plan-quick__dowCnt[hidden] {
+  display: none;
+}
+
+#solpath-plan-root .sp-plan-quick__applyRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.5rem;
+  margin-top: 0.25rem;
+  padding-top: 0.35rem;
+  border-top: 1px solid #f1e9ff;
+}
+
+#solpath-plan-root .sp-plan-manual__grid--quick {
+  margin-top: 0.15rem;
+}
+
 #solpath-plan-root .sp-plan-todoReg.is-collapsed .sp-plan-todoReg__outerHead.sp-plan-quick__head {
   border-bottom: none;
   padding-bottom: 0;
@@ -3888,6 +3999,39 @@ button.sp-stu-remark__item--open:hover {
   width: 100%;
   max-width: 14rem;
   margin-top: 0.25rem;
+}
+
+#solpath-plan-root .sp-plan-manual__mode {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 0 0 0.45rem;
+}
+
+#solpath-plan-root .sp-plan-manual__modeBtn.is-active {
+  border-color: #0ea5e9;
+  background: #e0f2fe;
+  color: #0369a1;
+}
+
+#solpath-plan-root .sp-plan-manual__block {
+  margin-bottom: 0.15rem;
+}
+
+#solpath-plan-root .sp-plan-manual__block[hidden] {
+  display: none !important;
+}
+
+#solpath-plan-root .sp-plan-curr__hint {
+  margin: 0 0 0.35rem;
+  font-size: calc(0.72rem + var(--sp-text-bump));
+  color: #64748b;
+}
+
+#solpath-plan-root .sp-plan-manual__lbl--preview .sp-plan-manual__input[readonly] {
+  background: #f1f5f9;
+  color: #334155;
+  cursor: default;
 }
 
 #solpath-plan-root .sp-plan-todoReg__panel--manual .sp-plan-manual__input:focus,
@@ -4284,7 +4428,20 @@ button.sp-stu-remark__item--open:hover {
   flex-shrink: 0;
 }
 
-/* 빠른등록 요약: plan.js 직계 .sp-plan-curBadge — 셀 폭 안에서 말줄임 */
+/* 일자 칸 todo 요약: 과목 블록 + 아랫줄(개별 등록) */
+#solpath-plan-root .sp-plan-month .sp-plan-day > .sp-plan-dayCellSum {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 1px;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  flex: 0 1 auto;
+  box-sizing: border-box;
+}
+
+#solpath-plan-root .sp-plan-month .sp-plan-day > .sp-plan-dayCellSum > .sp-plan-curBadge,
 #solpath-plan-root .sp-plan-month .sp-plan-day > .sp-plan-curBadge {
   display: block;
   width: 100%;
@@ -4295,7 +4452,24 @@ button.sp-stu-remark__item--open:hover {
   text-overflow: ellipsis;
   white-space: nowrap;
   text-align: center;
-  flex: 0 1 auto;
+}
+
+#solpath-plan-root .sp-plan-dayCellSum__sub {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  padding: 0 2px;
+  font-size: calc(0.52rem + var(--sp-text-bump));
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  color: #475569;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: center;
+  box-sizing: border-box;
 }
 
 #solpath-plan-root .sp-plan-month .sp-plan-day__fixedFoot {
@@ -4581,6 +4755,29 @@ button.sp-stu-remark__item--open:hover {
 #solpath-plan-root .sp-plan-todoSide__row--fixed .sp-plan-todoSide__title {
   color: #c62828;
   font-weight: 750;
+}
+
+#solpath-plan-root .sp-plan-todoSide__row--trace .sp-plan-todoSide__thSubj {
+  background: #f1f5f9;
+  color: #64748b;
+  border-color: #e2e8f0;
+}
+
+#solpath-plan-root .sp-plan-todoSide__row--trace .sp-plan-todoSide__tdTodo,
+#solpath-plan-root .sp-plan-todoSide__row--trace .sp-plan-todoSide__tdMark {
+  background: #f8fafc;
+  border-color: #e2e8f0;
+}
+
+#solpath-plan-root .sp-plan-todoSide__row--trace .sp-plan-todoSide__title {
+  color: #94a3b8;
+  font-weight: 600;
+  font-style: italic;
+}
+
+#solpath-plan-root .sp-plan-todoSide__row--trace .sp-plan-todoSide__traceMark {
+  color: #cbd5e1;
+  font-size: 0.95rem;
 }
 
 #solpath-plan-root .sp-plan-todoSide__row.is-brushRow .sp-plan-todoSide__tdTodo {

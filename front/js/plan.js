@@ -203,6 +203,246 @@ function plannerGasJsonpWithParams_(baseUrl, action, extraParams, timeoutMs) {
   });
 }
 
+/**
+ * 로컬 달 기준 `yyyy-MM` (`plannerBootstrap` · `year_month`).
+ * @param {Date} d
+ * @returns {string}
+ */
+function plannerYearMonthFromDate_(d) {
+  if (!(d instanceof Date) || isNaN(Number(d.getTime()))) {
+    d = new Date();
+  }
+  const y = d.getFullYear();
+  const m = d.getMonth() + 1;
+  return String(y) + '-' + (m < 10 ? '0' : '') + String(m);
+}
+
+/**
+ * GAS `dbPlannerReadCommonEvents_` · `DB_PLANNER_COMMON_CALENDAR_HEADERS` 와 동일 키.
+ * @typedef {{ event_id: string, start_date: string, end_date: string, title: string, description: string, category: string, sort_key: number }} PlannerCommonEvent
+ */
+
+/**
+ * @param {unknown} v
+ * @returns {string} `yyyy-MM-dd` 또는 빈 문자열
+ */
+function plannerCommonEventDateString_(v) {
+  if (v == null || v === '') return '';
+  if (v instanceof Date && !isNaN(Number(v.getTime()))) {
+    return plannerYmdFromParts_(v.getFullYear(), v.getMonth(), v.getDate());
+  }
+  const s = String(v).trim();
+  const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) {
+    return iso[1] + '-' + iso[2] + '-' + iso[3];
+  }
+  return '';
+}
+
+/**
+ * @param {unknown} ev
+ * @returns {PlannerCommonEvent}
+ */
+function plannerNormalizeCommonEventFromApi_(ev) {
+  const o = ev && typeof ev === 'object' ? /** @type {Record<string, unknown>} */ (ev) : {};
+  const sk = o.sort_key;
+  let skn = sk != null && String(sk).trim() !== '' ? Number(sk) : 0;
+  if (!isFinite(skn)) {
+    skn = 0;
+  }
+  const start0 = plannerCommonEventDateString_(o.start_date);
+  let end0 = plannerCommonEventDateString_(o.end_date);
+  if (start0 && (!end0 || end0 < start0)) {
+    end0 = start0;
+  }
+  return {
+    event_id: String(o.event_id != null ? o.event_id : '').trim(),
+    start_date: start0,
+    end_date: end0,
+    title: String(o.title != null ? o.title : '').trim(),
+    description: String(o.description != null ? o.description : '').trim(),
+    category: String(o.category != null ? o.category : '').trim(),
+    sort_key: skn
+  };
+}
+
+/**
+ * @param {unknown} arr
+ * @returns {PlannerCommonEvent[]}
+ */
+function plannerNormalizeCommonEventsFromApi_(arr) {
+  if (!Array.isArray(arr)) {
+    return [];
+  }
+  const list = arr.map(plannerNormalizeCommonEventFromApi_).filter(function (e) {
+    return e.start_date.length > 0;
+  });
+  list.sort(function (a, b) {
+    if (a.sort_key !== b.sort_key) {
+      return a.sort_key - b.sort_key;
+    }
+    if (a.start_date !== b.start_date) {
+      return a.start_date < b.start_date ? -1 : a.start_date > b.start_date ? 1 : 0;
+    }
+    if (a.event_id !== b.event_id) {
+      return a.event_id < b.event_id ? -1 : 1;
+    }
+    return 0;
+  });
+  return list;
+}
+
+/**
+ * 공통 일정: `start_date`~`end_date`(포함) 각 날에 배지 합산.
+ * @param {Record<string, number>} byDate
+ * @param {PlannerCommonEvent[]} events
+ */
+function plannerCommonEventsMergeIntoByDate_(byDate, events) {
+  events.forEach(function (ev) {
+    const start = ev.start_date;
+    const end = ev.end_date || start;
+    if (!start) {
+      return;
+    }
+    const ps = start.split('-');
+    const pe = end.split('-');
+    if (ps.length !== 3 || pe.length !== 3) {
+      byDate[start] = (byDate[start] || 0) + 1;
+      return;
+    }
+    const y1 = Number(ps[0]);
+    const m1 = Number(ps[1]);
+    const d1 = Number(ps[2]);
+    const y2 = Number(pe[0]);
+    const m2 = Number(pe[1]);
+    const d2 = Number(pe[2]);
+    if (![y1, m1, d1, y2, m2, d2].every(isFinite)) {
+      byDate[start] = (byDate[start] || 0) + 1;
+      return;
+    }
+    let cur = new Date(y1, m1 - 1, d1);
+    const last = new Date(y2, m2 - 1, d2);
+    let guard = 0;
+    while (guard < 400 && cur <= last) {
+      const key = plannerYmdFromParts_(cur.getFullYear(), cur.getMonth(), cur.getDate());
+      byDate[key] = (byDate[key] || 0) + 1;
+      cur = new Date(cur.getFullYear(), cur.getMonth(), cur.getDate() + 1);
+      guard++;
+    }
+  });
+}
+
+/**
+ * bootstrap `curriculum` → 상태에 둘 `{ courses, lectures }`.
+ * @param {unknown} raw
+ * @returns {{ courses: object[], lectures: object[] }}
+ */
+function plannerNormalizeCurriculumFromBootstrap_(raw) {
+  const o = raw && typeof raw === 'object' ? /** @type {Record<string, unknown>} */ (raw) : {};
+  const courses = o.courses;
+  const lectures = o.lectures;
+  return {
+    courses: Array.isArray(courses) ? /** @type {object[]} */ (courses) : [],
+    lectures: Array.isArray(lectures) ? /** @type {object[]} */ (lectures) : []
+  };
+}
+
+/**
+ * 게이트 통과 후 저장된 연락처로 `viewMonth` 해당 달 bootstrap만 다시 읽기 (§8.5 구역 C).
+ * @param {HTMLElement} root
+ * @returns {Promise<void>}
+ */
+function plannerRefetchBootstrapForViewMonth_(root) {
+  const ctx = root.__spPlannerBootstrapCtx;
+  const st = root.__spPlanState;
+  if (
+    !ctx ||
+    typeof ctx !== 'object' ||
+    !st ||
+    typeof st !== 'object' ||
+    !Array.isArray(ctx.phoneSegments)
+  ) {
+    return Promise.resolve();
+  }
+  const segs = ctx.phoneSegments;
+  if (segs[0].length !== 3 || segs[1].length !== 4 || segs[2].length !== 4) {
+    return Promise.resolve();
+  }
+  const view = st.viewMonth instanceof Date && !isNaN(st.viewMonth.getTime()) ? st.viewMonth : new Date();
+  const rid = (root.__spPlannerMonthFetchId = (root.__spPlannerMonthFetchId || 0) + 1);
+  return plannerGasCall_({
+    action: 'plannerBootstrap',
+    phoneSegments: segs,
+    name: ctx.name != null ? ctx.name : '',
+    memberCode: ctx.memberCode != null ? ctx.memberCode : '',
+    year_month: plannerYearMonthFromDate_(view)
+  }).then(function (boot) {
+    if (root.__spPlannerMonthFetchId !== rid) return;
+    if (!boot || !boot.ok) return;
+    const d = /** @type {{ role?: string, common?: object[], personal?: object[] | null, student_profile?: Record<string, unknown>, curriculum?: unknown }} */ (
+      boot.data || {}
+    );
+    plannerMergeBootstrapMonthData_(root, {
+      role: d.role || 'guest',
+      common: d.common || [],
+      personal: d.personal != null ? d.personal : null,
+      student_profile: d.student_profile,
+      curriculum: d.curriculum
+    });
+  });
+}
+
+/**
+ * 월 이동 재조회 결과만 상태·달력 격자에 반영 (`renderCalendar_` 전체 생략 — 등록 폼 유지).
+ * @param {HTMLElement} root
+ * @param {{ role: string, common: object[], personal: object[] | null, student_profile?: Record<string, unknown>, curriculum?: unknown }} pack
+ */
+function plannerMergeBootstrapMonthData_(root, pack) {
+  const st = root.__spPlanState;
+  if (!st || typeof st !== 'object') return;
+  const roleNext = pack.role === 'member' ? 'member' : 'guest';
+  st.role = roleNext;
+  if (st.planGuestUnlockMock) {
+    st.role = 'member';
+  }
+  st.plannerCurriculum = plannerNormalizeCurriculumFromBootstrap_(pack.curriculum);
+  const common = plannerNormalizeCommonEventsFromApi_(pack.common);
+  const personal = pack.personal != null && Array.isArray(pack.personal) ? pack.personal : [];
+  st.plannerCommonEvents = common;
+  /** @type {Record<string, number>} */
+  const byDate = {};
+  plannerCommonEventsMergeIntoByDate_(byDate, common);
+  personal.forEach(function (ev) {
+    const d0 = String((ev && ev.date) || '').trim();
+    if (!d0) return;
+    byDate[d0] = (byDate[d0] || 0) + 1;
+  });
+  st.byDate = byDate;
+  st.apiHadCalendarRows = common.length > 0 || personal.length > 0;
+  const ban = root.querySelector('#sp-plan-banner');
+  if (ban) {
+    if (st.role === 'guest') {
+      ban.textContent = '등록된 번호로 확인되지 않아 공통 일정만 표시합니다.';
+      ban.removeAttribute('hidden');
+    } else {
+      ban.setAttribute('hidden', 'hidden');
+    }
+  }
+  renderPlannerStudentProfile_(root, pack.student_profile);
+  plannerApplyBootstrapPersonal_(st, pack.personal, st.role);
+  const slotMerge = root.querySelector('#sp-plan-calendar-slot');
+  if (slotMerge && st.manualRegMode === 'curriculum') {
+    plannerCurriculumRefreshCascade_(slotMerge, st, 'all');
+  }
+  if (typeof root.__spPlanRerenderMonth === 'function') {
+    root.__spPlanRerenderMonth();
+  }
+  plannerRefreshPostPreview_(root);
+  if (typeof root.__spPlanRefreshOpenDayModal === 'function') {
+    root.__spPlanRefreshOpenDayModal();
+  }
+}
+
 const PLANNER_JSONP_TIMEOUT_MS = 360000;
 
 /**
@@ -252,6 +492,35 @@ function plannerGasNormalizeResult_(data) {
 }
 
 /**
+ * GAS Web App POST — `Content-Type: text/plain` JSON 본문(임웹·README와 동일).
+ * @param {string} url
+ * @param {Record<string, unknown>} bodyObj
+ * @return {Promise<unknown>}
+ */
+async function plannerGasJsonPost_(url, bodyObj) {
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify(bodyObj),
+    credentials: 'omit'
+  });
+  const text = await res.text();
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch (_e) {
+    return {
+      ok: false,
+      error: {
+        code: 'INVALID_RESPONSE',
+        message: 'JSON 파싱 실패: ' + text.slice(0, 400)
+      }
+    };
+  }
+  return data;
+}
+
+/**
  * `HttpOpenSync.js` JSONP 분기 — 쿼리 `p0`·`p1`·`p2`·`n`·`m`(memberCode).
  * @param {Record<string, unknown>} payload
  * @return {Promise<Record<string, unknown>>}
@@ -276,7 +545,52 @@ async function plannerGasCall_(payload) {
         n: String(payload.name != null ? payload.name : ''),
         m: String(payload.memberCode != null ? payload.memberCode : '')
       };
+      const ym = String(payload.year_month != null ? payload.year_month : payload.yearMonth != null ? payload.yearMonth : '').trim();
+      if (ym.length) {
+        extra.year_month = ym;
+      }
       const raw = await plannerGasJsonpWithParams_(url, action, extra, PLANNER_JSONP_TIMEOUT_MS);
+      return plannerGasNormalizeResult_(raw);
+    }
+    if (action === 'plannerRegistryProfileSave') {
+      const segs = /** @type {unknown[]} */ (Array.isArray(payload.phoneSegments) ? payload.phoneSegments : []);
+      const prof =
+        payload.student_profile != null && typeof payload.student_profile === 'object'
+          ? payload.student_profile
+          : {};
+      let profStr = '{}';
+      try {
+        profStr = JSON.stringify(prof);
+      } catch (_e) {
+        profStr = '{}';
+      }
+      const extra = {
+        p0: String(segs[0] != null ? segs[0] : '').replace(/\D/g, ''),
+        p1: String(segs[1] != null ? segs[1] : '').replace(/\D/g, ''),
+        p2: String(segs[2] != null ? segs[2] : '').replace(/\D/g, ''),
+        n: String(payload.name != null ? payload.name : ''),
+        m: String(payload.memberCode != null ? payload.memberCode : ''),
+        student_profile: profStr
+      };
+      const raw = await plannerGasJsonpWithParams_(url, action, extra, PLANNER_JSONP_TIMEOUT_MS);
+      return plannerGasNormalizeResult_(raw);
+    }
+    if (action === 'plannerPersonalTodosApply') {
+      const segs = /** @type {unknown[]} */ (Array.isArray(payload.phoneSegments) ? payload.phoneSegments : []);
+      const p0 = String(segs[0] != null ? segs[0] : '').replace(/\D/g, '');
+      const p1 = String(segs[1] != null ? segs[1] : '').replace(/\D/g, '');
+      const p2 = String(segs[2] != null ? segs[2] : '').replace(/\D/g, '');
+      const ym = String(payload.year_month != null ? payload.year_month : payload.yearMonth != null ? payload.yearMonth : '').trim();
+      const todos = Array.isArray(payload.todos) ? payload.todos : [];
+      const body = /** @type {Record<string, unknown>} */ ({
+        action: 'plannerPersonalTodosApply',
+        phoneSegments: [p0, p1, p2],
+        name: String(payload.name != null ? payload.name : ''),
+        memberCode: String(payload.memberCode != null ? payload.memberCode : ''),
+        year_month: ym,
+        todos: todos
+      });
+      const raw = await plannerGasJsonPost_(url, body);
       return plannerGasNormalizeResult_(raw);
     }
     return { ok: false, error: { code: 'BAD_ACTION', message: '지원하지 않는 action: ' + action } };
@@ -294,6 +608,234 @@ async function plannerGasCall_(payload) {
   }
 }
 
+/** 부트스트랩 `student_profile` / registry 저장에 쓰는 키 (`phone_display` 제외). */
+const PLANNER_STUDENT_PROFILE_KEYS_FOR_SAVE = [
+  'display_name',
+  'track',
+  'admission_type',
+  'prev_university',
+  'prev_major_gpa',
+  'goal_university',
+  'goal_department',
+  'study_status'
+];
+
+/**
+ * @param {string} s
+ * @returns {string}
+ */
+function escAttr(s) {
+  return String(s != null ? s : '')
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;');
+}
+
+/** @param {unknown} v */
+function plannerStudentFieldIsEmpty_(v) {
+  return !String(v != null ? v : '').trim();
+}
+
+/**
+ * @param {Record<string, unknown>|null|undefined} profile
+ * @returns {Record<string, string>}
+ */
+function plannerNormalizeStudentProfileFromApi_(profile) {
+  const o = profile && typeof profile === 'object' ? /** @type {Record<string, unknown>} */ (profile) : {};
+  /** @type {Record<string, string>} */
+  const out = { phone_display: '' };
+  PLANNER_STUDENT_PROFILE_KEYS_FOR_SAVE.forEach(function (k) {
+    out[k] = o[k] != null ? String(o[k]).trim() : '';
+  });
+  out.phone_display = o.phone_display != null ? String(o.phone_display).trim() : '';
+  return out;
+}
+
+/**
+ * @param {HTMLElement} root
+ * @returns {boolean}
+ */
+function plannerStudentProfileIsMemberView_(root) {
+  const st = root.__spPlanState;
+  if (!st || typeof st !== 'object') return false;
+  if (st.planGuestUnlockMock) return true;
+  return st.role === 'member';
+}
+
+/**
+ * @param {HTMLElement} root
+ * @returns {Record<string, string>}
+ */
+function plannerCollectStudentProfilePayloadForSave_(root) {
+  const tbody = root.querySelector('#sp-plan-student-tbody');
+  const initial = root.__spPlanStudentProfileInitial && typeof root.__spPlanStudentProfileInitial === 'object'
+    ? root.__spPlanStudentProfileInitial
+    : {};
+  /** @type {Record<string, string>} */
+  const out = {};
+  PLANNER_STUDENT_PROFILE_KEYS_FOR_SAVE.forEach(function (k) {
+    if (!tbody) {
+      out[k] = initial[k] != null ? String(initial[k]) : '';
+      return;
+    }
+    const inp = tbody.querySelector('[data-sp-plan-student-input="' + escAttr(k) + '"]');
+    if (!inp) {
+      out[k] = initial[k] != null ? String(initial[k]) : '';
+      return;
+    }
+    if ('value' in inp) {
+      out[k] = String(/** @type {HTMLInputElement | HTMLTextAreaElement} */ (inp).value).trim();
+    } else {
+      out[k] = initial[k] != null ? String(initial[k]) : '';
+    }
+  });
+  return out;
+}
+
+/**
+ * @param {HTMLElement} root
+ */
+async function plannerStudentProfileSaveClick_(root) {
+  const msgEl = root.querySelector('#sp-plan-student-save-msg');
+  const ctx = root.__spPlannerBootstrapCtx;
+  const st = root.__spPlanState;
+  if (!ctx || !st || !plannerStudentProfileIsMemberView_(root)) {
+    if (msgEl) {
+      msgEl.textContent = '저장할 수 없습니다.';
+      msgEl.removeAttribute('hidden');
+    }
+    return;
+  }
+  const payload = plannerCollectStudentProfilePayloadForSave_(root);
+  if (msgEl) {
+    msgEl.textContent = '저장 중…';
+    msgEl.removeAttribute('hidden');
+  }
+  const res = await plannerGasCall_({
+    action: 'plannerRegistryProfileSave',
+    phoneSegments: ctx.phoneSegments,
+    name: ctx.name || '',
+    memberCode: ctx.memberCode || '',
+    student_profile: payload
+  });
+  if (!res || !res.ok) {
+    const m = res && res.error && res.error.message != null ? String(res.error.message) : '저장에 실패했습니다.';
+    if (msgEl) msgEl.textContent = m;
+    return;
+  }
+  const ymDate = st.viewMonth instanceof Date && !isNaN(st.viewMonth.getTime()) ? st.viewMonth : new Date();
+  const boot = await plannerGasCall_({
+    action: 'plannerBootstrap',
+    phoneSegments: ctx.phoneSegments,
+    name: ctx.name || '',
+    memberCode: ctx.memberCode || '',
+    year_month: plannerYearMonthFromDate_(ymDate)
+  });
+  if (boot && boot.ok && boot.data) {
+    const d = /** @type {{ student_profile?: Record<string, unknown> }} */ (boot.data);
+    renderPlannerStudentProfile_(root, d.student_profile);
+    if (msgEl) {
+      msgEl.textContent = '저장했습니다.';
+      window.setTimeout(function () {
+        msgEl.setAttribute('hidden', 'hidden');
+      }, 2200);
+    }
+  } else if (msgEl) {
+    msgEl.textContent = '저장은 반영되었을 수 있습니다. 달력 월을 한 번 바꿔 새로고침해 보세요.';
+  }
+}
+
+function wirePlannerStudentProfileSaveOnce_(root) {
+  if (root.__spPlanStudentSaveWired) return;
+  root.__spPlanStudentSaveWired = true;
+  root.addEventListener('click', function (e) {
+    const t = e.target instanceof HTMLElement ? e.target : null;
+    if (!t) return;
+    const btn = t.id === 'sp-plan-student-save' ? t : t.closest ? t.closest('#sp-plan-student-save') : null;
+    if (!btn) return;
+    e.preventDefault();
+    void plannerStudentProfileSaveClick_(root);
+  });
+}
+
+/**
+ * `plannerPersonalTodosApply` — 현재 보는 달(`viewMonth`)의 todo 페이로드를 학생 월 시트에 덮어쓴다.
+ * @param {HTMLElement} root
+ */
+async function plannerPersonalTodosApplyClick_(root) {
+  const msgEl = root.querySelector('#sp-plan-todos-apply-msg');
+  const ctx = root.__spPlannerBootstrapCtx;
+  const st = root.__spPlanState;
+  const memberUi = st && (st.role === 'member' || st.planGuestUnlockMock);
+  if (!ctx || !st || !memberUi) {
+    if (msgEl) {
+      msgEl.textContent = '회원 확인 후에만 저장할 수 있습니다.';
+      msgEl.removeAttribute('hidden');
+    }
+    return;
+  }
+  plannerRebuildQuickPostPayload_(st);
+  const ymDate = st.viewMonth instanceof Date && !isNaN(st.viewMonth.getTime()) ? st.viewMonth : new Date();
+  const ym = plannerYearMonthFromDate_(ymDate);
+  const todos =
+    st.plannerQuickPostBody && Array.isArray(st.plannerQuickPostBody.todos) ? st.plannerQuickPostBody.todos : [];
+  if (msgEl) {
+    msgEl.textContent = '저장 중…';
+    msgEl.removeAttribute('hidden');
+  }
+  const res = await plannerGasCall_({
+    action: 'plannerPersonalTodosApply',
+    phoneSegments: ctx.phoneSegments,
+    name: ctx.name || '',
+    memberCode: ctx.memberCode || '',
+    year_month: ym,
+    todos: todos
+  });
+  if (!res || !res.ok) {
+    const m = res && res.error && res.error.message != null ? String(res.error.message) : '저장에 실패했습니다.';
+    if (msgEl) msgEl.textContent = m;
+    return;
+  }
+  const boot = await plannerGasCall_({
+    action: 'plannerBootstrap',
+    phoneSegments: ctx.phoneSegments,
+    name: ctx.name || '',
+    memberCode: ctx.memberCode || '',
+    year_month: ym
+  });
+  if (boot && boot.ok && boot.data) {
+    const d = /** @type {{ role?: string, common?: object[], personal?: object[] | null, student_profile?: Record<string, unknown>, curriculum?: unknown }} */ (
+      boot.data || {}
+    );
+    plannerMergeBootstrapMonthData_(root, {
+      role: d.role || 'guest',
+      common: d.common || [],
+      personal: d.personal != null ? d.personal : null,
+      student_profile: d.student_profile,
+      curriculum: d.curriculum
+    });
+  }
+  if (msgEl) {
+    msgEl.textContent = '저장했습니다.';
+    window.setTimeout(function () {
+      msgEl.setAttribute('hidden', 'hidden');
+    }, 2200);
+  }
+}
+
+function wirePlannerPersonalTodosApplyOnce_(root) {
+  if (root.__spPlanTodosApplyWired) return;
+  root.__spPlanTodosApplyWired = true;
+  root.addEventListener('click', function (e) {
+    const t = e.target instanceof HTMLElement ? e.target : null;
+    if (!t) return;
+    const btn = t.id === 'sp-plan-todos-apply' ? t : t.closest ? t.closest('#sp-plan-todos-apply') : null;
+    if (!btn) return;
+    e.preventDefault();
+    void plannerPersonalTodosApplyClick_(root);
+  });
+}
+
 /** @param {string} s */
 function esc(s) {
   return String(s != null ? s : '')
@@ -301,49 +843,6 @@ function esc(s) {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
-}
-
-/**
- * `plannerBootstrap.data.student_profile` 에 대응하는 **목업 객체** (필드명은 API 맞출 때 그대로 쓰면 됨).
- * @type {Record<string, string>}
- */
-const MOCK_PLANNER_STUDENT_PROFILE = {
-  display_name: '김솔패',
-  phone_display: '010-2345-6789',
-  track: '인문',
-  admission_type: '일반',
-  prev_university: '○○대학교',
-  prev_major_gpa: '국어국문학과 · 평점 3.82 / 4.5',
-  goal_university: '서울대학교',
-  goal_department: '경영학부',
-  study_status: '노배이스 처음시작'
-};
-
-/**
- * API가 일부 필드만 줄 때 목업과 병합.
- * @param {Record<string, unknown>|null|undefined} apiPartial
- * @returns {Record<string, string>}
- */
-function plannerMergeStudentProfile_(apiPartial) {
-  const o = apiPartial && typeof apiPartial === 'object' ? /** @type {Record<string, unknown>} */ (apiPartial) : {};
-  const m = MOCK_PLANNER_STUDENT_PROFILE;
-  /** @param {string} k */
-  function pick(k) {
-    const v = o[k];
-    if (v != null && String(v).trim()) return String(v);
-    return m[k] != null ? m[k] : '';
-  }
-  return {
-    display_name: pick('display_name'),
-    phone_display: pick('phone_display'),
-    track: pick('track'),
-    admission_type: pick('admission_type'),
-    prev_university: pick('prev_university'),
-    prev_major_gpa: pick('prev_major_gpa'),
-    goal_university: pick('goal_university'),
-    goal_department: pick('goal_department'),
-    study_status: pick('study_status')
-  };
 }
 
 /**
@@ -377,78 +876,120 @@ function plannerPrevMajorGpaParts_(raw) {
 }
 
 /**
- * 학생 정보 표 — **데이터 객체만** 받아 DOM 생성 (HTML에 문구 박지 않음).
+ * 학생 정보 표 — bootstrap `student_profile`. **비어 있는 칸만** 회원에게 입력 허용(이미 있는 값은 수정 UI 없음).
  * @param {HTMLElement} root
- * @param {Record<string, unknown>|null|undefined} profile API `student_profile` 또는 null(목업만)
+ * @param {Record<string, unknown>|null|undefined} profile
  */
 function renderPlannerStudentProfile_(root, profile) {
   const tbody = root.querySelector('#sp-plan-student-tbody');
   if (!tbody) return;
-  const p = plannerMergeStudentProfile_(profile);
-  const pm = plannerPrevMajorGpaParts_(p.prev_major_gpa);
-  tbody.innerHTML =
-    '<tr>' +
-    '<th scope="row">이름</th>' +
-    '<td data-sp-plan-student="display_name">' +
-    esc(p.display_name) +
-    '</td>' +
-    '<th scope="row">휴대전화</th>' +
-    '<td data-sp-plan-student="phone_display">' +
-    esc(p.phone_display) +
-    '</td>' +
-    '</tr>' +
-    '<tr>' +
-    '<th scope="row">계열</th>' +
-    '<td data-sp-plan-student="track">' +
-    esc(p.track) +
-    '</td>' +
-    '<th scope="row">편입 구분</th>' +
-    '<td data-sp-plan-student="admission_type">' +
-    esc(p.admission_type) +
-    '</td>' +
-    '</tr>' +
-    '<tr>' +
-    '<th scope="row">전적대</th>' +
-    '<td data-sp-plan-student="prev_university">' +
-    esc(p.prev_university) +
-    '</td>' +
-    '<th scope="row">학과</th>' +
-    '<td data-sp-plan-student="prev_major">' +
-    esc(pm.major) +
-    '</td>' +
-    '</tr>' +
-    '<tr>' +
-    '<th scope="row">평점</th>' +
-    '<td colspan="3" data-sp-plan-student="prev_major_gpa">' +
-    esc(pm.gpa) +
-    '</td>' +
-    '</tr>' +
-    '<tr>' +
-    '<th scope="row">목표대학</th>' +
-    '<td data-sp-plan-student="goal_university">' +
-    esc(p.goal_university) +
-    '</td>' +
-    '<th scope="row">목표 학과</th>' +
-    '<td data-sp-plan-student="goal_department">' +
-    esc(p.goal_department) +
-    '</td>' +
-    '</tr>' +
-    '<tr class="sp-plan-student__tr--study">' +
-    '<th scope="row">공부 현황</th>' +
-    '<td colspan="3" class="sp-plan-student__td--text" data-sp-plan-student="study_status">' +
-    esc(p.study_status) +
-    '</td>' +
-    '</tr>';
+  const memberView = plannerStudentProfileIsMemberView_(root);
+  const p = plannerNormalizeStudentProfileFromApi_(profile);
+  root.__spPlanStudentProfileInitial = {};
+  PLANNER_STUDENT_PROFILE_KEYS_FOR_SAVE.forEach(function (k) {
+    root.__spPlanStudentProfileInitial[k] = p[k];
+  });
+
+  function showVal(key) {
+    const v = p[key];
+    if (plannerStudentFieldIsEmpty_(v)) return '—';
+    return String(v);
+  }
+
+  function tdReadCell(key) {
+    return '<td data-sp-plan-student="' + escAttr(key) + '">' + esc(showVal(key)) + '</td>';
+  }
+
+  function tdInp(key) {
+    return (
+      '<td><input type="text" class="sp-plan-student__input" data-sp-plan-student-input="' +
+      escAttr(key) +
+      '" value="" maxlength="2000" autocomplete="off" spellcheck="true" /></td>'
+    );
+  }
+
+  function tdTxtArea(key) {
+    return (
+      '<td colspan="3" class="sp-plan-student__td--text"><textarea class="sp-plan-student__input sp-plan-student__textarea" rows="3" data-sp-plan-student-input="' +
+      escAttr(key) +
+      '" maxlength="3000" spellcheck="true"></textarea></td>'
+    );
+  }
+
+  /** @param {string} key */
+  const ed = function (key) {
+    return memberView && plannerStudentFieldIsEmpty_(p[key]);
+  };
+
+  let h = '';
+  h += '<tr>';
+  h += '<th scope="row">이름</th>';
+  h += ed('display_name') ? tdInp('display_name') : tdReadCell('display_name');
+  h += '<th scope="row">휴대전화</th>';
+  h += '<td data-sp-plan-student="phone_display">' + esc(showVal('phone_display')) + '</td>';
+  h += '</tr>';
+
+  h += '<tr>';
+  h += '<th scope="row">계열</th>';
+  h += ed('track') ? tdInp('track') : tdReadCell('track');
+  h += '<th scope="row">편입 구분</th>';
+  h += ed('admission_type') ? tdInp('admission_type') : tdReadCell('admission_type');
+  h += '</tr>';
+
+  h += '<tr>';
+  h += '<th scope="row">전적대</th>';
+  h += ed('prev_university') ? tdInp('prev_university') : tdReadCell('prev_university');
+  if (ed('prev_major_gpa')) {
+    h += '<th scope="row">학과·평점</th>';
+    h += tdInp('prev_major_gpa');
+  } else {
+    const pm = plannerPrevMajorGpaParts_(p.prev_major_gpa);
+    h += '<th scope="row">학과</th>';
+    h += '<td data-sp-plan-student="prev_major">' + esc(pm.major) + '</td>';
+  }
+  h += '</tr>';
+
+  if (!ed('prev_major_gpa')) {
+    const pmB = plannerPrevMajorGpaParts_(p.prev_major_gpa);
+    h += '<tr>';
+    h += '<th scope="row">평점</th>';
+    h += '<td colspan="3" data-sp-plan-student="prev_major_gpa">' + esc(pmB.gpa) + '</td>';
+    h += '</tr>';
+  }
+
+  h += '<tr>';
+  h += '<th scope="row">목표대학</th>';
+  h += ed('goal_university') ? tdInp('goal_university') : tdReadCell('goal_university');
+  h += '<th scope="row">목표 학과</th>';
+  h += ed('goal_department') ? tdInp('goal_department') : tdReadCell('goal_department');
+  h += '</tr>';
+
+  h += '<tr class="sp-plan-student__tr--study">';
+  h += '<th scope="row">공부 현황</th>';
+  if (ed('study_status')) {
+    h += tdTxtArea('study_status');
+  } else {
+    h += '<td colspan="3" class="sp-plan-student__td--text" data-sp-plan-student="study_status">' + esc(showVal('study_status')) + '</td>';
+  }
+  h += '</tr>';
+
+  tbody.innerHTML = h;
+
+  const saveRow = root.querySelector('#sp-plan-student-save-row');
+  if (saveRow) {
+    if (memberView) saveRow.removeAttribute('hidden');
+    else saveRow.setAttribute('hidden', 'hidden');
+  }
 }
 
 /**
- * 주간 커리큘럼 한 블록 — API에서 내려올 **JSON 형태** 목업 (`rows[]`).
- * @typedef {{ subject: string, subject_code?: string, textbook_goal: string, lesson_outline: string }} PlannerCurriculumRowPayload
+ * 주간 커리큘럼 한 블록 — API에서 내려올 **JSON 형태** (`rows[]`).
+ * @typedef {{ subject: string, subject_code?: string, textbook_goal: string, lesson_outline: string, link_url?: string }} PlannerCurriculumRowPayload
  * @typedef {{ source: string, week_index: number, focus_phase: string, rows: PlannerCurriculumRowPayload[] }} PlannerCurriculumWeekPayload
  */
 
 /**
- * 빠른 등록(quickPlanByDate)으로 해당 주의 과목별 강 범위를 만든다.
+ * `monthTodos` 해당 주 날짜에서 과목별 강 범위(제목 `· N강` 파싱).
  * @param {object} st
  * @param {string[]} weekDateKeys YYYY-MM-DD 7일
  * @returns {Record<string, { min: number, max: number }>}
@@ -456,21 +997,21 @@ function renderPlannerStudentProfile_(root, profile) {
 function plannerCurriculumWeekLessonRangeFromQuickPlan_(st, weekDateKeys) {
   /** @type {Record<string, { min: number, max: number }>} */
   const out = {};
-  if (!st || !st.quickPlanByDate) return out;
+  if (!st) return out;
   (weekDateKeys || []).forEach(function (key) {
-    const list = st.quickPlanByDate && st.quickPlanByDate[key] ? st.quickPlanByDate[key] : null;
-    if (!Array.isArray(list)) return;
-    list.forEach(function (t) {
-      if (!t || typeof t !== 'object') return;
-      const subj = String(t.subject != null ? t.subject : '').trim();
-      const L = Number(t.lesson);
-      if (!subj) return;
-      if (!isFinite(L) || L <= 0) return;
-      if (!out[subj]) out[subj] = { min: L, max: L };
-      else {
-        if (L < out[subj].min) out[subj].min = L;
-        if (L > out[subj].max) out[subj].max = L;
-      }
+    plannerMonthTodosForDay_(st, key).forEach(function (t) {
+      if (!t || plannerIsTraceGhostDisplay_(t)) return;
+      const subj = String(t.category != null ? t.category : '').trim();
+      if (!/^(grammar|logic|read|vocab)$/.test(subj)) return;
+      const lessons = plannerLessonsFromStudyTitle_(String(t.title != null ? t.title : ''));
+      lessons.forEach(function (L) {
+        if (!isFinite(L) || L <= 0) return;
+        if (!out[subj]) out[subj] = { min: L, max: L };
+        else {
+          if (L < out[subj].min) out[subj].min = L;
+          if (L > out[subj].max) out[subj].max = L;
+        }
+      });
     });
   });
   return out;
@@ -506,32 +1047,166 @@ function plannerCurriculumMockWeekPayload_(weekIndex, weekLessonRanges) {
         subject: '문법',
         subject_code: 'grammar',
         textbook_goal: '솔패스 문법 교재 · ' + phase,
-        lesson_outline: plannerCurriculumLessonOutlineFromRange_(ranges.grammar) || '—'
+        lesson_outline: plannerCurriculumLessonOutlineFromRange_(ranges.grammar) || '—',
+        link_url: ''
       },
       {
         subject: '논리',
         subject_code: 'logic',
         textbook_goal: '논리 추론 기초 교재 · ' + phase,
-        lesson_outline: plannerCurriculumLessonOutlineFromRange_(ranges.logic) || '—'
+        lesson_outline: plannerCurriculumLessonOutlineFromRange_(ranges.logic) || '—',
+        link_url: ''
       },
       {
         subject: '독해',
         subject_code: 'read',
         textbook_goal: '실전 지문 독해 · ' + phase,
-        lesson_outline: plannerCurriculumLessonOutlineFromRange_(ranges.read) || '—'
+        lesson_outline: plannerCurriculumLessonOutlineFromRange_(ranges.read) || '—',
+        link_url: ''
       },
       {
         subject: '어휘',
         subject_code: 'vocab',
         textbook_goal: '핵심 어휘 · ' + phase,
-        lesson_outline: plannerCurriculumLessonOutlineFromRange_(ranges.vocab) || '—'
+        lesson_outline: plannerCurriculumLessonOutlineFromRange_(ranges.vocab) || '—',
+        link_url: ''
       }
     ]
   };
 }
 
 /**
- * `PlannerCurriculumWeekPayload` → 표 HTML (내용은 전부 `esc` 처리).
+ * 강좌 행(`subject`·`course_name`) → 빠른등록 코드 `grammar`|`logic`|`read`|`vocab` (없으면 빈 문자열).
+ * @param {object} course
+ * @returns {string}
+ */
+function plannerSubjectCodeFromCatalogCourse_(course) {
+  const c = course && typeof course === 'object' ? course : {};
+  const subj = String(c.subject != null ? c.subject : '').trim().toLowerCase();
+  const cn = String(c.course_name != null ? c.course_name : '').trim().toLowerCase();
+  const blob = subj + ' ' + cn;
+  if (/\bgrammar\b|문법/.test(blob)) return 'grammar';
+  if (/\blogic\b|논리/.test(blob)) return 'logic';
+  if (/\bread\b|독해/.test(blob)) return 'read';
+  if (/\bvocab\b|어휘/.test(blob)) return 'vocab';
+  return '';
+}
+
+/**
+ * @param {object[]} courses
+ * @param {string} code
+ * @returns {object|null}
+ */
+function plannerFindCatalogCourseForSubjectCode_(courses, code) {
+  if (!Array.isArray(courses) || !code) return null;
+  for (let i = 0; i < courses.length; i++) {
+    const row = courses[i];
+    if (row && typeof row === 'object' && plannerSubjectCodeFromCatalogCourse_(row) === code) {
+      return row;
+    }
+  }
+  return null;
+}
+
+/**
+ * @param {object[]} lectures
+ * @param {unknown} courseId
+ * @param {{ min: number, max: number }|null|undefined} range
+ * @returns {string}
+ */
+function plannerLectureTitlesInRangeForCourse_(lectures, courseId, range) {
+  if (courseId === '' || courseId == null || !Array.isArray(lectures)) return '';
+  const idStr = String(courseId);
+  const lo =
+    range && isFinite(range.min) && isFinite(range.max) ? Math.min(range.min, range.max) : NaN;
+  const hi =
+    range && isFinite(range.min) && isFinite(range.max) ? Math.max(range.min, range.max) : NaN;
+  const list = lectures.filter(function (L) {
+    if (!L || String(L.course_id) !== idStr) return false;
+    const no = Number(L.lecture_no);
+    if (!isFinite(no)) return false;
+    if (isFinite(lo) && isFinite(hi)) return no >= lo && no <= hi;
+    return true;
+  });
+  list.sort(function (a, b) {
+    return (Number(a.lecture_no) || 0) - (Number(b.lecture_no) || 0);
+  });
+  return list
+    .map(function (L) {
+      return String(L.lecture_name != null ? L.lecture_name : '').trim();
+    })
+    .filter(Boolean)
+    .join(' · ');
+}
+
+/**
+ * 마스터 커리큘럼 시트 + 주간 빠른등록 범위 → 주간 표 payload (`source: catalog`).
+ * @param {number} weekIndex
+ * @param {Record<string, { min: number, max: number }>} weekLessonRanges
+ * @param {object[]} courses
+ * @param {object[]} lectures
+ * @returns {PlannerCurriculumWeekPayload}
+ */
+function plannerCurriculumWeekPayloadFromCatalog_(weekIndex, weekLessonRanges, courses, lectures) {
+  const phases = ['기본 개념·예문', '오답·심화', '실전 모의', '누적 복습', '약점 보완', '월말 정리'];
+  const phase = phases[weekIndex % phases.length];
+  const ranges = weekLessonRanges && typeof weekLessonRanges === 'object' ? weekLessonRanges : {};
+  const subjLabel = { grammar: '문법', logic: '논리', read: '독해', vocab: '어휘' };
+  const order = ['grammar', 'logic', 'read', 'vocab'];
+  /** @type {PlannerCurriculumRowPayload[]} */
+  const rows = [];
+  order.forEach(function (code) {
+    const course = plannerFindCatalogCourseForSubjectCode_(courses, code);
+    const label = subjLabel[code] != null ? subjLabel[code] : code;
+    const r = /** @type {{ min: number, max: number }|undefined} */ (ranges[code]);
+    let textbook_goal = '';
+    let link_url = '';
+    let courseIdForLec = '';
+    if (course) {
+      const cname = String(course.course_name != null ? course.course_name : '').trim();
+      const inst = String(course.instructor != null ? course.instructor : '').trim();
+      const parts = [];
+      if (inst.length) parts.push(inst);
+      if (cname.length) parts.push(cname);
+      textbook_goal = parts.join(' · ') || String(course.subject != null ? course.subject : '').trim() || '—';
+      link_url = String(course.link_url != null ? course.link_url : '').trim();
+      courseIdForLec = course.course_id;
+    } else {
+      textbook_goal = phase + ' · (마스터 강좌 시트에 과목을 문법/논리/독해/어휘로 맞춰 주세요)';
+      link_url = '';
+    }
+    let outline = plannerCurriculumLessonOutlineFromRange_(r) || '';
+    const titles = plannerLectureTitlesInRangeForCourse_(lectures, courseIdForLec, r);
+    if (titles.length) outline = outline.length ? outline + ' · ' + titles : titles;
+    if (!outline.length) outline = '—';
+    rows.push({
+      subject: label,
+      subject_code: code,
+      textbook_goal: textbook_goal,
+      lesson_outline: outline,
+      link_url: link_url
+    });
+  });
+  return { source: 'catalog', week_index: weekIndex, focus_phase: phase, rows: rows };
+}
+
+/**
+ * bootstrap `curriculum` 이 있으면 카탈로그 표시, 없으면 목업.
+ * @param {number} weekIndex
+ * @param {Record<string, { min: number, max: number }>} weekLessonRanges
+ * @param {{ courses?: object[], lectures?: object[] }|null|undefined} curriculum
+ * @returns {PlannerCurriculumWeekPayload}
+ */
+function plannerCurriculumWeekPayloadForRender_(weekIndex, weekLessonRanges, curriculum) {
+  const pack = plannerNormalizeCurriculumFromBootstrap_(curriculum);
+  if (pack.courses.length || pack.lectures.length) {
+    return plannerCurriculumWeekPayloadFromCatalog_(weekIndex, weekLessonRanges, pack.courses, pack.lectures);
+  }
+  return plannerCurriculumMockWeekPayload_(weekIndex, weekLessonRanges);
+}
+
+/**
+ * `PlannerCurriculumWeekPayload` → 표 HTML (내용은 전부 `esc` / 링크는 `escAttr`).
  * @param {PlannerCurriculumWeekPayload} payload
  * @returns {string}
  */
@@ -542,6 +1217,12 @@ function plannerCurriculumWeekTableHtml_(payload) {
     const subj = String(r.subject != null ? r.subject : '').trim();
     const goal = String(r.textbook_goal != null ? r.textbook_goal : '').trim();
     const outl = String(r.lesson_outline != null ? r.lesson_outline : '').trim();
+    const href = String(r.link_url != null ? r.link_url : '').trim();
+    const linkInner = href.length
+      ? '<a class="sp-plan-cur__a" href="' +
+        escAttr(href) +
+        '" target="_blank" rel="noopener noreferrer">열기</a>'
+      : '<span class="sp-plan-cur__noLink">—</span>';
     body +=
       '<tr><th scope="row">' +
       esc(subj) +
@@ -549,7 +1230,9 @@ function plannerCurriculumWeekTableHtml_(payload) {
       esc(goal) +
       '</td><td class="sp-plan-cur__outline">' +
       esc(outl) +
-      '</td><td class="sp-plan-cur__link"><a class="sp-plan-cur__a" href="" aria-disabled="true" tabindex="-1"></a></td></tr>';
+      '</td><td class="sp-plan-cur__link">' +
+      linkInner +
+      '</td></tr>';
   });
   return (
     '<div class="sp-plan-cur" data-sp-plan-cur-source="' +
@@ -595,11 +1278,15 @@ const PLAN_APP_MAIN_AND_CLOSE = `<main class="app-main sp-plan-app-main app-shel
     <div class="panel panel--hero sp-plan-body">
       <section class="sp-plan-student" id="sp-plan-student-info" aria-labelledby="sp-plan-student-info-title">
         <h2 class="sp-plan-student__title" id="sp-plan-student-info-title">학생 정보</h2>
-        <p class="sp-plan-student__hint">추후 학생 DB와 연동 예정 · 현재 표시는 시연용 목업입니다.</p>
+        <p class="sp-plan-student__hint">마스터 <code class="sp-plan-student__code">planner_registry</code>와 동기화됩니다. 빈 칸만 입력·저장할 수 있으며, 이미 적힌 값은 이 화면에서 바꿀 수 없습니다.</p>
         <div class="sp-plan-student__wrap">
           <table class="sp-plan-student__tbl">
             <tbody id="sp-plan-student-tbody"></tbody>
           </table>
+          <div class="sp-plan-student__saveRow" id="sp-plan-student-save-row" hidden>
+            <button type="button" class="btn btn--primary" id="sp-plan-student-save">프로필 저장</button>
+            <span class="sp-plan-student__saveMsg" id="sp-plan-student-save-msg" hidden></span>
+          </div>
         </div>
       </section>
       <div class="sp-plan-monthly-title" id="sp-plan-monthly-label">월간 플랜</div>
@@ -800,7 +1487,15 @@ const PLAN_FIXED_MEAL_TODO_ID = '__sp_routine_meal';
 const PLAN_CATEGORY_FIXED = 'fixed';
 
 /**
- * 취침·식사·고정일정(`category: fixed`) — 월간 합산·배지·과목별 공부 시간 분에 넣지 않음.
+ * @param {object|null|undefined} row
+ * @returns {boolean} `trace_dates`만으로 그날에 보이는 회색 흔적(본행 아님)
+ */
+function plannerIsTraceGhostDisplay_(row) {
+  return Boolean(row && typeof row === 'object' && row._spTraceGhost === true);
+}
+
+/**
+ * 취침·식사·고정일정 — 월간 합산·배지·과목별 공부 시간에 넣지 않음.
  * @param {string} taskId
  * @param {string} [category]
  * @returns {boolean}
@@ -821,10 +1516,11 @@ function plannerIsRoutineExcludedFromStudyTotals_(taskId) {
 
 /**
  * @param {string} dateYmd
- * @returns {{ task_id: string, title: string, description: string, status: string, priority: string, due_date: string, start_date: string, category: string, sort_key: number, completed_at: string, created_at: string, updated_at: string }[]}
+ * @returns {{ task_id: string, title: string, date: string, category: string, lecture_id: string, timeline_slots: string, sort_key: number, mark: string, trace_dates: string, created_date: string, updated_date: string }[]}
  */
 function plannerFixedRoutineTodoRows_(dateYmd) {
   const y = String(dateYmd || '').trim();
+  const today = plannerTodayYmdSeoul_();
   /**
    * @param {string} taskId
    * @param {string} title
@@ -834,16 +1530,15 @@ function plannerFixedRoutineTodoRows_(dateYmd) {
     return {
       task_id: taskId,
       title: title,
-      description: '',
-      status: '',
-      priority: '',
-      due_date: y,
-      start_date: y,
+      date: y,
       category: 'misc',
+      lecture_id: '',
+      timeline_slots: '[]',
       sort_key: sortKey,
-      completed_at: '',
-      created_at: '',
-      updated_at: ''
+      mark: 'none',
+      trace_dates: '[]',
+      created_date: today,
+      updated_date: today
     };
   }
   return [
@@ -854,7 +1549,7 @@ function plannerFixedRoutineTodoRows_(dateYmd) {
 
 /**
  * @param {string} dateYmd
- * @param {{ task_id: string, title: string, description: string, status: string, priority: string, due_date: string, start_date: string, category: string, sort_key: number, completed_at: string, created_at: string, updated_at: string }[]} list
+ * @param {{ task_id: string, title: string, date: string, category: string, lecture_id: string, timeline_slots: string, sort_key: number, mark: string, trace_dates: string, created_date: string, updated_date: string }[]} list
  */
 function plannerWithFixedRoutineTodosFirst_(dateYmd, list) {
   const idSeen = {};
@@ -892,6 +1587,9 @@ function plannerCategoryLabelKo_(cat) {
  */
 function plannerTodoSideMergeKey_(r) {
   if (!r) return '';
+  if (plannerIsTraceGhostDisplay_(r)) {
+    return '\0trace\0' + String(r.task_id != null ? r.task_id : '') + '\0' + String(r._spTraceOnDate || '');
+  }
   const id = String(r.task_id != null ? r.task_id : '').trim();
   if (plannerIsRoutineExcludedFromStudyTotals_(id)) return '\0routine\0' + id;
   if (String(r.category != null ? r.category : '').trim() === PLAN_CATEGORY_FIXED) return '\0fixed\0' + id;
@@ -904,6 +1602,7 @@ function plannerTodoSideMergeKey_(r) {
  */
 function plannerTodoSideSubjectLabel_(r) {
   if (!r) return '';
+  if (plannerIsTraceGhostDisplay_(r)) return '밀림';
   const id = String(r.task_id != null ? r.task_id : '').trim();
   if (id === PLAN_FIXED_SLEEP_TODO_ID) return '취침';
   if (id === PLAN_FIXED_MEAL_TODO_ID) return '식사';
@@ -919,6 +1618,106 @@ function plannerYmdFromParts_(y, m0, day) {
   return String(y) + '-' + plannerPad2_(m0 + 1) + '-' + plannerPad2_(day);
 }
 
+/** @returns {string} 서울 기준 오늘 `YYYY-MM-DD` */
+function plannerTodayYmdSeoul_() {
+  try {
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Seoul',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    }).format(new Date());
+  } catch (_e) {
+    const d = new Date();
+    return plannerYmdFromParts_(d.getFullYear(), d.getMonth(), d.getDate());
+  }
+}
+
+/**
+ * @param {unknown} v `YYYY-MM-DD` 또는 ISO 시각 문자열
+ * @returns {string}
+ */
+function plannerYmdFromDateField_(v) {
+  const s = String(v != null ? v : '').trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  if (s.length >= 10 && /^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+  return '';
+}
+
+/**
+ * @param {unknown} raw
+ * @returns {string[]}
+ */
+function plannerParseTraceDatesJson_(raw) {
+  const s = String(raw != null ? raw : '').trim();
+  if (!s.length) return [];
+  try {
+    const j = JSON.parse(s);
+    if (!Array.isArray(j)) return [];
+    const out = [];
+    j.forEach(function (d) {
+      const y = plannerYmdFromDateField_(d);
+      if (y && out.indexOf(y) < 0) out.push(y);
+    });
+    out.sort();
+    return out;
+  } catch (_e) {
+    return [];
+  }
+}
+
+/**
+ * @param {string[]} list
+ * @returns {string}
+ */
+function plannerTraceDatesToJson_(list) {
+  const arr = Array.isArray(list) ? list.slice() : [];
+  arr.sort();
+  return JSON.stringify(arr);
+}
+
+/**
+ * @param {object} row
+ * @param {string} ymd
+ * @returns {boolean}
+ */
+function plannerTraceDatesIncludes_(row, ymd) {
+  const d = String(ymd || '').trim();
+  if (!d) return false;
+  return plannerParseTraceDatesJson_(row && row.trace_dates).indexOf(d) >= 0;
+}
+
+/**
+ * @param {string} fromDateYmd
+ * @param {string} toDateYmd
+ * @returns {boolean} `to`가 `from`보다 뒤(밀림)이면 true — `trace_dates`에만 기록
+ */
+function plannerIsPostponeMove_(fromDateYmd, toDateYmd) {
+  const a = String(fromDateYmd || '').trim();
+  const b = String(toDateYmd || '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(a) || !/^\d{4}-\d{2}-\d{2}$/.test(b)) return false;
+  return b > a;
+}
+
+/**
+ * 같은 `task_id` 행: `date`만 변경. 밀림이면 떠난 날을 `trace_dates`에 append (행 추가 없음).
+ * @param {object} row
+ * @param {string} toDateYmd
+ */
+function plannerApplyTodoDateMove_(row, toDateYmd) {
+  if (!row || typeof row !== 'object') return;
+  const fromD = String(row.date != null ? row.date : '').trim();
+  const toD = String(toDateYmd || '').trim();
+  if (!fromD || !toD || fromD === toD) return;
+  if (plannerIsPostponeMove_(fromD, toD)) {
+    const list = plannerParseTraceDatesJson_(row.trace_dates);
+    if (list.indexOf(fromD) < 0) list.push(fromD);
+    row.trace_dates = plannerTraceDatesToJson_(list);
+  }
+  row.date = toD;
+  row.updated_date = plannerTodayYmdSeoul_();
+}
+
 function plannerMonthYmdPrefix_(viewMonth) {
   return String(viewMonth.getFullYear()) + '-' + plannerPad2_(viewMonth.getMonth() + 1) + '-';
 }
@@ -929,9 +1728,9 @@ function plannerMonthYmdPrefix_(viewMonth) {
  */
 function plannerMonthHasQuickPlan_(st, viewMonth) {
   const pfx = plannerMonthYmdPrefix_(viewMonth);
-  if (!st.quickPlanByDate) return false;
-  return Object.keys(st.quickPlanByDate).some(function (k) {
-    return k.indexOf(pfx) === 0 && st.quickPlanByDate[k] && st.quickPlanByDate[k].length > 0;
+  plannerEnsureMonthTodos_(st);
+  return st.monthTodos.some(function (r) {
+    return r && !r._fromServer && String(r.date || '').trim().indexOf(pfx) === 0;
   });
 }
 
@@ -940,13 +1739,7 @@ function plannerMonthHasQuickPlan_(st, viewMonth) {
  * @param {Date} viewMonth
  */
 function plannerClearQuickPlanForMonth_(st, viewMonth) {
-  if (!st.quickPlanByDate) st.quickPlanByDate = {};
-  const pfx = plannerMonthYmdPrefix_(viewMonth);
-  Object.keys(st.quickPlanByDate).forEach(function (k) {
-    if (k.indexOf(pfx) === 0) delete st.quickPlanByDate[k];
-  });
-  plannerClearQuickTodoOrderForMonth_(st, viewMonth);
-  plannerRebuildQuickPostPayload_(st);
+  plannerClearLocalTodosForMonth_(st, viewMonth);
 }
 
 /**
@@ -963,86 +1756,725 @@ function plannerClearQuickTodoOrderForMonth_(st, viewMonth) {
 }
 
 /**
- * `quickPlanByDate` + `plannerManualTodos` → 나중에 GAS POST에 넣을 **본문 형태**만 프론트에 유지 (`연동은 나중`).
- * 필드명은 `DB_PLANNER_PERSONAL_TODO_HEADERS` 와 맞춤 (`gas/DB/dbSchema.js`).
- * @param {object} st
+ * API/시트 `timeline_slots` 한 요소 → `시_칸` 키 (`8_3`). `0830` 형태는 시·분에서 10분 칸으로 변환.
+ * @param {unknown} slot
+ * @returns {string}
  */
-function plannerRebuildQuickPostPayload_(st) {
-  if (!st.plannerQuickPostBody || typeof st.plannerQuickPostBody !== 'object') {
-    st.plannerQuickPostBody = { action: 'plannerPersonalTodosApply', todos: [] };
+function plannerNormalizeTimelineSlotKeyFromApi_(slot) {
+  const s = String(slot != null ? slot : '').trim();
+  if (!s) return '';
+  if (/^\d+_[0-5]$/.test(s)) return s;
+  if (/^\d{4}$/.test(s)) {
+    const hour = parseInt(s.slice(0, 2), 10);
+    const min = parseInt(s.slice(2, 4), 10);
+    if (!isFinite(hour) || !isFinite(min)) return '';
+    const sub = Math.floor(min / 10);
+    if (sub < 0 || sub > 5) return '';
+    return plannerTimelineSlotKey_(hour, sub);
   }
-  st.plannerQuickPostBody.action = 'plannerPersonalTodosApply';
-  const subjLabel = { grammar: '문법', logic: '논리', read: '독해', vocab: '어휘' };
-  /** @type {{ task_id: string, title: string, description: string, status: string, priority: string, due_date: string, start_date: string, category: string, sort_key: number, completed_at: string, created_at: string, updated_at: string }[]} */
-  const todos = [];
-  const keys = Object.keys(st.quickPlanByDate || {}).sort();
-  keys.forEach(function (ymd) {
-    const arr = st.quickPlanByDate[ymd];
-    if (!Array.isArray(arr)) return;
-    let sk = 0;
-    arr.forEach(function (item) {
-      if (!item || typeof item !== 'object') return;
-      const subject = String(item.subject != null ? item.subject : '').trim();
-      const lesson = Number(item.lesson);
-      if (!subject || !isFinite(lesson) || lesson <= 0) return;
-      const label = subjLabel[subject] != null ? subjLabel[subject] : subject;
-      const task_id = 'qk_' + ymd + '_' + subject + '_' + lesson;
-      todos.push({
-        task_id: task_id,
-        title: label + ' · ' + lesson + '강',
-        description: '',
-        status: 'todo',
-        priority: 'normal',
-        due_date: ymd,
-        start_date: ymd,
-        category: subject,
-        sort_key: sk++,
-        completed_at: '',
-        created_at: '',
-        updated_at: ''
-      });
-    });
-  });
-  /** @type {Record<string, number>} */
-  const maxSkByDue = {};
-  todos.forEach(function (t) {
-    const d = String((t && t.due_date) || '').trim();
-    if (!d) return;
-    const sk = Number(t.sort_key) || 0;
-    if (maxSkByDue[d] == null || sk > maxSkByDue[d]) maxSkByDue[d] = sk;
-  });
-  const manual = Array.isArray(st.plannerManualTodos) ? st.plannerManualTodos : [];
-  manual.forEach(function (m) {
-    if (!m || typeof m !== 'object') return;
-    const d = String(m.due_date != null ? m.due_date : '').trim();
-    if (!d) return;
-    const next = (maxSkByDue[d] != null ? maxSkByDue[d] : -1) + 1;
-    maxSkByDue[d] = next;
-    m.sort_key = next;
-    todos.push(m);
-  });
-  st.plannerQuickPostBody.todos = todos;
-  st.plannerQuickPostBody.dayTimelineTodoByDate = st.dayTimelineTodoByDate || {};
-  st.plannerQuickPostBody.dayFixedBlockSlotsByDate = st.dayFixedBlockSlotsByDate || {};
-  plannerSyncPayloadSortKeysFromDayOrder_(st);
+  return '';
 }
 
 /**
- * 일반 등록 폼 → `plannerManualTodos` 에 append 후 페이로드 재생성.
+ * bootstrap `personal` 한 줄 → 페이로드용( `task_id` 문자열 ).
+ * @param {object} row
+ * @returns {{ task_id: string, title: string, date: string, category: string, lecture_id: string, timeline_slots: string, sort_key: number, mark: string, trace_dates: string, created_date: string, updated_date: string }}
+ */
+function plannerNormalizeServerTodoRowForPayload_(row) {
+  const r = row && typeof row === 'object' ? row : {};
+  const tidRaw = r.task_id;
+  const task_id = tidRaw != null && String(tidRaw).trim() !== '' ? String(tidRaw).trim() : '';
+  const ts0 = String(r.timeline_slots != null ? r.timeline_slots : '').trim();
+  const dateStr = String(r.date != null ? r.date : '').trim();
+  const today = plannerTodayYmdSeoul_();
+  let created_date = plannerYmdFromDateField_(r.created_date);
+  if (!created_date) created_date = plannerYmdFromDateField_(r.created_at);
+  if (!created_date) created_date = today;
+  let updated_date = plannerYmdFromDateField_(r.updated_date);
+  if (!updated_date) updated_date = plannerYmdFromDateField_(r.updated_at);
+  if (!updated_date) updated_date = today;
+  const timeline_slots = ts0.length ? ts0 : '[]';
+  const mark = String(r.mark != null ? r.mark : 'none').trim() || 'none';
+  const trace_dates = plannerTraceDatesToJson_(plannerParseTraceDatesJson_(r.trace_dates));
+  return {
+    task_id: task_id,
+    title: String(r.title != null ? r.title : '').trim() || '(제목 없음)',
+    date: dateStr,
+    category: String(r.category != null ? r.category : 'misc').trim() || 'misc',
+    lecture_id: String(r.lecture_id != null ? r.lecture_id : ''),
+    timeline_slots: timeline_slots,
+    sort_key: Number(r.sort_key) || 0,
+    mark: mark,
+    trace_dates: trace_dates,
+    created_date: created_date,
+    updated_date: updated_date
+  };
+}
+
+/**
+ * @param {object} st
+ */
+function plannerEnsureMonthTodos_(st) {
+  if (!st || typeof st !== 'object') return;
+  if (!Array.isArray(st.monthTodos)) st.monthTodos = [];
+}
+
+/**
+ * @param {object} row
+ * @returns {object}
+ */
+function plannerTodoRowFromServer_(row) {
+  const n = plannerNormalizeServerTodoRowForPayload_(row);
+  n._fromServer = true;
+  return n;
+}
+
+/**
+ * @param {object} row
+ * @returns {object}
+ */
+function plannerTodoRowLocal_(row) {
+  const n = plannerNormalizeServerTodoRowForPayload_(row);
+  n._fromServer = false;
+  return n;
+}
+
+/**
+ * POST 본문용 — `_fromServer` 제거.
+ * @param {object} row
+ * @returns {object}
+ */
+function plannerTodoRowForPost_(row) {
+  return plannerNormalizeServerTodoRowForPayload_(row);
+}
+
+/**
+ * @param {object} st
+ * @param {string} ymd
+ * @returns {number}
+ */
+function plannerNextSortKeyForDate_(st, ymd) {
+  plannerEnsureMonthTodos_(st);
+  let max = -1;
+  st.monthTodos.forEach(function (r) {
+    if (!r || String(r.date || '').trim() !== ymd) return;
+    const sk = Number(r.sort_key) || 0;
+    if (sk > max) max = sk;
+  });
+  return max + 1;
+}
+
+/**
+ * @param {object} st
+ * @param {object} row
+ */
+function plannerPushMonthTodo_(st, row, skipRebuild) {
+  plannerEnsureMonthTodos_(st);
+  const d = String(row.date != null ? row.date : '').trim();
+  if (!d) return;
+  if (row.sort_key == null || row.sort_key === '' || !isFinite(Number(row.sort_key))) {
+    row.sort_key = plannerNextSortKeyForDate_(st, d);
+  }
+  st.monthTodos.push(row);
+  if (!skipRebuild) plannerRebuildQuickPostPayload_(st);
+}
+
+/**
+ * @param {object} st
+ * @param {Date} viewMonth
+ */
+function plannerClearLocalTodosForMonth_(st, viewMonth) {
+  plannerEnsureMonthTodos_(st);
+  const pfx = plannerMonthYmdPrefix_(viewMonth);
+  st.monthTodos = st.monthTodos.filter(function (r) {
+    if (!r || typeof r !== 'object') return false;
+    if (r._fromServer) return true;
+    const d = String(r.date != null ? r.date : '').trim();
+    return d.indexOf(pfx) !== 0;
+  });
+  plannerClearQuickTodoOrderForMonth_(st, viewMonth);
+  if (st.dayFixedBlockSlotsByDate) {
+    Object.keys(st.dayFixedBlockSlotsByDate).forEach(function (k) {
+      if (k.indexOf(pfx) === 0) {
+        try {
+          delete st.dayFixedBlockSlotsByDate[k];
+        } catch (_e) {
+          st.dayFixedBlockSlotsByDate[k] = {};
+        }
+      }
+    });
+  }
+  plannerRebuildQuickPostPayload_(st);
+}
+
+/**
+ * @param {object} st
+ * @param {string} ymd
+ * @returns {Record<string, string>}
+ */
+function plannerBuildTimelineSlotMapForDayFromMonthTodos_(st, ymd) {
+  const rows = plannerMonthTodosForDay_(st, ymd);
+  /** @type {Record<string, string>} */
+  const map = {};
+  rows.forEach(function (row) {
+    if (!row || plannerIsTraceGhostDisplay_(row)) return;
+    const tid = String(row.task_id != null ? row.task_id : '').trim();
+    if (!tid) return;
+    let arr = [];
+    try {
+      const j = JSON.parse(String(row.timeline_slots != null ? row.timeline_slots : '[]'));
+      if (Array.isArray(j)) arr = j;
+    } catch (_e) {}
+    arr.forEach(function (slot) {
+      const sk = plannerNormalizeTimelineSlotKeyFromApi_(slot);
+      if (sk) map[sk] = tid;
+    });
+  });
+  return map;
+}
+
+/**
+ * 일일 모달 타임라인 맵 → 해당 날 `monthTodos` 행의 `timeline_slots`.
+ * @param {object} st
+ * @param {string} ymd
+ */
+function plannerPersistTimelineSlotMapToMonthTodos_(st, ymd) {
+  const map = st.dayTimelineTodoByDate && st.dayTimelineTodoByDate[ymd];
+  if (!map || typeof map !== 'object') return;
+  /** @type {Record<string, string[]>} */
+  const byTask = {};
+  Object.keys(map).forEach(function (sk) {
+    const tid = String(map[sk] != null ? map[sk] : '').trim();
+    if (!tid) return;
+    if (!byTask[tid]) byTask[tid] = [];
+    byTask[tid].push(sk);
+  });
+  plannerEnsureMonthTodos_(st);
+  const today = plannerTodayYmdSeoul_();
+  st.monthTodos.forEach(function (row) {
+    if (!row || String(row.date || '').trim() !== ymd) return;
+    if (plannerIsTraceGhostDisplay_(row)) return;
+    const tid = String(row.task_id != null ? row.task_id : '').trim();
+    const keys = byTask[tid] ? byTask[tid].slice().sort() : [];
+    row.timeline_slots = JSON.stringify(keys);
+    if (!row._fromServer) row.updated_date = today;
+  });
+  plannerRebuildQuickPostPayload_(st);
+}
+
+/**
+ * @param {object} st
+ * @param {string} dateYmd
+ * @returns {object[]}
+ */
+function plannerMonthTodosForDay_(st, dateYmd) {
+  plannerEnsureMonthTodos_(st);
+  const day = String(dateYmd || '').trim();
+  /** @type {object[]} */
+  const rows = [];
+  st.monthTodos.forEach(function (t) {
+    if (!t || typeof t !== 'object') return;
+    if (String(t.date || '') === day) {
+      rows.push(t);
+      return;
+    }
+    if (plannerTraceDatesIncludes_(t, day)) {
+      rows.push(Object.assign({}, t, { _spTraceGhost: true, _spTraceOnDate: day }));
+    }
+  });
+  rows.sort(function (a, b) {
+    const ga = plannerIsTraceGhostDisplay_(a) ? 1 : 0;
+    const gb = plannerIsTraceGhostDisplay_(b) ? 1 : 0;
+    if (ga !== gb) return ga - gb;
+    return (Number(a.sort_key) || 0) - (Number(b.sort_key) || 0);
+  });
+  return rows;
+}
+
+/**
+ * @param {object} st
+ * @param {string} taskId
+ * @returns {object|null}
+ */
+function plannerFindMonthTodoByTaskId_(st, taskId) {
+  plannerEnsureMonthTodos_(st);
+  const id = String(taskId || '').trim();
+  if (!id) return null;
+  for (let i = 0; i < st.monthTodos.length; i++) {
+    const r = st.monthTodos[i];
+    if (r && String(r.task_id) === id) return r;
+  }
+  return null;
+}
+
+/**
+ * n빵: M일에 N강을 균등 분배.
+ * @param {number} dayCount
+ * @param {number} totalLessons
+ * @returns {number[]}
+ */
+function plannerNbungCounts_(dayCount, totalLessons) {
+  const M = Math.max(0, Math.floor(Number(dayCount) || 0));
+  const N = Math.max(0, Math.floor(Number(totalLessons) || 0));
+  if (M <= 0 || N <= 0) return [];
+  const base = Math.floor(N / M);
+  const rem = N % M;
+  /** @type {number[]} */
+  const out = [];
+  let i;
+  for (i = 0; i < M; i++) {
+    out.push(base + (i < rem ? 1 : 0));
+  }
+  return out;
+}
+
+/**
+ * 서버에서 읽은 `personal` 이 월 todo 스키마인지(`task_id` 키 유무).
+ * @param {object|null|undefined} row
+ * @returns {boolean}
+ */
+function plannerBootstrapPersonalIsFullSchema_(row) {
+  return Boolean(row && typeof row === 'object' && Object.prototype.hasOwnProperty.call(row, 'task_id'));
+}
+
+/**
+ * 해당 날짜에 스프레드시트에서 다시 채울 타임라인·○△×·메모(월 bootstrap 시점).
+ * @param {object} st
+ * @param {object[]} rows `plannerNormalizeServerTodoRowForPayload_` 결과
+ */
+function plannerHydrateDayMapsFromServerTodos_(st, rows) {
+  if (!st || typeof st !== 'object' || !Array.isArray(rows)) return;
+  if (!st.dayTimelineTodoByDate) st.dayTimelineTodoByDate = {};
+  if (!st.dayTodoCompletionByDate) st.dayTodoCompletionByDate = {};
+  if (!st.dayMemoByDate) st.dayMemoByDate = {};
+  /** @type {Record<string, boolean>} */
+  const touched = {};
+  rows.forEach(function (r) {
+    const y = String(r.date != null ? r.date : '').trim();
+    if (y) touched[y] = true;
+  });
+  Object.keys(touched).forEach(function (ymd) {
+    st.dayTimelineTodoByDate[ymd] = {};
+    st.dayTodoCompletionByDate[ymd] = {};
+    try {
+      delete st.dayMemoByDate[ymd];
+    } catch (_e) {
+      st.dayMemoByDate[ymd] = '';
+    }
+  });
+  /** @type {Record<string, string[]>} */
+  const memoLinesByDate = {};
+  rows.forEach(function (row) {
+    const ymd = String(row.date != null ? row.date : '').trim();
+    if (!ymd) return;
+    const tid = String(row.task_id != null ? row.task_id : '').trim();
+    const cat = String(row.category != null ? row.category : '').trim();
+    if (cat === 'memo') {
+      const text = String(row.title != null ? row.title : '').trim();
+      if (text) {
+        if (!memoLinesByDate[ymd]) memoLinesByDate[ymd] = [];
+        memoLinesByDate[ymd].push(text);
+      }
+      return;
+    }
+    if (tid) {
+      const mk = String(row.mark != null ? row.mark : '').trim();
+      if (mk === 'circle' || mk === 'triangle' || mk === 'x') {
+        plannerTodoCompletionSet_(st, ymd, tid, mk);
+      }
+    }
+    const slotsRaw = row.timeline_slots != null ? String(row.timeline_slots) : '';
+    let arr = [];
+    try {
+      const j = JSON.parse(slotsRaw);
+      if (Array.isArray(j)) arr = j;
+    } catch (_e) {}
+    if (!st.dayTimelineTodoByDate[ymd]) st.dayTimelineTodoByDate[ymd] = {};
+    if (!tid) return;
+    arr.forEach(function (slot) {
+      const sk = plannerNormalizeTimelineSlotKeyFromApi_(slot);
+      if (sk) st.dayTimelineTodoByDate[ymd][sk] = tid;
+    });
+  });
+  Object.keys(memoLinesByDate).forEach(function (ymd) {
+    st.dayMemoByDate[ymd] = memoLinesByDate[ymd].join('\n');
+  });
+}
+
+/**
+ * `renderCalendar_` 직후: 회원 bootstrap `personal` → `monthTodos`·POST 페이로드.
+ * @param {object} st
+ * @param {object[]|null} personal
+ * @param {'member'|'guest'} role
+ */
+function plannerApplyBootstrapPersonal_(st, personal, role) {
+  if (!st || typeof st !== 'object') return;
+  plannerEnsureMonthTodos_(st);
+  if (role !== 'member') {
+    st.monthTodos = [];
+    plannerRebuildQuickPostPayload_(st);
+    return;
+  }
+  const list = personal != null && Array.isArray(personal) ? personal : [];
+  if (!list.length) {
+    st.monthTodos = [];
+    plannerRebuildQuickPostPayload_(st);
+    return;
+  }
+  const first = list[0];
+  if (!plannerBootstrapPersonalIsFullSchema_(first)) {
+    st.monthTodos = [];
+    plannerRebuildQuickPostPayload_(st);
+    return;
+  }
+  st.monthTodos = list.map(plannerTodoRowFromServer_);
+  plannerRebuildQuickPostPayload_(st);
+}
+
+/**
+ * `monthTodos` → POST 미리보기·`plannerPersonalTodosApply` 본문.
+ * @param {object} st
+ */
+function plannerRebuildQuickPostPayload_(st) {
+  plannerEnsureMonthTodos_(st);
+  const view = st.viewMonth instanceof Date && !isNaN(st.viewMonth.getTime()) ? st.viewMonth : new Date();
+  const pfx = plannerMonthYmdPrefix_(view);
+  const todos = st.monthTodos
+    .filter(function (r) {
+      return r && String(r.date || '').trim().indexOf(pfx) === 0;
+    })
+    .map(plannerTodoRowForPost_);
+  plannerSyncPayloadSortKeysFromDayOrder_(st);
+  const ym = plannerYearMonthFromDate_(view);
+  st.plannerQuickPostBody = {
+    action: 'plannerPersonalTodosApply',
+    year_month: ym,
+    todos: todos.map(plannerTodoRowForPost_)
+  };
+}
+
+/** 커리큘럼 개별 등록 — 과목 코드(마스터 `courses.subject` 매칭용). */
+const PLANNER_CURR_SUBJECT_OPTS = [
+  { code: 'grammar', label: '문법' },
+  { code: 'logic', label: '논리' },
+  { code: 'read', label: '독해' },
+  { code: 'vocab', label: '어휘' }
+];
+
+/**
+ * @param {object} st
+ * @returns {{ courses: object[], lectures: object[] }}
+ */
+function plannerCurriculumCatalog_(st) {
+  const pack = st && st.plannerCurriculum ? st.plannerCurriculum : { courses: [], lectures: [] };
+  return {
+    courses: Array.isArray(pack.courses) ? pack.courses : [],
+    lectures: Array.isArray(pack.lectures) ? pack.lectures : []
+  };
+}
+
+/**
+ * @param {object} st
+ * @returns {boolean}
+ */
+function plannerCurriculumHasCatalog_(st) {
+  const c = plannerCurriculumCatalog_(st);
+  return c.courses.length > 0 && c.lectures.length > 0;
+}
+
+/**
+ * todo `title` — 강좌명 · N강 (`lecture_name` 미사용).
+ * @param {string} courseName
+ * @param {number} lectureNo
+ * @returns {string}
+ */
+function plannerCurriculumTodoTitle_(courseName, lectureNo) {
+  const name = String(courseName != null ? courseName : '').trim();
+  const no = Number(lectureNo);
+  if (!name.length) return isFinite(no) && no > 0 ? String(no) + '강' : '';
+  if (!isFinite(no) || no <= 0) return name;
+  return name + ' · ' + String(no) + '강';
+}
+
+/**
+ * @param {HTMLSelectElement} sel
+ * @param {{ value: string, label: string }[]} items
+ * @param {string} [placeholder]
+ */
+function plannerSelectFillOptions_(sel, items, placeholder) {
+  const prev = sel.value;
+  sel.innerHTML = '';
+  if (placeholder) {
+    const ph = document.createElement('option');
+    ph.value = '';
+    ph.textContent = placeholder;
+    sel.appendChild(ph);
+  }
+  items.forEach(function (it) {
+    const o = document.createElement('option');
+    o.value = String(it.value);
+    o.textContent = String(it.label);
+    sel.appendChild(o);
+  });
+  if (prev) {
+    const ok = Array.prototype.some.call(sel.options, function (opt) {
+      return opt.value === prev;
+    });
+    if (ok) sel.value = prev;
+  }
+}
+
+/**
+ * @param {object[]} courses
+ * @param {string} subjectCode
+ * @returns {object[]}
+ */
+function plannerCurriculumCoursesForSubject_(courses, subjectCode) {
+  const code = String(subjectCode || '').trim();
+  if (!code) return [];
+  return courses.filter(function (c) {
+    return c && typeof c === 'object' && plannerSubjectCodeFromCatalogCourse_(c) === code;
+  });
+}
+
+/**
+ * @param {HTMLElement} slot
+ * @param {object} st
+ * @param {'all'|'subject'|'instructor'|'course'|'preview'} fromLevel
+ */
+function plannerCurriculumRefreshCascade_(slot, st, fromLevel) {
+  const subjEl = slot.querySelector('#sp-curr-subj');
+  const instEl = slot.querySelector('#sp-curr-instructor');
+  const courseEl = slot.querySelector('#sp-curr-course');
+  const lecEl = slot.querySelector('#sp-curr-lecture');
+  const titleEl = slot.querySelector('#sp-curr-title-preview');
+  const hintEl = slot.querySelector('#sp-curr-catalog-hint');
+  if (
+    !(subjEl instanceof HTMLSelectElement) ||
+    !(instEl instanceof HTMLSelectElement) ||
+    !(courseEl instanceof HTMLSelectElement) ||
+    !(lecEl instanceof HTMLSelectElement)
+  ) {
+    return;
+  }
+  if (fromLevel === 'preview') {
+    plannerCurriculumUpdateTitlePreview_(slot, st, lecEl, titleEl);
+    return;
+  }
+  const cat = plannerCurriculumCatalog_(st);
+  const has = plannerCurriculumHasCatalog_(st);
+  if (hintEl) {
+    if (!has) {
+      hintEl.textContent = '커리큘럼 마스터(강좌·강의)가 없습니다. 관리자 시트를 확인해 주세요.';
+      hintEl.removeAttribute('hidden');
+    } else {
+      hintEl.textContent = '';
+      hintEl.setAttribute('hidden', 'hidden');
+    }
+  }
+  subjEl.disabled = !has;
+  instEl.disabled = !has;
+  courseEl.disabled = !has;
+  lecEl.disabled = !has;
+
+  if (fromLevel === 'all') {
+    const subjItems = [];
+    PLANNER_CURR_SUBJECT_OPTS.forEach(function (o) {
+      const rows = plannerCurriculumCoursesForSubject_(cat.courses, o.code);
+      if (rows.length) subjItems.push({ value: o.code, label: o.label });
+    });
+    plannerSelectFillOptions_(subjEl, subjItems, '과목 선택');
+    subjEl.value = subjItems.length ? subjItems[0].value : '';
+    fromLevel = 'subject';
+  }
+
+  const subjectCode = String(subjEl.value || '').trim();
+  if (fromLevel === 'subject') {
+    const coursesSub = plannerCurriculumCoursesForSubject_(cat.courses, subjectCode);
+    /** @type {Record<string, boolean>} */
+    const seenInst = {};
+    const instItems = [];
+    coursesSub.forEach(function (c) {
+      const inst = String(c.instructor != null ? c.instructor : '').trim() || '(선생님 미입력)';
+      if (seenInst[inst]) return;
+      seenInst[inst] = true;
+      instItems.push({ value: inst, label: inst });
+    });
+    instItems.sort(function (a, b) {
+      return a.label.localeCompare(b.label, 'ko');
+    });
+    plannerSelectFillOptions_(instEl, instItems, '선생님 선택');
+    fromLevel = 'instructor';
+  }
+
+  const instructor = String(instEl.value || '').trim();
+  if (fromLevel === 'instructor') {
+    const coursesSub = plannerCurriculumCoursesForSubject_(cat.courses, subjectCode);
+    const coursesInst = coursesSub.filter(function (c) {
+      const inst = String(c.instructor != null ? c.instructor : '').trim() || '(선생님 미입력)';
+      return inst === instructor;
+    });
+    const courseItems = coursesInst.map(function (c) {
+      const cid = c.course_id != null ? String(c.course_id) : '';
+      const cname = String(c.course_name != null ? c.course_name : '').trim() || '(강좌명 없음)';
+      return { value: cid, label: cname };
+    });
+    courseItems.sort(function (a, b) {
+      return a.label.localeCompare(b.label, 'ko');
+    });
+    plannerSelectFillOptions_(courseEl, courseItems, '강좌명 선택');
+    fromLevel = 'course';
+  }
+
+  const courseId = String(courseEl.value || '').trim();
+  if (fromLevel === 'course') {
+    const courseRow = cat.courses.find(function (c) {
+      return c && String(c.course_id) === courseId;
+    });
+    const cname = courseRow ? String(courseRow.course_name != null ? courseRow.course_name : '').trim() : '';
+    const lecRows = cat.lectures
+      .filter(function (L) {
+        return L && String(L.course_id) === courseId;
+      })
+      .sort(function (a, b) {
+        return (Number(a.lecture_no) || 0) - (Number(b.lecture_no) || 0);
+      });
+    const lecItems = lecRows.map(function (L) {
+      const lid = L.lecture_id != null ? String(L.lecture_id) : '';
+      const no = Number(L.lecture_no);
+      const label = plannerCurriculumTodoTitle_(cname, no);
+      return { value: lid, label: label };
+    });
+    plannerSelectFillOptions_(lecEl, lecItems, '회차 선택');
+  }
+
+  plannerCurriculumUpdateTitlePreview_(slot, st, lecEl, titleEl);
+}
+
+/**
+ * @param {HTMLElement} slot
+ * @param {object} st
+ * @param {HTMLSelectElement} lecEl
+ * @param {HTMLElement|null} titleEl
+ */
+function plannerCurriculumUpdateTitlePreview_(slot, st, lecEl, titleEl) {
+  const cat = plannerCurriculumCatalog_(st);
+  let preview = '';
+  const lecId = String(lecEl.value || '').trim();
+  if (lecId) {
+    const lec = cat.lectures.find(function (L) {
+      return L && String(L.lecture_id) === lecId;
+    });
+    const courseRow = cat.courses.find(function (c) {
+      return c && String(c.course_id) === String(lec && lec.course_id);
+    });
+    if (lec && courseRow) {
+      preview = plannerCurriculumTodoTitle_(courseRow.course_name, lec.lecture_no);
+    }
+  }
+  if (titleEl && 'value' in titleEl) /** @type {HTMLInputElement} */ (titleEl).value = preview;
+}
+
+/**
+ * @param {HTMLElement} slot
+ * @param {object} st
+ */
+function plannerSetManualRegMode_(slot, st, mode) {
+  const direct = slot.querySelector('#sp-plan-manual-direct');
+  const curr = slot.querySelector('#sp-plan-manual-curriculum');
+  const btnD = slot.querySelector('#sp-manual-mode-direct');
+  const btnC = slot.querySelector('#sp-manual-mode-curriculum');
+  const next = mode === 'curriculum' ? 'curriculum' : 'direct';
+  if (st && typeof st === 'object') st.manualRegMode = next;
+  if (direct) direct.toggleAttribute('hidden', next !== 'direct');
+  if (curr) curr.toggleAttribute('hidden', next !== 'curriculum');
+  if (btnD) {
+    btnD.setAttribute('aria-pressed', next === 'direct' ? 'true' : 'false');
+    btnD.classList.toggle('is-active', next === 'direct');
+  }
+  if (btnC) {
+    btnC.setAttribute('aria-pressed', next === 'curriculum' ? 'true' : 'false');
+    btnC.classList.toggle('is-active', next === 'curriculum');
+  }
+  if (next === 'curriculum') plannerCurriculumRefreshCascade_(slot, st, 'all');
+}
+
+/**
+ * 커리큘럼 개별 등록 → `monthTodos` append.
+ * @param {HTMLElement} slot
+ * @param {object} st
+ * @returns {string}
+ */
+function plannerAppendCurriculumTodoFromForm_(slot, st) {
+  if (!plannerCurriculumHasCatalog_(st)) {
+    return '커리큘럼 마스터가 없어 등록할 수 없습니다.';
+  }
+  const dueEl = slot.querySelector('#sp-curr-due');
+  const lecEl = slot.querySelector('#sp-curr-lecture');
+  const due = dueEl && 'value' in dueEl ? String(/** @type {HTMLInputElement} */ (dueEl).value).trim() : '';
+  const lecId = lecEl && 'value' in lecEl ? String(/** @type {HTMLSelectElement} */ (lecEl).value).trim() : '';
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(due)) return '등록·예정일을 선택해 주세요.';
+  if (!lecId.length) return '회차(강의)를 선택해 주세요.';
+
+  const cat = plannerCurriculumCatalog_(st);
+  const lec = cat.lectures.find(function (L) {
+    return L && String(L.lecture_id) === lecId;
+  });
+  if (!lec) return '선택한 강의를 찾을 수 없습니다. 다시 고르거나 새로고침해 주세요.';
+  const courseRow = cat.courses.find(function (c) {
+    return c && String(c.course_id) === String(lec.course_id);
+  });
+  if (!courseRow) return '강좌 정보를 찾을 수 없습니다.';
+
+  const category = plannerSubjectCodeFromCatalogCourse_(courseRow);
+  if (!category) return '이 강좌의 과목(문법·논리·독해·어휘)을 확인할 수 없습니다. 마스터 시트 subject를 맞춰 주세요.';
+
+  const title = plannerCurriculumTodoTitle_(courseRow.course_name, lec.lecture_no);
+  if (!title.length) return '제목을 만들 수 없습니다. 강좌명·회차를 확인해 주세요.';
+
+  const task_id = 'lec_' + lecId + '_' + due;
+  const todayCur = plannerTodayYmdSeoul_();
+  plannerEnsureMonthTodos_(st);
+  const dup = st.monthTodos.some(function (m) {
+    return m && String(m.task_id) === task_id;
+  });
+  if (dup) return '같은 날짜에 이미 추가한 회차입니다.';
+
+  plannerPushMonthTodo_(
+    st,
+    plannerTodoRowLocal_({
+      task_id: task_id,
+      title: title,
+      date: due,
+      category: category,
+      lecture_id: lecId,
+      timeline_slots: '[]',
+      sort_key: 0,
+      mark: 'none',
+      trace_dates: '[]',
+      created_date: todayCur,
+      updated_date: todayCur
+    })
+  );
+  if (lecEl instanceof HTMLSelectElement) lecEl.value = '';
+  plannerCurriculumRefreshCascade_(slot, st, 'course');
+  return '';
+}
+
+/**
+ * 일반 등록 폼 → `monthTodos`에 append 후 페이로드 재생성.
  * @param {HTMLElement} slot `#sp-plan-calendar-slot`
  * @param {object} st
  * @returns {string} 빈 문자열 = 성공, 아니면 에러 메시지
  */
 function plannerAppendManualTodoFromForm_(slot, st) {
-  if (!st.plannerManualTodos) st.plannerManualTodos = [];
+  plannerEnsureMonthTodos_(st);
   const titleEl = slot.querySelector('#sp-manual-title');
   const dueEl = slot.querySelector('#sp-manual-due');
   const catEl = slot.querySelector('#sp-manual-cat');
-  const descEl = slot.querySelector('#sp-manual-desc');
   const title = titleEl && 'value' in titleEl ? String(/** @type {HTMLInputElement} */ (titleEl).value).trim() : '';
   const due = dueEl && 'value' in dueEl ? String(/** @type {HTMLInputElement} */ (dueEl).value).trim() : '';
   const category = catEl && 'value' in catEl ? String(/** @type {HTMLSelectElement} */ (catEl).value).trim() : 'misc';
-  const description = descEl && 'value' in descEl ? String(/** @type {HTMLTextAreaElement} */ (descEl).value).trim() : '';
   if (!title.length) return '할 일 제목을 입력해 주세요.';
   if (!/^\d{4}-\d{2}-\d{2}$/.test(due)) return '등록·예정일을 선택해 주세요.';
   const allowedC = { grammar: true, logic: true, read: true, vocab: true, misc: true };
@@ -1056,23 +2488,24 @@ function plannerAppendManualTodoFromForm_(slot, st) {
     task_id = '';
   }
   if (!task_id) task_id = 'man_' + due + '_' + String(Date.now()) + '_' + String(Math.floor(Math.random() * 1e6));
-  st.plannerManualTodos.push({
-    task_id: task_id,
-    title: title,
-    description: description,
-    status: 'todo',
-    priority: 'normal',
-    due_date: due,
-    start_date: due,
-    category: c,
-    sort_key: 0,
-    completed_at: '',
-    created_at: '',
-    updated_at: ''
-  });
-  plannerRebuildQuickPostPayload_(st);
+  const todayMan = plannerTodayYmdSeoul_();
+  plannerPushMonthTodo_(
+    st,
+    plannerTodoRowLocal_({
+      task_id: task_id,
+      title: title,
+      date: due,
+      category: c,
+      lecture_id: '',
+      timeline_slots: '[]',
+      sort_key: 0,
+      mark: 'none',
+      trace_dates: '[]',
+      created_date: todayMan,
+      updated_date: todayMan
+    })
+  );
   if (titleEl) /** @type {HTMLInputElement} */ (titleEl).value = '';
-  if (descEl) /** @type {HTMLTextAreaElement} */ (descEl).value = '';
   return '';
 }
 
@@ -1091,20 +2524,11 @@ function plannerSyncPayloadSortKeysFromDayOrder_(st) {
 /**
  * @param {object} st
  * @param {string} dateYmd
- * @returns {{ task_id: string, title: string, description: string, status: string, priority: string, due_date: string, start_date: string, category: string, sort_key: number, completed_at: string, created_at: string, updated_at: string }[]}
+ * @returns {{ task_id: string, title: string, date: string, category: string, sort_key: number, created_date: string, updated_date: string }[]}
  */
 function plannerOrderedDayTodos_(st, dateYmd) {
-  const body = st.plannerQuickPostBody;
-  const all = body && Array.isArray(body.todos) ? body.todos : [];
-  /** @type {{ task_id: string, title: string, description: string, status: string, priority: string, due_date: string, start_date: string, category: string, sort_key: number, completed_at: string, created_at: string, updated_at: string }[]} */
-  const rows = [];
-  for (let i = 0; i < all.length; i++) {
-    const t = all[i];
-    if (t && String(t.due_date || '') === dateYmd) rows.push(t);
-  }
-  rows.sort(function (a, b) {
-    return (Number(a.sort_key) || 0) - (Number(b.sort_key) || 0);
-  });
+  const day = String(dateYmd || '').trim();
+  const rows = plannerMonthTodosForDay_(st, day).slice();
   const custom = st.dayTodoOrderByDate && st.dayTodoOrderByDate[dateYmd];
   if (custom && custom.length) {
     const byId = {};
@@ -1131,18 +2555,18 @@ function plannerOrderedDayTodos_(st, dateYmd) {
  * @param {string[]} taskIdsInOrder
  */
 function plannerApplyTodoOrderToPayloadSortKeys_(st, dateYmd, taskIdsInOrder) {
-  const todos = st.plannerQuickPostBody && Array.isArray(st.plannerQuickPostBody.todos) ? st.plannerQuickPostBody.todos : [];
+  plannerEnsureMonthTodos_(st);
   const idToIndex = {};
   let i;
   for (i = 0; i < taskIdsInOrder.length; i++) {
     idToIndex[String(taskIdsInOrder[i])] = i;
   }
-  for (i = 0; i < todos.length; i++) {
-    const row = todos[i];
-    if (!row || String(row.due_date || '') !== dateYmd) continue;
-    const ix = idToIndex[row.task_id];
+  st.monthTodos.forEach(function (row) {
+    if (!row || String(row.date || '') !== dateYmd) return;
+    const ix = idToIndex[String(row.task_id)];
     if (ix != null) row.sort_key = ix;
-  }
+  });
+  plannerRebuildQuickPostPayload_(st);
 }
 
 /**
@@ -1216,15 +2640,30 @@ function plannerDayTodosFromPayloadHtml_(dateYmd, st) {
       if (id === PLAN_FIXED_SLEEP_TODO_ID) rowKind = ' sp-plan-todoSide__row--sleep';
       else if (id === PLAN_FIXED_MEAL_TODO_ID) rowKind = ' sp-plan-todoSide__row--meal';
       else if (String(r.category || '').trim() === PLAN_CATEGORY_FIXED) rowKind = ' sp-plan-todoSide__row--fixed';
-      const title = esc(String(r.title || '').trim() || id);
-      const isB = Boolean(brush && brush === id);
+      else if (plannerIsTraceGhostDisplay_(r)) rowKind = ' sp-plan-todoSide__row--trace';
+      let title = esc(String(r.title || '').trim() || id);
+      if (plannerIsTraceGhostDisplay_(r)) {
+        const toD = String(r.date != null ? r.date : '').trim();
+        if (toD) title += esc(' → ' + toD);
+      }
+      const isTrace = plannerIsTraceGhostDisplay_(r);
+      const isB = !isTrace && Boolean(brush && brush === id);
       const comp = plannerTodoCompletionGet_(st, dateYmd, id);
       const selNone = comp === 'none' ? ' selected' : '';
       const selO = comp === 'circle' ? ' selected' : '';
       const selTri = comp === 'triangle' ? ' selected' : '';
       const selX = comp === 'x' ? ' selected' : '';
-      const hueCls = ' sp-plan-todoHue-' + plannerTodoHueClass_(id);
-      body += '<tr class="sp-plan-todoSide__row' + rowKind + hueCls + (isB ? ' is-brushRow' : '') + '" data-todo-id="' + esc(id) + '">';
+      const hueCls = isTrace ? '' : ' sp-plan-todoHue-' + plannerTodoHueClass_(id);
+      body +=
+        '<tr class="sp-plan-todoSide__row' +
+        rowKind +
+        hueCls +
+        (isB ? ' is-brushRow' : '') +
+        '" data-todo-id="' +
+        esc(id) +
+        '"' +
+        (isTrace ? ' data-sp-plan-trace="1"' : '') +
+        '>';
       if (k === i) {
         body +=
           '<th class="sp-plan-todoSide__thSubj" scope="row" rowspan="' +
@@ -1233,38 +2672,43 @@ function plannerDayTodosFromPayloadHtml_(dateYmd, st) {
           subjHead +
           '</th>';
       }
-      body +=
-        '<td class="sp-plan-todoSide__tdTodo">' +
-        '<span class="sp-plan-todoSide__title">' +
-        title +
-        '</span>' +
-        '<button type="button" class="sp-plan-todoSide__brushBtn' +
-        (isB ? ' is-brush' : '') +
-        '" data-action="todo-brush" aria-pressed="' +
-        (isB ? 'true' : 'false') +
-        '" aria-label="이 할 일로 시간표에 표시">' +
-        (isB ? '체크 ✓' : '체크') +
-        '</button></td>' +
-        '<td class="sp-plan-todoSide__tdMark">' +
-        '<label class="sp-plan-todoSide__markLbl"><span class="sp-plan-vh">달성도</span>' +
-        '<select class="sp-plan-todoSide__markSel" data-todo-id="' +
-        esc(id) +
-        '" aria-label="' +
-        esc(String(r.title || '').trim() || id) +
-        ' 달성도">' +
-        '<option value="none"' +
-        selNone +
-        '>선택</option>' +
-        '<option value="circle"' +
-        selO +
-        '>○</option>' +
-        '<option value="triangle"' +
-        selTri +
-        '>△</option>' +
-        '<option value="x"' +
-        selX +
-        '>×</option>' +
-        '</select></label></td></tr>';
+      body += '<td class="sp-plan-todoSide__tdTodo"><span class="sp-plan-todoSide__title">' + title + '</span>';
+      if (!isTrace) {
+        body +=
+          '<button type="button" class="sp-plan-todoSide__brushBtn' +
+          (isB ? ' is-brush' : '') +
+          '" data-action="todo-brush" aria-pressed="' +
+          (isB ? 'true' : 'false') +
+          '" aria-label="이 할 일로 시간표에 표시">' +
+          (isB ? '체크 ✓' : '체크') +
+          '</button>';
+      }
+      body += '</td><td class="sp-plan-todoSide__tdMark">';
+      if (isTrace) {
+        body += '<span class="sp-plan-todoSide__traceMark" aria-hidden="true">—</span>';
+      } else {
+        body +=
+          '<label class="sp-plan-todoSide__markLbl"><span class="sp-plan-vh">달성도</span>' +
+          '<select class="sp-plan-todoSide__markSel" data-todo-id="' +
+          esc(id) +
+          '" aria-label="' +
+          esc(String(r.title || '').trim() || id) +
+          ' 달성도">' +
+          '<option value="none"' +
+          selNone +
+          '>선택</option>' +
+          '<option value="circle"' +
+          selO +
+          '>○</option>' +
+          '<option value="triangle"' +
+          selTri +
+          '>△</option>' +
+          '<option value="x"' +
+          selX +
+          '>×</option>' +
+          '</select></label>';
+      }
+      body += '</td></tr>';
     }
     i = j;
   }
@@ -1302,159 +2746,444 @@ function plannerAssignedMinutesForDay_(st, ymd) {
 }
 
 /**
- * 해당 날짜 빠른 등록 배열에 이미 같은 과목·강 번호가 있는지.
- * @param {{ subject: string, lesson: number }[]|undefined} arr
- * @param {string} subject
- * @param {number} lesson
- * @returns {boolean}
- */
-function plannerQuickPlanDayHasLesson_(arr, subject, lesson) {
-  if (!Array.isArray(arr)) return false;
-  const s = String(subject != null ? subject : '').trim();
-  const L = Number(lesson);
-  if (!s || !isFinite(L) || L <= 0) return false;
-  return arr.some(function (it) {
-    if (!it || typeof it !== 'object') return false;
-    return String(it.subject != null ? it.subject : '').trim() === s && Number(it.lesson) === L;
-  });
-}
-
-/**
- * 선택 요일만 달에서 **1일→말일 순**으로 `dates`에 모은 뒤, 과목마다 강 `fromL`~`toL` 총 N건을
- * **날짜마다 가능한 한 균등**하게 나눈다: 각 날에는 `⌊N/M⌋` 또는 `⌊N/M⌋+1`강(앞쪽 날부터 +1 분배).
- * 과목끼리는 섞지 않는다. **기존 `quickPlanByDate` 해당 달 데이터는 지우지 않고** 이 배치만 더하며,
- * 같은 날·같은 과목·같은 강 번호는 중복으로 넣지 않는다.
+ * 빠른 등록: 커리큘럼 강좌·회차 구간을 선택 요일에 그리디 배치 → `monthTodos`에 추가.
  * @param {object} st
  * @param {Date} viewMonth
  * @param {number[]} weekdays 0=일 … 6=토
- * @param {string[]} subjects grammar|logic|read|vocab
- * @param {number} fromL
- * @param {number} toL
+ * @param {string} courseId
+ * @param {number} fromNo
+ * @param {number} toNo
+ * @param {Record<number, string>} countByDow 요일별 강 수(빈 문자열이면 n빵)
+ * @returns {string} 에러 문구 또는 ''
  */
-function plannerApplyQuickPlanToState_(st, viewMonth, weekdays, subjects, fromL, toL) {
+function plannerApplyQuickCurriculumToMonthTodos_(st, viewMonth, weekdays, courseId, fromNo, toNo, countByDow) {
+  const cat = plannerCurriculumCatalog_(st);
+  const courseRow = cat.courses.find(function (c) {
+    return c && String(c.course_id) === String(courseId);
+  });
+  if (!courseRow) return '강좌를 선택해 주세요.';
+  const category = plannerSubjectCodeFromCatalogCourse_(courseRow);
+  if (!category) return '이 강좌의 과목(문법·논리·독해·어휘)을 확인할 수 없습니다.';
+  const cname = String(courseRow.course_name != null ? courseRow.course_name : '').trim();
+  const lecList = cat.lectures
+    .filter(function (L) {
+      return L && String(L.course_id) === String(courseId);
+    })
+    .sort(function (a, b) {
+      return (Number(a.lecture_no) || 0) - (Number(b.lecture_no) || 0);
+    });
+  const lo = Math.min(Number(fromNo) || 1, Number(toNo) || 1);
+  const hi = Math.max(Number(fromNo) || 1, Number(toNo) || 1);
+  const inRange = lecList.filter(function (L) {
+    const no = Number(L.lecture_no);
+    return isFinite(no) && no >= lo && no <= hi;
+  });
+  if (!inRange.length) return '선택한 회차가 없습니다.';
   const y = viewMonth.getFullYear();
   const m0 = viewMonth.getMonth();
   const last = new Date(y, m0 + 1, 0).getDate();
-  const dates = [];
-  for (let day = 1; day <= last; day++) {
+  /** @type {{ ymd: string, dow: number }[]} */
+  const dateSlots = [];
+  let day;
+  for (day = 1; day <= last; day++) {
     const dd = new Date(y, m0, day);
     if (weekdays.indexOf(dd.getDay()) >= 0) {
-      dates.push(plannerYmdFromParts_(y, m0, day));
+      dateSlots.push({ ymd: plannerYmdFromParts_(y, m0, day), dow: dd.getDay() });
     }
   }
-  if (!dates.length || !subjects.length) return;
-  const lo = Math.min(Number(fromL) || 1, Number(toL) || 1);
-  const hi = Math.max(Number(fromL) || 1, Number(toL) || 1);
-  if (lo > hi) return;
-  if (!st.quickPlanByDate) st.quickPlanByDate = {};
-  const M = dates.length;
-  const N = hi - lo + 1;
-  const base = Math.floor(N / M);
-  const rem = N % M;
-  subjects.forEach(function (subj) {
-    let Lrun = lo;
-    for (let di = 0; di < M && Lrun <= hi; di++) {
-      const cnt = base + (di < rem ? 1 : 0);
-      const key = dates[di];
-      if (!st.quickPlanByDate[key]) st.quickPlanByDate[key] = [];
-      for (let k = 0; k < cnt && Lrun <= hi; k++) {
-        if (!plannerQuickPlanDayHasLesson_(st.quickPlanByDate[key], subj, Lrun)) {
-          st.quickPlanByDate[key].push({ subject: subj, lesson: Lrun });
-        }
-        Lrun++;
-      }
+  if (!dateSlots.length) return '요일을 한 개 이상 선택해 주세요.';
+  const N = inRange.length;
+  const nbung = plannerNbungCounts_(dateSlots.length, N);
+  let lecIx = 0;
+  const todayQ = plannerTodayYmdSeoul_();
+  let di;
+  for (di = 0; di < dateSlots.length; di++) {
+    const ymd = dateSlots[di].ymd;
+    const dowFix = dateSlots[di].dow;
+    const rawCnt = countByDow && countByDow[dowFix] != null ? String(countByDow[dowFix]).trim() : '';
+    let cnt = rawCnt.length ? Math.max(0, Math.floor(Number(rawCnt))) : nbung[di] || 0;
+    if (!isFinite(cnt)) cnt = nbung[di] || 0;
+    let k;
+    for (k = 0; k < cnt && lecIx < inRange.length; k++) {
+      const L = inRange[lecIx];
+      lecIx++;
+      const lecId = L.lecture_id != null ? String(L.lecture_id) : '';
+      const title = plannerCurriculumTodoTitle_(cname, L.lecture_no);
+      const task_id = 'lec_' + lecId + '_' + ymd;
+      plannerPushMonthTodo_(
+        st,
+        plannerTodoRowLocal_({
+          task_id: task_id,
+          title: title,
+          date: ymd,
+          category: category,
+          lecture_id: lecId,
+          timeline_slots: '[]',
+          sort_key: 0,
+          mark: 'none',
+          trace_dates: '[]',
+          created_date: todayQ,
+          updated_date: todayQ
+        }),
+        true
+      );
     }
-  });
+  }
   plannerRebuildQuickPostPayload_(st);
+  return '';
 }
 
 /**
- * 달력 칸에 빠른등록 요약 — `sp-plan-curBadge` span을 일자 버튼 직계 자식으로 나열(래퍼 없음).
+ * @param {HTMLElement} slot
+ */
+function plannerQuickSyncDowCountInputs_(slot) {
+  slot.querySelectorAll('input[name="sp-dow"]').forEach(function (cb) {
+    const el = /** @type {HTMLInputElement} */ (cb);
+    const inp = slot.querySelector('.sp-plan-quick__dowCnt[data-dow="' + el.value + '"]');
+    if (!(inp instanceof HTMLInputElement)) return;
+    if (el.checked) inp.removeAttribute('hidden');
+    else {
+      inp.setAttribute('hidden', 'hidden');
+      inp.value = '';
+    }
+  });
+}
+
+/**
+ * @param {HTMLElement} slot
+ * @param {object} st
+ * @param {'all'|'subject'|'instructor'|'course'} fromLevel
+ */
+function plannerQuickCurriculumRefreshCascade_(slot, st, fromLevel) {
+  const subjEl = slot.querySelector('#sp-quick-subj');
+  const instEl = slot.querySelector('#sp-quick-instructor');
+  const courseEl = slot.querySelector('#sp-quick-course');
+  const fromEl = slot.querySelector('#sp-quick-lec-from');
+  const toEl = slot.querySelector('#sp-quick-lec-to');
+  const hintEl = slot.querySelector('#sp-quick-catalog-hint');
+  if (
+    !(subjEl instanceof HTMLSelectElement) ||
+    !(instEl instanceof HTMLSelectElement) ||
+    !(courseEl instanceof HTMLSelectElement) ||
+    !(fromEl instanceof HTMLSelectElement) ||
+    !(toEl instanceof HTMLSelectElement)
+  ) {
+    return;
+  }
+  const cat = plannerCurriculumCatalog_(st);
+  const has = plannerCurriculumHasCatalog_(st);
+  if (hintEl) {
+    if (!has) {
+      hintEl.textContent = '커리큘럼 마스터(강좌·강의)가 없습니다.';
+      hintEl.removeAttribute('hidden');
+    } else {
+      hintEl.textContent = '';
+      hintEl.setAttribute('hidden', 'hidden');
+    }
+  }
+  subjEl.disabled = !has;
+  instEl.disabled = !has;
+  courseEl.disabled = !has;
+  fromEl.disabled = !has;
+  toEl.disabled = !has;
+  if (fromLevel === 'all') {
+    const subjItems = [];
+    PLANNER_CURR_SUBJECT_OPTS.forEach(function (o) {
+      const rows = plannerCurriculumCoursesForSubject_(cat.courses, o.code);
+      if (rows.length) subjItems.push({ value: o.code, label: o.label });
+    });
+    plannerSelectFillOptions_(subjEl, subjItems, '과목 선택');
+    subjEl.value = subjItems.length ? subjItems[0].value : '';
+    fromLevel = 'subject';
+  }
+  const subjectCode = String(subjEl.value || '').trim();
+  if (fromLevel === 'subject') {
+    const coursesSub = plannerCurriculumCoursesForSubject_(cat.courses, subjectCode);
+    const seenInst = {};
+    const instItems = [];
+    coursesSub.forEach(function (c) {
+      const inst = String(c.instructor != null ? c.instructor : '').trim() || '(선생님 미입력)';
+      if (seenInst[inst]) return;
+      seenInst[inst] = true;
+      instItems.push({ value: inst, label: inst });
+    });
+    instItems.sort(function (a, b) {
+      return a.label.localeCompare(b.label, 'ko');
+    });
+    plannerSelectFillOptions_(instEl, instItems, '선생님 선택');
+    fromLevel = 'instructor';
+  }
+  const instructor = String(instEl.value || '').trim();
+  if (fromLevel === 'instructor') {
+    const coursesSub = plannerCurriculumCoursesForSubject_(cat.courses, subjectCode);
+    const coursesInst = coursesSub.filter(function (c) {
+      const inst = String(c.instructor != null ? c.instructor : '').trim() || '(선생님 미입력)';
+      return inst === instructor;
+    });
+    const courseItems = coursesInst.map(function (c) {
+      const cid = c.course_id != null ? String(c.course_id) : '';
+      const cname = String(c.course_name != null ? c.course_name : '').trim() || '(강좌명 없음)';
+      return { value: cid, label: cname };
+    });
+    courseItems.sort(function (a, b) {
+      return a.label.localeCompare(b.label, 'ko');
+    });
+    plannerSelectFillOptions_(courseEl, courseItems, '강좌명 선택');
+    fromLevel = 'course';
+  }
+  const courseId = String(courseEl.value || '').trim();
+  if (fromLevel === 'course') {
+    const courseRow = cat.courses.find(function (c) {
+      return c && String(c.course_id) === courseId;
+    });
+    const cname = courseRow ? String(courseRow.course_name != null ? courseRow.course_name : '').trim() : '';
+    const lecRows = cat.lectures
+      .filter(function (L) {
+        return L && String(L.course_id) === courseId;
+      })
+      .sort(function (a, b) {
+        return (Number(a.lecture_no) || 0) - (Number(b.lecture_no) || 0);
+      });
+    const lecItems = lecRows.map(function (L) {
+      const no = Number(L.lecture_no);
+      return {
+        value: String(isFinite(no) ? no : ''),
+        label: plannerCurriculumTodoTitle_(cname, no)
+      };
+    });
+    plannerSelectFillOptions_(fromEl, lecItems, '시작 회차');
+    plannerSelectFillOptions_(toEl, lecItems, '끝 회차');
+    if (lecItems.length) {
+      fromEl.value = lecItems[0].value;
+      toEl.value = lecItems[lecItems.length - 1].value;
+    }
+  }
+}
+
+/**
+ * @param {HTMLElement} slot
+ * @returns {Record<number, string>}
+ */
+function plannerQuickReadCountByDow_(slot) {
+  /** @type {Record<number, string>} */
+  const out = {};
+  slot.querySelectorAll('.sp-plan-quick__dowCnt').forEach(function (inp) {
+    if (!(inp instanceof HTMLInputElement)) return;
+    const d = inp.getAttribute('data-dow');
+    if (d == null || d === '') return;
+    out[Number(d)] = String(inp.value != null ? inp.value : '').trim();
+  });
+  return out;
+}
+
+/**
+ * 달력 일자 칸 할 일 뱃지 한 줄.
+ * @param {string} mod grammar|logic|read|vocab|misc
+ * @param {string} label
+ * @returns {string}
+ */
+function plannerCurBadgeSpan_(mod, label) {
+  const body = String(label != null ? label : '').trim();
+  if (!body) return '';
+  const m = /^(grammar|logic|read|vocab)$/.test(mod) ? mod : 'misc';
+  return (
+    '<span class="sp-plan-curBadge sp-plan-curBadge--' +
+    esc(m) +
+    '" title="' +
+    esc(body) +
+    '">' +
+    esc(body) +
+    '</span>'
+  );
+}
+
+/**
+ * 제목 문자열에서 `· 3강`, `1~3강` 등 **강 번호** 나열.
+ * @param {string} title
+ * @returns {number[]}
+ */
+function plannerLessonsFromStudyTitle_(title) {
+  const s = String(title != null ? title : '').trim();
+  if (!s.length) return [];
+  /** @type {number[]} */
+  const nums = [];
+  const re = /(\d+)(?:~(\d+))?강/g;
+  let m;
+  while ((m = re.exec(s)) !== null) {
+    const a = Number(m[1]);
+    const b = m[2] != null ? Number(m[2]) : a;
+    if (!isFinite(a) || a <= 0) continue;
+    if (isFinite(b) && b >= a) {
+      for (let k = a; k <= b; k++) {
+        nums.push(k);
+      }
+    } else {
+      nums.push(a);
+    }
+  }
+  return nums;
+}
+
+/**
+ * 강 번호 배열 → `1`, `1~3`, `1, 4~6` (중복 제거·연속 구간 묶음).
+ * @param {number[]} nums
+ * @returns {string}
+ */
+function plannerLessonsToOutline_(nums) {
+  const u = nums
+    .slice()
+    .sort(function (a, b) {
+      return a - b;
+    })
+    .filter(function (v, i, a) {
+      return i === 0 || v !== a[i - 1];
+    });
+  if (!u.length) return '';
+  const parts = [];
+  let runStart = u[0];
+  let prev = u[0];
+  for (let i = 1; i <= u.length; i++) {
+    const cur = u[i];
+    if (i === u.length || cur !== prev + 1) {
+      parts.push(runStart === prev ? String(runStart) : runStart + '~' + prev);
+      if (i < u.length) {
+        runStart = cur;
+        prev = cur;
+      }
+    } else {
+      prev = cur;
+    }
+  }
+  return parts.join(', ');
+}
+
+/**
+ * 일자 칸 과목 블록: 위는 과목 뱃지(빠른 등록 요약), 아래는 같은 과목 개별 할 일(말줄임).
+ * @param {string} mod
+ * @param {string} badgeLabel
+ * @param {string[]} subLines
+ * @returns {string}
+ */
+function plannerDayCellSubjectBlockHtml_(mod, badgeLabel, subLines) {
+  const badge = plannerCurBadgeSpan_(mod, badgeLabel);
+  if (!badge) return '';
+  const m = /^(grammar|logic|read|vocab)$/.test(mod) ? mod : 'misc';
+  const subs = Array.isArray(subLines) ? subLines : [];
+  let subHtml = '';
+  const tipParts = [badgeLabel];
+  subs.forEach(function (line) {
+    const t = String(line != null ? line : '').trim();
+    if (!t) return;
+    tipParts.push(t);
+    subHtml +=
+      '<span class="sp-plan-dayCellSum__sub" title="' + esc(t) + '">' + esc(t) + '</span>';
+  });
+  return (
+    '<span class="sp-plan-dayCellSum sp-plan-dayCellSum--' +
+    esc(m) +
+    '" title="' +
+    esc(tipParts.join(' · ')) +
+    '">' +
+    badge +
+    subHtml +
+    '</span>'
+  );
+}
+
+/**
+ * 달력 일자 칸 **요약 표시**만 담당. 등록(빠른·개별·고정)은 모두 `plannerRebuildQuickPostPayload_` → todo DB 형태.
+ * 빠른 등록: 과목별 `논리 1~3강` 등. 개별 등록: 같은 과목 칩 **아랫줄**(길면 …).
  * @param {object} st
  * @param {string} key ymd
  * @returns {string}
  */
 function plannerQuickPlanCellSummaryHtml_(st, key) {
-  const arr = st.quickPlanByDate && st.quickPlanByDate[key];
-  if (!Array.isArray(arr) || !arr.length) return '';
   const subjName = { grammar: '문법', logic: '논리', read: '독해', vocab: '어휘' };
   const order = ['grammar', 'logic', 'read', 'vocab'];
   /** @type {Record<string, number[]>} */
-  const bySub = {};
-  arr.forEach(function (t) {
+  const lessonsBySub = {};
+  /** @type {Record<string, string[]>} */
+  const manualByCat = {};
+  const rows = plannerOrderedDayTodos_(st, key);
+  rows.forEach(function (t) {
     if (!t || typeof t !== 'object') return;
-    const s = String(t.subject != null ? t.subject : '').trim();
-    const L = Number(t.lesson);
-    if (!s || !isFinite(L) || L <= 0) return;
-    if (!bySub[s]) bySub[s] = [];
-    bySub[s].push(L);
-  });
-  function lessonsToOutline_(nums) {
-    const u = nums
-      .slice()
-      .sort(function (a, b) {
-        return a - b;
-      })
-      .filter(function (v, i, a) {
-        return i === 0 || v !== a[i - 1];
-      });
-    if (!u.length) return '';
-    const parts = [];
-    let runStart = u[0];
-    let prev = u[0];
-    for (let i = 1; i <= u.length; i++) {
-      const cur = u[i];
-      if (i === u.length || cur !== prev + 1) {
-        parts.push(runStart === prev ? String(runStart) : runStart + '~' + prev);
-        if (i < u.length) {
-          runStart = cur;
-          prev = cur;
-        }
-      } else {
-        prev = cur;
+    const tid = String(t.task_id != null ? t.task_id : '');
+    if (plannerIsTraceGhostDisplay_(t)) return;
+    if (plannerIsRoutineExcludedFromStudyTotals_(tid)) return;
+    const cat = String(t.category != null ? t.category : 'misc').trim() || 'misc';
+    if (cat === PLAN_CATEGORY_FIXED) return;
+    if (cat === 'memo') return;
+    const title = String(t.title != null ? t.title : '').trim();
+    if (order.indexOf(cat) >= 0) {
+      const lessons = plannerLessonsFromStudyTitle_(title);
+      if (lessons.length) {
+        if (!lessonsBySub[cat]) lessonsBySub[cat] = [];
+        lessons.forEach(function (L) {
+          lessonsBySub[cat].push(L);
+        });
+        return;
       }
     }
-    return parts.join(', ');
+    if (!title) return;
+    if (!manualByCat[cat]) manualByCat[cat] = [];
+    manualByCat[cat].push(title);
+  });
+
+  const blocks = [];
+  function pushSubjectBlock_(code) {
+    const lessons = lessonsBySub[code];
+    const extras = manualByCat[code];
+    delete manualByCat[code];
+    delete lessonsBySub[code];
+    const hasL = lessons && lessons.length;
+    const hasE = extras && extras.length;
+    if (!hasL && !hasE) return;
+    const name = subjName[code] != null ? subjName[code] : code;
+    let badgeLabel = '';
+    if (hasL) {
+      const outline = plannerLessonsToOutline_(lessons);
+      if (outline) badgeLabel = name + ' ' + outline + '강';
+    }
+    if (!badgeLabel) badgeLabel = name;
+    const block = plannerDayCellSubjectBlockHtml_(code, badgeLabel, hasE ? extras : []);
+    if (block) blocks.push(block);
   }
-  const lines = [];
-  order.forEach(function (code) {
-    const nums = bySub[code];
-    if (!nums || !nums.length) return;
-    const outline = lessonsToOutline_(nums);
-    const name = subjName[code] || code;
-    const mod = /^(grammar|logic|read|vocab)$/.test(code) ? code : 'misc';
-    const tip = name + ' ' + outline + '강';
-    const body = name + ' ' + outline + '강';
-    lines.push(
-      '<span class="sp-plan-curBadge sp-plan-curBadge--' +
-      esc(mod) +
-      '" title="' +
-      esc(tip) +
-      '">' +
-      esc(body) +
-      '</span>'
-    );
-  });
-  Object.keys(bySub).forEach(function (code) {
+
+  order.forEach(pushSubjectBlock_);
+
+  Object.keys(lessonsBySub).forEach(function (code) {
     if (order.indexOf(code) >= 0) return;
-    const nums = bySub[code];
-    if (!nums || !nums.length) return;
-    const outline = lessonsToOutline_(nums);
-    const mod = 'misc';
-    const tip = code + ' ' + outline + '강';
-    const body = code + ' ' + outline + '강';
-    lines.push(
-      '<span class="sp-plan-curBadge sp-plan-curBadge--' +
-      mod +
-      '" title="' +
-      esc(tip) +
-      '">' +
-      esc(body) +
-      '</span>'
-    );
+    const lessons = lessonsBySub[code];
+    const extras = manualByCat[code];
+    delete manualByCat[code];
+    if ((!lessons || !lessons.length) && (!extras || !extras.length)) return;
+    const outline = lessons && lessons.length ? plannerLessonsToOutline_(lessons) : '';
+    const badgeLabel = outline ? code + ' ' + outline + '강' : code;
+    const block = plannerDayCellSubjectBlockHtml_('misc', badgeLabel, extras || []);
+    if (block) blocks.push(block);
+    delete lessonsBySub[code];
   });
-  if (!lines.length) return '';
-  return lines.join('');
+
+  const miscExtras = manualByCat.misc;
+  delete manualByCat.misc;
+  if (miscExtras && miscExtras.length) {
+    miscExtras.forEach(function (title) {
+      const block = plannerDayCellSubjectBlockHtml_('misc', title, []);
+      if (block) blocks.push(block);
+    });
+  }
+
+  Object.keys(manualByCat).forEach(function (cat) {
+    const extras = manualByCat[cat];
+    if (!extras || !extras.length) return;
+    const mod = /^(grammar|logic|read|vocab)$/.test(cat) ? cat : 'misc';
+    const name = subjName[cat] != null ? subjName[cat] : cat;
+    const block = plannerDayCellSubjectBlockHtml_(mod, name, extras);
+    if (block) blocks.push(block);
+  });
+
+  if (!blocks.length) return '';
+  return blocks.join('');
 }
 
 /** @param {Record<string, unknown>} legacy */
@@ -1631,8 +3360,15 @@ function plannerApplyFixedScheduleForMonth_(st, viewMonth, weekdays, title, star
   const m0 = viewMonth.getMonth();
   const last = new Date(y, m0 + 1, 0).getDate();
   const ruleId = 'fxr_' + String(Date.now()) + '_' + String(Math.floor(Math.random() * 1e6));
-  if (!st.plannerManualTodos) st.plannerManualTodos = [];
+  plannerEnsureMonthTodos_(st);
   if (!st.dayFixedBlockSlotsByDate) st.dayFixedBlockSlotsByDate = {};
+  /** @type {string[]} */
+  const slotKeysForRows = [];
+  for (let ix = s0; ix < s1; ix++) {
+    const ks = plannerOrderIndexToSlotKey_(ix);
+    if (ks) slotKeysForRows.push(ks);
+  }
+  const timeline_slots = JSON.stringify(slotKeysForRows);
   let d;
   let skdx;
   for (d = 1; d <= last; d++) {
@@ -1640,20 +3376,24 @@ function plannerApplyFixedScheduleForMonth_(st, viewMonth, weekdays, title, star
     if (weekdays.indexOf(dd.getDay()) < 0) continue;
     const ymd = plannerYmdFromParts_(y, m0, d);
     const task_id = '__sp_fix_' + ruleId + '_' + ymd;
-    st.plannerManualTodos.push({
-      task_id: task_id,
-      title: name,
-      description: '',
-      status: 'todo',
-      priority: 'normal',
-      due_date: ymd,
-      start_date: ymd,
-      category: PLAN_CATEGORY_FIXED,
-      sort_key: -600,
-      completed_at: '',
-      created_at: '',
-      updated_at: ''
-    });
+    const todayFx = plannerTodayYmdSeoul_();
+    plannerPushMonthTodo_(
+      st,
+      plannerTodoRowLocal_({
+        task_id: task_id,
+        title: name,
+        date: ymd,
+        category: PLAN_CATEGORY_FIXED,
+        lecture_id: '',
+        timeline_slots: timeline_slots,
+        sort_key: -600,
+        mark: 'none',
+        trace_dates: '[]',
+        created_date: todayFx,
+        updated_date: todayFx
+      }),
+      true
+    );
     if (!st.dayFixedBlockSlotsByDate[ymd]) st.dayFixedBlockSlotsByDate[ymd] = {};
     const slots = plannerEnsureTimelineTodoSlots_(st, ymd);
     for (skdx = s0; skdx < s1; skdx++) {
@@ -1678,10 +3418,10 @@ function plannerApplyFixedScheduleForMonth_(st, viewMonth, weekdays, title, star
  * @returns {string}
  */
 function plannerFixedScheduleFooterHtml_(st, key) {
-  const rows = Array.isArray(st.plannerManualTodos) ? st.plannerManualTodos : [];
+  const rows = plannerMonthTodosForDay_(st, key);
   const lines = [];
   rows.forEach(function (r) {
-    if (!r || String(r.due_date || '').trim() !== key) return;
+    if (!r || String(r.date || '').trim() !== key) return;
     if (String(r.category || '').trim() !== PLAN_CATEGORY_FIXED) return;
     const t = String(r.title || '').trim();
     if (t) lines.push(t);
@@ -1774,7 +3514,7 @@ function plannerDayTodoIdMapForDay_(dateYmd, st) {
   /** @type {Record<string, { task_id: string, title: string, category: string }>} */
   const o = {};
   rows.forEach(function (r) {
-    if (!r || !r.task_id) return;
+    if (!r || !r.task_id || plannerIsTraceGhostDisplay_(r)) return;
     o[String(r.task_id)] = {
       task_id: String(r.task_id),
       title: String(r.title != null ? r.title : ''),
@@ -1832,8 +3572,9 @@ function plannerHourTodoColHtmlFromSlots_(slots, dateYmd, st, hour) {
  * @returns {'none'|'circle'|'triangle'|'x'}
  */
 function plannerTodoCompletionGet_(st, ymd, taskId) {
-  if (!st.dayTodoCompletionByDate || !st.dayTodoCompletionByDate[ymd]) return 'none';
-  const v = st.dayTodoCompletionByDate[ymd][String(taskId)];
+  const row = plannerFindMonthTodoByTaskId_(st, taskId);
+  if (!row || String(row.date || '').trim() !== String(ymd || '').trim()) return 'none';
+  const v = String(row.mark != null ? row.mark : 'none').trim();
   if (v === 'circle' || v === 'triangle' || v === 'x') return v;
   return 'none';
 }
@@ -1845,18 +3586,11 @@ function plannerTodoCompletionGet_(st, ymd, taskId) {
  * @param {'none'|'circle'|'triangle'|'x'} mark
  */
 function plannerTodoCompletionSet_(st, ymd, taskId, mark) {
-  if (!st.dayTodoCompletionByDate) st.dayTodoCompletionByDate = {};
-  if (!st.dayTodoCompletionByDate[ymd]) st.dayTodoCompletionByDate[ymd] = {};
-  const id = String(taskId);
-  if (mark === 'none') {
-    try {
-      delete st.dayTodoCompletionByDate[ymd][id];
-    } catch (_e) {
-      st.dayTodoCompletionByDate[ymd][id] = 'none';
-    }
-  } else {
-    st.dayTodoCompletionByDate[ymd][id] = mark;
-  }
+  const row = plannerFindMonthTodoByTaskId_(st, taskId);
+  if (!row || String(row.date || '').trim() !== String(ymd || '').trim()) return;
+  row.mark = mark === 'none' ? 'none' : mark;
+  if (!row._fromServer) row.updated_date = plannerTodayYmdSeoul_();
+  plannerRebuildQuickPostPayload_(st);
 }
 
 /**
@@ -2012,7 +3746,9 @@ function plannerEnsureTimelineTodoSlots_(st, d) {
   if (!st.dayTimelineTodoByDate) st.dayTimelineTodoByDate = {};
   if (!st.dayTimelineTodoByDate[d]) {
     const leg = st.dayTimelineSlotsByDate && st.dayTimelineSlotsByDate[d];
-    st.dayTimelineTodoByDate[d] = leg ? plannerMigrateLegacySlotsToTodo_(leg) : {};
+    st.dayTimelineTodoByDate[d] = leg
+      ? plannerMigrateLegacySlotsToTodo_(leg)
+      : plannerBuildTimelineSlotMapForDayFromMonthTodos_(st, d);
     if (leg && st.dayTimelineSlotsByDate) {
       try {
         delete st.dayTimelineSlotsByDate[d];
@@ -2227,6 +3963,10 @@ function wirePlannerDayModalUiOnce_(modalEl, root) {
   function endPaintGlobal() {
     painting = false;
     lastPaintSlot = '';
+    const st = root.__spPlanState;
+    if (st && st.selectedDate) {
+      plannerPersistTimelineSlotMapToMonthTodos_(st, st.selectedDate);
+    }
     plannerRefreshDayModalStudyFooter_(root);
     plannerRefreshDayModalTodoSide_(root);
     window.removeEventListener('pointerup', endPaintGlobal);
@@ -2274,6 +4014,7 @@ function wirePlannerDayModalUiOnce_(modalEl, root) {
       const brush = st.modalBrushTodoId ? String(st.modalBrushTodoId) : '';
       plannerTimelineSlotApplyBrush_(slots, String(slot), brush, st, st.selectedDate);
       plannerSyncSlotcellUi_(btn, slots, String(slot), st, st.selectedDate);
+      plannerPersistTimelineSlotMapToMonthTodos_(st, st.selectedDate);
       plannerRefreshDayModalStudyFooter_(root);
       plannerRefreshDayModalTodoSide_(root);
     } else if (e.key === 'ArrowRight') {
@@ -2334,22 +4075,17 @@ function wirePlannerDayModalUiOnce_(modalEl, root) {
 }
 
 /**
- * 일반 등록(`plannerManualTodos`) 중 해당 날짜 건수.
+ * `monthTodos` 중 해당 날짜 건수(고정·trace 제외).
  * @param {object} st
  * @param {string} ymd
  * @returns {number}
  */
 function plannerManualTodosCountForDay_(st, ymd) {
-  const m = st.plannerManualTodos;
-  if (!Array.isArray(m)) return 0;
-  let n = 0;
-  for (let i = 0; i < m.length; i++) {
-    const row = m[i];
-    if (!row || String(row.due_date || '').trim() !== ymd) continue;
-    if (String(row.category || '').trim() === PLAN_CATEGORY_FIXED) continue;
-    n++;
-  }
-  return n;
+  return plannerMonthTodosForDay_(st, ymd).filter(function (t) {
+    if (!t || plannerIsTraceGhostDisplay_(t)) return false;
+    if (String(t.category || '').trim() === PLAN_CATEGORY_FIXED) return false;
+    return true;
+  }).length;
 }
 
 /**
@@ -2360,13 +4096,13 @@ function plannerManualTodosCountForDay_(st, ymd) {
  */
 function plannerCalendarUserTodoCountForBadge_(st, ymd) {
   return plannerOrderedDayTodos_(st, ymd).filter(function (r) {
-    return r && !plannerIsExcludedFromStudyTotals_(r.task_id, r.category);
+    return r && !plannerIsTraceGhostDisplay_(r) && !plannerIsExcludedFromStudyTotals_(r.task_id, r.category);
   }).length;
 }
 
 /**
  * @param {HTMLElement} root
- * @param {{ role: string, common: object[], personal: object[] | null }} boot
+ * @param {{ role: string, common: object[], personal: object[] | null, curriculum?: unknown }} boot
  */
 function renderCalendar_(root, boot) {
   const slot = root.querySelector('#sp-plan-calendar-slot');
@@ -2375,25 +4111,21 @@ function renderCalendar_(root, boot) {
 
   const role = boot && boot.role === 'member' ? 'member' : 'guest';
 
-  const common = boot && Array.isArray(boot.common) ? boot.common : [];
+  const common = plannerNormalizeCommonEventsFromApi_(boot && boot.common);
   const personal = boot && boot.personal != null && Array.isArray(boot.personal) ? boot.personal : [];
 
   /** @type {Record<string, number>} */
   const byDate = {};
-  common.forEach(function (ev) {
-    const d0 = String((ev && ev.start_date) || '').trim();
-    if (!d0) return;
-    byDate[d0] = (byDate[d0] || 0) + 1;
-  });
+  plannerCommonEventsMergeIntoByDate_(byDate, common);
   personal.forEach(function (ev) {
-    const d0 = String((ev && ev.start_date) || '').trim();
+    const d0 = String((ev && ev.date) || '').trim();
     if (!d0) return;
     byDate[d0] = (byDate[d0] || 0) + 1;
   });
 
   const apiHadCalendarRows = common.length > 0 || personal.length > 0;
 
-  /** @type {{ role: 'member'|'guest', viewMonth: Date, byDate: Record<string, number>, selectedDate: string|null, apiHadCalendarRows: boolean, dayTodoOrderByDate?: Record<string, string[]>, dayTodoCompletionByDate?: Record<string, Record<string, string>>, dayTimelineSlotsByDate?: Record<string, Record<string, boolean>>, dayTimelineTodoByDate?: Record<string, Record<string, string>>, dayMemoByDate?: Record<string, string>, quickPlanByDate?: Record<string, { subject: string, lesson: number }[]>, plannerManualTodos?: object[], plannerQuickPostBody?: { action: string, todos: object[] }, modalBrushTodoId?: string, quickRegCollapsed?: boolean, planGuestUnlockMock?: boolean }} */
+  /** @type {{ role: 'member'|'guest', viewMonth: Date, byDate: Record<string, number>, selectedDate: string|null, apiHadCalendarRows: boolean, plannerCurriculum?: { courses: object[], lectures: object[] }, monthTodos?: object[], dayTodoOrderByDate?: Record<string, string[]>, dayTimelineSlotsByDate?: Record<string, Record<string, boolean>>, dayTimelineTodoByDate?: Record<string, Record<string, string>>, dayFixedBlockSlotsByDate?: Record<string, Record<string, boolean>>, dayMemoByDate?: Record<string, string>, plannerQuickPostBody?: { action: string, todos: object[] }, modalBrushTodoId?: string, quickRegCollapsed?: boolean, planGuestUnlockMock?: boolean }} */
   const st = (root.__spPlanState =
     root.__spPlanState && typeof root.__spPlanState === 'object'
       ? root.__spPlanState
@@ -2404,13 +4136,12 @@ function renderCalendar_(root, boot) {
           selectedDate: null,
           apiHadCalendarRows: false,
           dayTodoOrderByDate: {},
-          dayTodoCompletionByDate: {},
           dayTimelineSlotsByDate: {},
           dayTimelineTodoByDate: {},
           dayFixedBlockSlotsByDate: {},
           dayMemoByDate: {},
-          quickPlanByDate: {},
-          plannerManualTodos: [],
+          monthTodos: [],
+          plannerCurriculum: { courses: [], lectures: [] },
           plannerQuickPostBody: { action: 'plannerPersonalTodosApply', todos: [] },
           modalBrushTodoId: '',
           quickRegCollapsed: false,
@@ -2423,9 +4154,10 @@ function renderCalendar_(root, boot) {
   }
   st.byDate = byDate;
   st.apiHadCalendarRows = apiHadCalendarRows;
+  st.plannerCommonEvents = common;
+  st.plannerCurriculum = plannerNormalizeCurriculumFromBootstrap_(boot && boot.curriculum);
   if (st.modalBrushTodoId == null) st.modalBrushTodoId = '';
-  if (!st.quickPlanByDate) st.quickPlanByDate = {};
-  if (!st.plannerManualTodos) st.plannerManualTodos = [];
+  plannerEnsureMonthTodos_(st);
   if (!st.plannerQuickPostBody || typeof st.plannerQuickPostBody !== 'object') {
     st.plannerQuickPostBody = { action: 'plannerPersonalTodosApply', todos: [] };
     plannerRebuildQuickPostPayload_(st);
@@ -2433,7 +4165,6 @@ function renderCalendar_(root, boot) {
   if (!st.dayTimelineTodoByDate) st.dayTimelineTodoByDate = {};
   if (!st.dayFixedBlockSlotsByDate) st.dayFixedBlockSlotsByDate = {};
   if (!st.dayMemoByDate) st.dayMemoByDate = {};
-  if (!st.dayTodoCompletionByDate) st.dayTodoCompletionByDate = {};
   if (typeof st.quickRegCollapsed !== 'boolean') st.quickRegCollapsed = false;
   if (typeof st.planGuestUnlockMock !== 'boolean') st.planGuestUnlockMock = false;
   if (ban) {
@@ -2447,6 +4178,8 @@ function renderCalendar_(root, boot) {
   if (!(st.viewMonth instanceof Date) || isNaN(Number(st.viewMonth))) {
     st.viewMonth = new Date();
   }
+
+  plannerApplyBootstrapPersonal_(st, personal, st.role);
 
   function pad2(n) {
     return String(n < 10 ? '0' : '') + String(n);
@@ -2527,7 +4260,7 @@ function renderCalendar_(root, boot) {
           : '') +
         '</div>' +
         plannerCurriculumWeekTableHtml_(
-          plannerCurriculumMockWeekPayload_(
+        plannerCurriculumWeekPayloadForRender_(
             w,
             plannerCurriculumWeekLessonRangeFromQuickPlan_(st, [
               ymd(new Date(sun.getFullYear(), sun.getMonth(), sun.getDate() + 0)),
@@ -2537,7 +4270,8 @@ function renderCalendar_(root, boot) {
               ymd(new Date(sun.getFullYear(), sun.getMonth(), sun.getDate() + 4)),
               ymd(new Date(sun.getFullYear(), sun.getMonth(), sun.getDate() + 5)),
               ymd(new Date(sun.getFullYear(), sun.getMonth(), sun.getDate() + 6))
-            ])
+            ]),
+            st.plannerCurriculum
           )
         ) +
         '</div>';
@@ -2548,8 +4282,8 @@ function renderCalendar_(root, boot) {
         const key = ymd(d);
         const wkCls = di === 0 ? ' is-sun' : di === 6 ? ' is-sat' : '';
         const apiN = st.byDate[key] || 0;
-        const qn = st.quickPlanByDate && st.quickPlanByDate[key] ? st.quickPlanByDate[key].length : 0;
         const mn = plannerManualTodosCountForDay_(st, key);
+        const qn = mn;
         const todoN = plannerCalendarUserTodoCountForBadge_(st, key);
         const asg = plannerAssignedMinutesForDay_(st, key) > 0 ? 1 : 0;
         const badge = apiN + todoN + asg;
@@ -2737,37 +4471,32 @@ function renderCalendar_(root, boot) {
     '<span class="sp-plan-todoReg__panelBadge" aria-hidden="true">빠른</span>' +
     '<div class="sp-plan-todoReg__panelHeadText">' +
     '<h3 class="sp-plan-todoReg__panelTitle">빠른 등록</h3>' +
-    '<p class="sp-plan-todoReg__panelSub">선택한 요일에 강 번호를 나눠 이 달에 할 일을 한 번에 더합니다. 이미 반영된 빠른 등록은 지우지 않고 합치며, 같은 날·같은 과목·같은 강 번호만 중복으로 넣지 않습니다.</p>' +
+    '<p class="sp-plan-todoReg__panelSub">커리큘럼 강좌·회차 구간을 선택 요일에 나눠 todo를 한 번에 추가합니다. 요일별 강 수를 비우면 n빵으로 채웁니다.</p>' +
     '</div></div>' +
     '<p class="sp-plan-quick__err" id="sp-plan-quick-err" hidden></p>' +
-    '<div class="sp-plan-quick__row sp-plan-quick__row--horiz">' +
-    '<span class="sp-plan-quick__lbl">요일</span>' +
-    '<div class="sp-plan-quick__chks" role="group" aria-label="요일">' +
-    '<label class="sp-plan-quick__chk"><input type="checkbox" name="sp-dow" value="1"/>월</label>' +
-    '<label class="sp-plan-quick__chk"><input type="checkbox" name="sp-dow" value="2"/>화</label>' +
-    '<label class="sp-plan-quick__chk"><input type="checkbox" name="sp-dow" value="3"/>수</label>' +
-    '<label class="sp-plan-quick__chk"><input type="checkbox" name="sp-dow" value="4"/>목</label>' +
-    '<label class="sp-plan-quick__chk"><input type="checkbox" name="sp-dow" value="5"/>금</label>' +
-    '<label class="sp-plan-quick__chk"><input type="checkbox" name="sp-dow" value="6"/>토</label>' +
-    '<label class="sp-plan-quick__chk"><input type="checkbox" name="sp-dow" value="0"/>일</label>' +
+    '<p class="sp-plan-curr__hint" id="sp-quick-catalog-hint" hidden></p>' +
+    '<div class="sp-plan-quick__row sp-plan-quick__row--stack">' +
+    '<span class="sp-plan-quick__lbl">요일·강 수</span>' +
+    '<div class="sp-plan-quick__dowGrid" role="group" aria-label="요일">' +
+    '<div class="sp-plan-quick__dowItem"><label class="sp-plan-quick__chk"><input type="checkbox" name="sp-dow" value="1"/>월</label><input type="text" class="sp-plan-quick__dowCnt" data-dow="1" inputmode="numeric" pattern="[0-9]*" autocomplete="off" placeholder="강 수" hidden/></div>' +
+    '<div class="sp-plan-quick__dowItem"><label class="sp-plan-quick__chk"><input type="checkbox" name="sp-dow" value="2"/>화</label><input type="text" class="sp-plan-quick__dowCnt" data-dow="2" inputmode="numeric" pattern="[0-9]*" autocomplete="off" placeholder="강 수" hidden/></div>' +
+    '<div class="sp-plan-quick__dowItem"><label class="sp-plan-quick__chk"><input type="checkbox" name="sp-dow" value="3"/>수</label><input type="text" class="sp-plan-quick__dowCnt" data-dow="3" inputmode="numeric" pattern="[0-9]*" autocomplete="off" placeholder="강 수" hidden/></div>' +
+    '<div class="sp-plan-quick__dowItem"><label class="sp-plan-quick__chk"><input type="checkbox" name="sp-dow" value="4"/>목</label><input type="text" class="sp-plan-quick__dowCnt" data-dow="4" inputmode="numeric" pattern="[0-9]*" autocomplete="off" placeholder="강 수" hidden/></div>' +
+    '<div class="sp-plan-quick__dowItem"><label class="sp-plan-quick__chk"><input type="checkbox" name="sp-dow" value="5"/>금</label><input type="text" class="sp-plan-quick__dowCnt" data-dow="5" inputmode="numeric" pattern="[0-9]*" autocomplete="off" placeholder="강 수" hidden/></div>' +
+    '<div class="sp-plan-quick__dowItem"><label class="sp-plan-quick__chk"><input type="checkbox" name="sp-dow" value="6"/>토</label><input type="text" class="sp-plan-quick__dowCnt" data-dow="6" inputmode="numeric" pattern="[0-9]*" autocomplete="off" placeholder="강 수" hidden/></div>' +
+    '<div class="sp-plan-quick__dowItem"><label class="sp-plan-quick__chk"><input type="checkbox" name="sp-dow" value="0"/>일</label><input type="text" class="sp-plan-quick__dowCnt" data-dow="0" inputmode="numeric" pattern="[0-9]*" autocomplete="off" placeholder="강 수" hidden/></div>' +
     '</div></div>' +
-    '<div class="sp-plan-quick__row sp-plan-quick__row--horiz">' +
-    '<span class="sp-plan-quick__lbl">과목</span>' +
-    '<div class="sp-plan-quick__chks" role="group" aria-label="과목">' +
-    '<label class="sp-plan-quick__chk"><input type="checkbox" name="sp-subj" value="grammar" checked/>문법</label>' +
-    '<label class="sp-plan-quick__chk"><input type="checkbox" name="sp-subj" value="logic" checked/>논리</label>' +
-    '<label class="sp-plan-quick__chk"><input type="checkbox" name="sp-subj" value="read" checked/>독해</label>' +
-    '<label class="sp-plan-quick__chk"><input type="checkbox" name="sp-subj" value="vocab"/>어휘</label>' +
-    '</div></div>' +
-    '<div class="sp-plan-quick__row sp-plan-quick__row--horiz sp-plan-quick__row--nums">' +
-    '<span class="sp-plan-quick__lbl">강</span>' +
-    '<div class="sp-plan-quick__chks sp-plan-quick__chks--nums">' +
-    '<input type="number" id="sp-lesson-from" class="sp-plan-quick__num" min="1" max="99" value="1" />' +
-    '<span class="sp-plan-quick__til">~</span>' +
-    '<input type="number" id="sp-lesson-to" class="sp-plan-quick__num" min="1" max="99" value="20" />' +
+    '<div class="sp-plan-manual__grid sp-plan-manual__grid--quick">' +
+    '<label class="sp-plan-manual__lbl">과목<select id="sp-quick-subj" class="sp-plan-manual__select"></select></label>' +
+    '<label class="sp-plan-manual__lbl">선생님<select id="sp-quick-instructor" class="sp-plan-manual__select"></select></label>' +
+    '<label class="sp-plan-manual__lbl">강좌명<select id="sp-quick-course" class="sp-plan-manual__select"></select></label>' +
+    '<label class="sp-plan-manual__lbl">시작<select id="sp-quick-lec-from" class="sp-plan-manual__select"></select></label>' +
+    '<label class="sp-plan-manual__lbl">끝<select id="sp-quick-lec-to" class="sp-plan-manual__select"></select></label>' +
+    '</div>' +
+    '<div class="sp-plan-quick__applyRow">' +
     '<button type="button" class="btn btn--primary sp-plan-quick__apply" id="sp-quick-apply">이 달에 반영</button>' +
     '<button type="button" class="btn btn--ghost sp-plan-quick__clear" id="sp-quick-clear">이 달 지우기</button>' +
-    '</div></div></div>' +
+    '</div></div>' +
     '<div class="sp-plan-todoReg__panel sp-plan-todoReg__panel--fixed" id="sp-plan-fixed-reg" aria-label="고정 일정">' +
     '<div class="sp-plan-todoReg__panelHead">' +
     '<span class="sp-plan-todoReg__panelBadge sp-plan-todoReg__panelBadge--fixed" aria-hidden="true">고정</span>' +
@@ -2809,9 +4538,16 @@ function renderCalendar_(root, boot) {
     '<span class="sp-plan-todoReg__panelBadge sp-plan-todoReg__panelBadge--manual" aria-hidden="true">개별</span>' +
     '<div class="sp-plan-todoReg__panelHeadText">' +
     '<h3 class="sp-plan-todoReg__panelTitle">개별 등록</h3>' +
-    '<p class="sp-plan-todoReg__panelSub">제목·등록 날짜·과목을 넣고 한 건씩 추가합니다. 그날짜가 이 할 일의 기준일입니다.</p>' +
+    '<p class="sp-plan-todoReg__panelSub">직접 입력 또는 커리큘럼(마스터 강좌·회차)으로 한 건씩 추가합니다.</p>' +
     '</div></div>' +
     '<p class="sp-plan-manual__err" id="sp-plan-manual-err" hidden></p>' +
+    '<p class="sp-plan-manual__err sp-plan-manual__err--curr" id="sp-plan-curr-err" hidden></p>' +
+    '<p class="sp-plan-curr__hint" id="sp-curr-catalog-hint" hidden></p>' +
+    '<div class="sp-plan-manual__mode" role="group" aria-label="개별 등록 방식">' +
+    '<button type="button" class="btn btn--ghost sp-plan-manual__modeBtn is-active" id="sp-manual-mode-direct" aria-pressed="true">직접 입력</button>' +
+    '<button type="button" class="btn btn--ghost sp-plan-manual__modeBtn" id="sp-manual-mode-curriculum" aria-pressed="false">커리큘럼</button>' +
+    '</div>' +
+    '<div id="sp-plan-manual-direct" class="sp-plan-manual__block">' +
     '<div class="sp-plan-manual__grid">' +
     '<label class="sp-plan-manual__lbl">제목<input type="text" id="sp-manual-title" class="sp-plan-manual__input" maxlength="200" placeholder="예: 모의고사 오답" autocomplete="off"/></label>' +
     '<label class="sp-plan-manual__lbl">등록·예정일<input type="date" id="sp-manual-due" class="sp-plan-manual__input" value="' +
@@ -2820,10 +4556,27 @@ function renderCalendar_(root, boot) {
     '<label class="sp-plan-manual__lbl">과목<select id="sp-manual-cat" class="sp-plan-manual__select">' +
     '<option value="grammar">문법</option><option value="logic">논리</option><option value="read">독해</option><option value="vocab">어휘</option><option value="misc" selected>기타</option></select></label>' +
     '</div>' +
-    '<label class="sp-plan-manual__lbl sp-plan-manual__lbl--block">메모(선택)<textarea id="sp-manual-desc" class="sp-plan-manual__textarea" rows="2" maxlength="2000"></textarea></label>' +
-    '<button type="button" class="btn btn--primary sp-plan-manual__add" id="sp-manual-add">할 일 추가</button></div>' +
+    '<button type="button" class="btn btn--primary sp-plan-manual__add" id="sp-manual-add">할 일 추가</button>' +
+    '</div>' +
+    '<div id="sp-plan-manual-curriculum" class="sp-plan-manual__block" hidden>' +
+    '<div class="sp-plan-manual__grid sp-plan-manual__grid--curr">' +
+    '<label class="sp-plan-manual__lbl">과목<select id="sp-curr-subj" class="sp-plan-manual__select"></select></label>' +
+    '<label class="sp-plan-manual__lbl">선생님<select id="sp-curr-instructor" class="sp-plan-manual__select"></select></label>' +
+    '<label class="sp-plan-manual__lbl">강좌명<select id="sp-curr-course" class="sp-plan-manual__select"></select></label>' +
+    '<label class="sp-plan-manual__lbl">회차<select id="sp-curr-lecture" class="sp-plan-manual__select"></select></label>' +
+    '<label class="sp-plan-manual__lbl">등록·예정일<input type="date" id="sp-curr-due" class="sp-plan-manual__input" value="' +
+    esc(defManDue) +
+    '"/></label>' +
+    '<label class="sp-plan-manual__lbl sp-plan-manual__lbl--preview">저장 제목<input type="text" id="sp-curr-title-preview" class="sp-plan-manual__input" readonly tabindex="-1" aria-readonly="true" placeholder="회차 선택 시 자동"/></label>' +
+    '</div>' +
+    '<button type="button" class="btn btn--primary sp-plan-manual__add" id="sp-curr-add">할 일 추가</button>' +
+    '</div></div>' +
     '<div class="sp-plan-quick__postPreview sp-plan-todoReg__postPreview">' +
     '<div class="sp-plan-quick__postPreviewLbl">POST 미리보기 · <code>plannerPersonalTodosApply</code> (빠른+개별 합본)</div>' +
+    '<div class="sp-plan-quick__postActions">' +
+    '<button type="button" class="btn btn--primary" id="sp-plan-todos-apply">이 달 시트에 저장</button>' +
+    '<span class="sp-plan-quick__applyMsg" id="sp-plan-todos-apply-msg" hidden></span>' +
+    '</div>' +
     '<pre class="sp-plan-quick__postPre" id="sp-plan-post-preview"></pre>' +
     '</div></div></section>' +
     '<div class="sp-plan-month" id="sp-plan-month-wrap">' +
@@ -2857,6 +4610,10 @@ function renderCalendar_(root, boot) {
     if (o6 instanceof HTMLOptionElement) fse0.value = '6';
     else if (fse0.options.length) fse0.selectedIndex = Math.min(2, fse0.options.length - 1);
   }
+
+  plannerSetManualRegMode_(slot, st, st.manualRegMode === 'curriculum' ? 'curriculum' : 'direct');
+  plannerQuickCurriculumRefreshCascade_(slot, st, 'all');
+  plannerQuickSyncDowCountInputs_(slot);
 
   if (!slot.__spPlanCalWired) {
     slot.__spPlanCalWired = true;
@@ -2897,37 +4654,47 @@ function renderCalendar_(root, boot) {
           qr.querySelectorAll('input[name="sp-dow"]:checked').forEach(function (cb) {
             weekdays.push(Number(/** @type {HTMLInputElement} */ (cb).value));
           });
-          const subjects = [];
-          qr.querySelectorAll('input[name="sp-subj"]:checked').forEach(function (cb) {
-            subjects.push(String(/** @type {HTMLInputElement} */ (cb).value));
-          });
-          const fromEl = slot.querySelector('#sp-lesson-from');
-          const toEl = slot.querySelector('#sp-lesson-to');
-          const fromL = fromEl && 'value' in fromEl ? Number(/** @type {HTMLInputElement} */ (fromEl).value) : 1;
-          const toL = toEl && 'value' in toEl ? Number(/** @type {HTMLInputElement} */ (toEl).value) : 20;
-          if (!weekdays.length) {
+          const courseEl = slot.querySelector('#sp-quick-course');
+          const fromEl = slot.querySelector('#sp-quick-lec-from');
+          const toEl = slot.querySelector('#sp-quick-lec-to');
+          const courseId =
+            courseEl && 'value' in courseEl ? String(/** @type {HTMLSelectElement} */ (courseEl).value).trim() : '';
+          const fromL = fromEl && 'value' in fromEl ? Number(/** @type {HTMLSelectElement} */ (fromEl).value) : 1;
+          const toL = toEl && 'value' in toEl ? Number(/** @type {HTMLSelectElement} */ (toEl).value) : 1;
+          const countByDow = plannerQuickReadCountByDow_(slot);
+          const msg = plannerApplyQuickCurriculumToMonthTodos_(
+            st,
+            st.viewMonth,
+            weekdays,
+            courseId,
+            fromL,
+            toL,
+            countByDow
+          );
+          if (msg) {
             if (errEl) {
-              errEl.textContent = '요일을 한 개 이상 선택해 주세요.';
+              errEl.textContent = msg;
               errEl.removeAttribute('hidden');
             }
             return;
           }
-          if (!subjects.length) {
-            if (errEl) {
-              errEl.textContent = '과목을 한 개 이상 선택해 주세요.';
-              errEl.removeAttribute('hidden');
-            }
-            return;
-          }
-          plannerApplyQuickPlanToState_(st, st.viewMonth, weekdays, subjects, fromL, toL);
+          plannerRefreshPostPreview_(root);
           renderMonth_();
           const modal = root.querySelector('#sp-plan-day-modal');
           if (modal && st.selectedDate && !modal.hasAttribute('hidden')) {
+            if (st.dayTimelineTodoByDate) {
+              try {
+                delete st.dayTimelineTodoByDate[st.selectedDate];
+              } catch (_e) {
+                st.dayTimelineTodoByDate[st.selectedDate] = {};
+              }
+            }
             openDayModal_(st.selectedDate);
           }
         }
         if (quickClear) {
           plannerClearQuickPlanForMonth_(st, st.viewMonth);
+          plannerRefreshPostPreview_(root);
           renderMonth_();
           if (errEl) {
             errEl.textContent = '';
@@ -2935,6 +4702,13 @@ function renderCalendar_(root, boot) {
           }
           const modal = root.querySelector('#sp-plan-day-modal');
           if (modal && st.selectedDate && !modal.hasAttribute('hidden')) {
+            if (st.dayTimelineTodoByDate) {
+              try {
+                delete st.dayTimelineTodoByDate[st.selectedDate];
+              } catch (_e) {
+                st.dayTimelineTodoByDate[st.selectedDate] = {};
+              }
+            }
             openDayModal_(st.selectedDate);
           }
         }
@@ -2979,6 +4753,18 @@ function renderCalendar_(root, boot) {
         }
         return;
       }
+      const modeDirect =
+        t.id === 'sp-manual-mode-direct' ? t : t.closest ? t.closest('#sp-manual-mode-direct') : null;
+      const modeCurr =
+        t.id === 'sp-manual-mode-curriculum' ? t : t.closest ? t.closest('#sp-manual-mode-curriculum') : null;
+      if (modeDirect) {
+        plannerSetManualRegMode_(slot, st, 'direct');
+        return;
+      }
+      if (modeCurr) {
+        plannerSetManualRegMode_(slot, st, 'curriculum');
+        return;
+      }
       const manualAdd = t.id === 'sp-manual-add' ? t : t.closest ? t.closest('#sp-manual-add') : null;
       if (manualAdd) {
         const errM = slot.querySelector('#sp-plan-manual-err');
@@ -3000,12 +4786,34 @@ function renderCalendar_(root, boot) {
         }
         return;
       }
+      const currAdd = t.id === 'sp-curr-add' ? t : t.closest ? t.closest('#sp-curr-add') : null;
+      if (currAdd) {
+        const errC = slot.querySelector('#sp-plan-curr-err');
+        const msgC = plannerAppendCurriculumTodoFromForm_(slot, st);
+        if (errC) {
+          if (msgC) {
+            errC.textContent = msgC;
+            errC.removeAttribute('hidden');
+          } else {
+            errC.textContent = '';
+            errC.setAttribute('hidden', 'hidden');
+          }
+        }
+        plannerRefreshPostPreview_(root);
+        renderMonth_();
+        const modalC = root.querySelector('#sp-plan-day-modal');
+        if (modalC && st.selectedDate && !modalC.hasAttribute('hidden')) {
+          openDayModal_(st.selectedDate);
+        }
+        return;
+      }
       const nav = t.closest ? t.closest('[data-nav]') : null;
       if (nav && nav.getAttribute) {
         const step = Number(nav.getAttribute('data-nav')) || 0;
         if (step) {
           st.viewMonth = new Date(st.viewMonth.getFullYear(), st.viewMonth.getMonth() + step, 1);
           renderMonth_();
+          void plannerRefetchBootstrapForViewMonth_(root);
         }
         return;
       }
@@ -3017,7 +4825,41 @@ function renderCalendar_(root, boot) {
         }
       }
     });
+    slot.addEventListener('change', function (e) {
+      const t = e.target;
+      if (t instanceof HTMLInputElement && t.name === 'sp-dow') {
+        plannerQuickSyncDowCountInputs_(slot);
+        return;
+      }
+      if (!(t instanceof HTMLSelectElement)) return;
+      const id = t.id || '';
+      if (id === 'sp-curr-subj') {
+        plannerCurriculumRefreshCascade_(slot, st, 'subject');
+      } else if (id === 'sp-curr-instructor') {
+        plannerCurriculumRefreshCascade_(slot, st, 'instructor');
+      } else if (id === 'sp-curr-course') {
+        plannerCurriculumRefreshCascade_(slot, st, 'course');
+      } else if (id === 'sp-curr-lecture') {
+        plannerCurriculumRefreshCascade_(slot, st, 'preview');
+      } else if (id === 'sp-quick-subj') {
+        plannerQuickCurriculumRefreshCascade_(slot, st, 'subject');
+      } else if (id === 'sp-quick-instructor') {
+        plannerQuickCurriculumRefreshCascade_(slot, st, 'instructor');
+      } else if (id === 'sp-quick-course') {
+        plannerQuickCurriculumRefreshCascade_(slot, st, 'course');
+      } else if (id === 'sp-quick-lec-from' || id === 'sp-quick-lec-to') {
+        /* 회차만 변경 */
+      }
+    });
   }
+
+  root.__spPlanRerenderMonth = renderMonth_;
+  root.__spPlanRefreshOpenDayModal = function () {
+    const m = root.querySelector('#sp-plan-day-modal');
+    if (m && st.selectedDate && !m.hasAttribute('hidden')) {
+      openDayModal_(st.selectedDate);
+    }
+  };
 
   plannerApplyAdminVisibility_(root);
 }
@@ -3047,25 +4889,45 @@ function wireGate_(root) {
   }
 
   async function runBootstrap(memberCode, segs, name) {
+    root.__spPlannerBootstrapCtx = {
+      memberCode: memberCode || '',
+      phoneSegments: Array.isArray(segs)
+        ? segs.map(function (s) {
+            return String(s != null ? s : '');
+          })
+        : ['', '', ''],
+      name: name || ''
+    };
+    const stPre = root.__spPlanState;
+    const ymDate =
+      stPre && stPre.viewMonth instanceof Date && !isNaN(stPre.viewMonth.getTime())
+        ? stPre.viewMonth
+        : new Date();
     const boot = await plannerGasCall_({
       action: 'plannerBootstrap',
       phoneSegments: segs,
       name: name || '',
-      memberCode: memberCode || ''
+      memberCode: memberCode || '',
+      year_month: plannerYearMonthFromDate_(ymDate)
     });
     if (!boot || !boot.ok) {
       const m = boot && boot.error && boot.error.message != null ? String(boot.error.message) : '일정을 불러오지 못했습니다.';
       showErr(m);
       return;
     }
-    const d = /** @type {{ role?: string, common?: object[], personal?: object[] | null, student_profile?: Record<string, unknown> }} */ (
+    const d = /** @type {{ role?: string, common?: object[], personal?: object[] | null, student_profile?: Record<string, unknown>, curriculum?: unknown }} */ (
       boot.data || {}
     );
     gate.setAttribute('hidden', 'hidden');
     gate.setAttribute('aria-hidden', 'true');
     plannerRevealPlanMain_(root);
+    renderCalendar_(root, {
+      role: d.role || 'guest',
+      common: d.common || [],
+      personal: d.personal != null ? d.personal : null,
+      curriculum: d.curriculum
+    });
     renderPlannerStudentProfile_(root, d.student_profile);
-    renderCalendar_(root, { role: d.role || 'guest', common: d.common || [], personal: d.personal != null ? d.personal : null });
   }
 
   btn.addEventListener('click', async function () {
@@ -3093,7 +4955,9 @@ function wireGate_(root) {
       showErr(m);
       return;
     }
-    const data = /** @type {{ outcome?: string, needName?: boolean, memberCode?: string | null }} */ (res.data || {});
+    const data = /** @type {{ outcome?: string, needName?: boolean, link_key?: string | null, memberCode?: string | null }} */ (
+      res.data || {}
+    );
     const oc = String(data.outcome || '');
     if (oc === 'need_name') {
       if (nameInput) {
@@ -3102,8 +4966,14 @@ function wireGate_(root) {
       showErr('같은 번호로 등록된 분이 여러 명입니다. 이름을 입력한 뒤 다시 확인을 눌러 주세요.');
       return;
     }
-    if (oc === 'matched' && data.memberCode) {
-      await runBootstrap(String(data.memberCode), segs, name);
+    const linkKey =
+      data.link_key != null && String(data.link_key).trim()
+        ? String(data.link_key).trim()
+        : data.memberCode != null && String(data.memberCode).trim()
+          ? String(data.memberCode).trim()
+          : '';
+    if (oc === 'matched' && linkKey) {
+      await runBootstrap(linkKey, segs, name);
       return;
     }
     await runBootstrap('', segs, name);
@@ -3135,7 +5005,7 @@ function wirePlanDevBar_(root) {
     }
     plannerRevealPlanMain_(root);
     renderCalendar_(root, { role: 'guest', common: [], personal: null });
-    renderPlannerStudentProfile_(root, MOCK_PLANNER_STUDENT_PROFILE);
+    renderPlannerStudentProfile_(root, null);
   });
 
   initBtn.addEventListener('click', async function () {
@@ -3210,8 +5080,10 @@ function main() {
     el.__spPlanAdminMode = false;
   }
   wirePlannerAdminUnlockOnce_(el);
+  wirePlannerStudentProfileSaveOnce_(el);
+  wirePlannerPersonalTodosApplyOnce_(el);
   plannerSetGatePending_(el);
-  renderPlannerStudentProfile_(el, MOCK_PLANNER_STUDENT_PROFILE);
+  renderPlannerStudentProfile_(el, null);
   wirePlanDevBar_(el);
   plannerApplyAdminVisibility_(el);
   if (GAS_MODE.useMock) {
