@@ -3178,6 +3178,19 @@ button.sp-stu-remark__item--open:hover {
   }
 }
 
+#solpath-plan-root .sp-plan-exportBar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.75rem;
+  margin: 0.35rem 0 0.15rem;
+}
+
+#solpath-plan-root .sp-plan-exportBar__msg {
+  font-size: 0.85rem;
+  color: #64748b;
+}
+
 #solpath-plan-root.solpath-mount .app-shell--plan .sp-plan-monthly-title {
   margin: 0 0 0.75rem;
   padding: 0;
@@ -3186,6 +3199,133 @@ button.sp-stu-remark__item--open:hover {
   letter-spacing: -0.015em;
   line-height: 1.25;
   color: #4a148c;
+}
+
+/* PDF보내기 — 화면 밖 렌더 후 html2canvas 캡처 */
+.sp-plan-pdf-export-host {
+  position: fixed;
+  left: -120vw;
+  top: 0;
+  z-index: -1;
+  width: 794px;
+  max-width: 794px;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.sp-plan-pdf-sheet {
+  width: 794px;
+  max-width: 794px;
+  padding: 10px 12px 8px;
+  box-sizing: border-box;
+  background: #fff;
+  color: #1e293b;
+  font-family: Pretendard, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.sp-plan-pdf__brand {
+  font-size: 15px;
+  font-weight: 700;
+  color: #4a148c;
+  letter-spacing: -0.02em;
+  margin: 0 0 6px;
+}
+
+.sp-plan-pdf__h {
+  margin: 0 0 4px;
+  font-size: 12px;
+  font-weight: 650;
+  color: #4a148c;
+}
+
+.sp-plan-pdf__section {
+  margin-bottom: 8px;
+}
+
+.sp-plan-pdf__section--cal {
+  margin-bottom: 4px;
+}
+
+.sp-plan-pdf__foot {
+  margin: 6px 0 0;
+  font-size: 9px;
+  color: #94a3b8;
+  text-align: right;
+}
+
+.sp-plan-pdf__empty {
+  margin: 0;
+  color: #64748b;
+  font-size: 11px;
+}
+
+.sp-plan-pdf-sheet .sp-plan-pdf__profile {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 10px;
+}
+
+.sp-plan-pdf-sheet .sp-plan-pdf__profile th,
+.sp-plan-pdf-sheet .sp-plan-pdf__profile td {
+  border: 1px solid #e2e8f0;
+  padding: 3px 5px;
+  vertical-align: top;
+  word-break: break-word;
+}
+
+.sp-plan-pdf-sheet .sp-plan-pdf__profile th {
+  width: 5.5rem;
+  background: #f8fafc;
+  font-weight: 600;
+  color: #475569;
+}
+
+.sp-plan-pdf-sheet .sp-plan-month {
+  min-width: 0 !important;
+  width: 100%;
+  --sp-plan-month-lead: 8.5rem;
+  --sp-plan-day-col-min: 2.35rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 4px;
+  box-sizing: border-box;
+  font-size: 8px;
+}
+
+.sp-plan-pdf-sheet .sp-plan-month__head {
+  justify-content: center;
+  margin-bottom: 4px;
+}
+
+.sp-plan-pdf-sheet .sp-plan-month__title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #4a148c;
+}
+
+.sp-plan-pdf-sheet .sp-plan-month__dow {
+  font-size: 7px;
+}
+
+.sp-plan-pdf-sheet .sp-plan-day {
+  min-height: 2.6rem;
+  padding: 2px;
+}
+
+.sp-plan-pdf-sheet .sp-plan-day__num {
+  font-size: 9px;
+}
+
+.sp-plan-pdf-sheet .sp-plan-cur__tbl {
+  font-size: 7px;
+}
+
+.sp-plan-pdf-sheet .sp-plan-month__weekMeta-range,
+.sp-plan-pdf-sheet .sp-plan-month__weekMeta-wk {
+  font-size: 7px;
 }
 
 #solpath-plan-root .app-shell--plan .sp-plan-calendar-slot {
@@ -4327,6 +4467,23 @@ button.sp-stu-remark__item--open:hover {
   overflow-x: auto;
   overflow-y: visible;
   box-sizing: border-box;
+}
+
+#solpath-plan-root .sp-plan-cur--empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 4.5rem;
+  padding: 0.5rem 0.65rem;
+  background: #f8fafc;
+}
+
+#solpath-plan-root .sp-plan-cur__empty {
+  margin: 0;
+  font-size: calc(0.68rem + var(--sp-text-bump));
+  color: #94a3b8;
+  text-align: center;
+  line-height: 1.35;
 }
 
 #solpath-plan-root .sp-plan-cur__tbl {

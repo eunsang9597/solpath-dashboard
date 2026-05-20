@@ -758,6 +758,313 @@ function wirePlannerStudentProfileSaveOnce_(root) {
   });
 }
 
+const PLANNER_PDF_LIB_HTML2CANVAS = 'https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js';
+const PLANNER_PDF_LIB_JSPDF = 'https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js';
+
+/**
+ * @param {string} src
+ * @returns {Promise<void>}
+ */
+function plannerLoadScriptOnce_(src) {
+  return new Promise(function (resolve, reject) {
+    const prev = document.querySelector('script[data-sp-plan-pdf-src="' + src + '"]');
+    if (prev) {
+      if (prev.getAttribute('data-sp-plan-pdf-ready') === '1') {
+        resolve();
+        return;
+      }
+      prev.addEventListener('load', function () {
+        resolve();
+      });
+      prev.addEventListener('error', function () {
+        reject(new Error('script load failed'));
+      });
+      return;
+    }
+    const s = document.createElement('script');
+    s.src = src;
+    s.async = true;
+    s.crossOrigin = 'anonymous';
+    s.setAttribute('data-sp-plan-pdf-src', src);
+    s.onload = function () {
+      s.setAttribute('data-sp-plan-pdf-ready', '1');
+      resolve();
+    };
+    s.onerror = function () {
+      reject(new Error('script load failed'));
+    };
+    document.head.appendChild(s);
+  });
+}
+
+/**
+ * @returns {Promise<void>}
+ */
+async function plannerEnsurePdfLibs_() {
+  await plannerLoadScriptOnce_(PLANNER_PDF_LIB_HTML2CANVAS);
+  await plannerLoadScriptOnce_(PLANNER_PDF_LIB_JSPDF);
+  if (typeof globalThis.html2canvas !== 'function') {
+    throw new Error('html2canvas unavailable');
+  }
+  const jspdfNs = globalThis.jspdf;
+  if (!jspdfNs || typeof jspdfNs.jsPDF !== 'function') {
+    throw new Error('jsPDF unavailable');
+  }
+}
+
+/**
+ * @param {HTMLTableCellElement|null} td
+ * @returns {string}
+ */
+function plannerStudentProfileCellTextForExport_(td) {
+  if (!td) return '—';
+  const inp = td.querySelector('input, textarea');
+  if (inp && 'value' in inp) {
+    const v = String(/** @type {HTMLInputElement | HTMLTextAreaElement} */ (inp).value).trim();
+    return v.length ? v : '—';
+  }
+  const t = String(td.textContent || '').trim();
+  return t.length ? t : '—';
+}
+
+/**
+ * @param {HTMLElement} root
+ * @returns {string}
+ */
+function plannerStudentProfileExportTableHtml_(root) {
+  const tbody = root.querySelector('#sp-plan-student-tbody');
+  if (!tbody) {
+    return '<p class="sp-plan-pdf__empty">학생 정보 없음</p>';
+  }
+  let h =
+    '<table class="sp-plan-pdf__profile"><tbody>';
+  tbody.querySelectorAll('tr').forEach(function (tr) {
+    const cells = tr.querySelectorAll('th, td');
+    if (!cells.length) return;
+    h += '<tr>';
+    cells.forEach(function (cell) {
+      const tag = cell.tagName === 'TH' ? 'th' : 'td';
+      const colspan = cell.getAttribute('colspan');
+      const cls = cell.className ? ' class="' + escAttr(cell.className) + '"' : '';
+      const cs = colspan ? ' colspan="' + escAttr(colspan) + '"' : '';
+      const val =
+        tag === 'th' ? String(cell.textContent || '').trim() : plannerStudentProfileCellTextForExport_(/** @type {HTMLTableCellElement} */ (cell));
+      h += '<' + tag + cls + cs + '>' + esc(val) + '</' + tag + '>';
+    });
+    h += '</tr>';
+  });
+  h += '</tbody></table>';
+  return h;
+}
+
+/**
+ * @param {HTMLElement} monthWrap
+ * @returns {HTMLElement}
+ */
+function plannerCloneMonthForPdfExport_(monthWrap) {
+  const clone = /** @type {HTMLElement} */ (monthWrap.cloneNode(true));
+  const actions = clone.querySelector('.sp-plan-month__actions');
+  if (actions) actions.remove();
+  clone.querySelectorAll('.sp-plan-month__nav').forEach(function (el) {
+    el.remove();
+  });
+  const head = clone.querySelector('.sp-plan-month__head');
+  const titleEl = head ? head.querySelector('.sp-plan-month__title') : null;
+  if (head && titleEl) {
+    head.innerHTML = '';
+    head.appendChild(titleEl);
+  }
+  clone.querySelectorAll('button.sp-plan-day').forEach(function (btn) {
+    const div = document.createElement('div');
+    div.className = btn.className;
+    const ymd = btn.getAttribute('data-ymd');
+    if (ymd) div.setAttribute('data-ymd', ymd);
+    div.innerHTML = btn.innerHTML;
+    btn.replaceWith(div);
+  });
+  return clone;
+}
+
+/**
+ * @param {HTMLElement} root
+ * @returns {HTMLElement}
+ */
+function plannerBuildPdfExportSheet_(root) {
+  const st = root.__spPlanState;
+  const monthWrap = root.querySelector('#sp-plan-month-wrap');
+  const sheet = document.createElement('div');
+  sheet.className = 'sp-plan-pdf-sheet';
+  sheet.setAttribute('aria-hidden', 'true');
+
+  const title = document.createElement('div');
+  title.className = 'sp-plan-pdf__brand';
+  title.textContent = '솔루션 학습 플래너';
+  sheet.appendChild(title);
+
+  const profSec = document.createElement('section');
+  profSec.className = 'sp-plan-pdf__section';
+  profSec.innerHTML =
+    '<h2 class="sp-plan-pdf__h">학생 정보</h2>' + plannerStudentProfileExportTableHtml_(root);
+  sheet.appendChild(profSec);
+
+  const calSec = document.createElement('section');
+  calSec.className = 'sp-plan-pdf__section sp-plan-pdf__section--cal';
+  const calH = document.createElement('h2');
+  calH.className = 'sp-plan-pdf__h';
+  const monthTitle = monthWrap ? monthWrap.querySelector('.sp-plan-month__title') : null;
+  calH.textContent = monthTitle ? String(monthTitle.textContent || '').trim() || '월간 플랜' : '월간 플랜';
+  calSec.appendChild(calH);
+  if (monthWrap) {
+    calSec.appendChild(plannerCloneMonthForPdfExport_(monthWrap));
+  } else {
+    const empty = document.createElement('p');
+    empty.className = 'sp-plan-pdf__empty';
+    empty.textContent = '달력이 아직 표시되지 않았습니다.';
+    calSec.appendChild(empty);
+  }
+  sheet.appendChild(calSec);
+
+  const foot = document.createElement('p');
+  foot.className = 'sp-plan-pdf__foot';
+  const now = new Date();
+  const pad2 = function (n) {
+    return String(n < 10 ? '0' : '') + String(n);
+  };
+  foot.textContent =
+    '출력: ' +
+    now.getFullYear() +
+    '-' +
+    pad2(now.getMonth() + 1) +
+    '-' +
+    pad2(now.getDate()) +
+    ' ' +
+    pad2(now.getHours()) +
+    ':' +
+    pad2(now.getMinutes());
+  sheet.appendChild(foot);
+
+  return sheet;
+}
+
+/**
+ * @param {HTMLElement} root
+ * @returns {string}
+ */
+function plannerPdfExportFilename_(root) {
+  const st = root.__spPlanState;
+  const tbody = root.querySelector('#sp-plan-student-tbody');
+  let name = '';
+  if (tbody) {
+    const nameInp = tbody.querySelector('[data-sp-plan-student-input="display_name"]');
+    if (nameInp && 'value' in nameInp) {
+      name = String(/** @type {HTMLInputElement} */ (nameInp).value || '').trim();
+    } else {
+      const nameTd = tbody.querySelector('[data-sp-plan-student="display_name"]');
+      if (nameTd) name = plannerStudentProfileCellTextForExport_(/** @type {HTMLTableCellElement} */ (nameTd));
+    }
+  }
+  if (!name || name === '—') name = '플래너';
+  let ymLabel = '';
+  if (st && st.viewMonth instanceof Date && !isNaN(st.viewMonth.getTime())) {
+    ymLabel = st.viewMonth.getFullYear() + '년' + (st.viewMonth.getMonth() + 1) + '월';
+  }
+  const base = '솔패스플래너-' + ymLabel + '-' + name;
+  return base.replace(/[\\/:*?"<>|]/g, '_').slice(0, 120) + '.pdf';
+}
+
+/**
+ * @param {HTMLElement} root
+ */
+async function plannerExportPdfClick_(root) {
+  const btn = root.querySelector('#sp-plan-pdf-export');
+  const msgEl = root.querySelector('#sp-plan-pdf-export-msg');
+  const main = root.querySelector('#sp-plan-app-main');
+  if (!btn || !main || main.hasAttribute('hidden')) {
+    if (msgEl) {
+      msgEl.textContent = '게이트 확인 후 이용할 수 있습니다.';
+      msgEl.removeAttribute('hidden');
+    }
+    return;
+  }
+  if (!root.querySelector('#sp-plan-month-wrap')) {
+    if (msgEl) {
+      msgEl.textContent = '달력을 불러온 뒤 다시 시도해 주세요.';
+      msgEl.removeAttribute('hidden');
+    }
+    return;
+  }
+  btn.setAttribute('disabled', 'disabled');
+  if (msgEl) {
+    msgEl.textContent = 'PDF 생성 중…';
+    msgEl.removeAttribute('hidden');
+  }
+
+  let host = root.querySelector('#sp-plan-pdf-export-host');
+  if (!host) {
+    host = document.createElement('div');
+    host.id = 'sp-plan-pdf-export-host';
+    host.className = 'sp-plan-pdf-export-host';
+    document.body.appendChild(host);
+  }
+  host.innerHTML = '';
+  const sheet = plannerBuildPdfExportSheet_(root);
+  host.appendChild(sheet);
+
+  try {
+    await plannerEnsurePdfLibs_();
+    const html2canvas = globalThis.html2canvas;
+    const jsPDF = globalThis.jspdf.jsPDF;
+    const canvas = await html2canvas(sheet, {
+      scale: 2,
+      backgroundColor: '#ffffff',
+      logging: false,
+      useCORS: true
+    });
+    const imgData = canvas.toDataURL('image/jpeg', 0.92);
+    const pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
+    const pageW = pdf.internal.pageSize.getWidth();
+    const pageH = pdf.internal.pageSize.getHeight();
+    const margin = 6;
+    const maxW = pageW - margin * 2;
+    const maxH = pageH - margin * 2;
+    let drawW = maxW;
+    let drawH = (canvas.height * drawW) / canvas.width;
+    if (drawH > maxH) {
+      drawH = maxH;
+      drawW = (canvas.width * drawH) / canvas.height;
+    }
+    const x = (pageW - drawW) / 2;
+    const y = margin;
+    pdf.addImage(imgData, 'JPEG', x, y, drawW, drawH);
+    pdf.save(plannerPdfExportFilename_(root));
+    if (msgEl) {
+      msgEl.textContent = '저장했습니다.';
+      window.setTimeout(function () {
+        msgEl.setAttribute('hidden', 'hidden');
+      }, 2200);
+    }
+  } catch (e) {
+    const m = e && e.message != null ? String(e.message) : String(e);
+    if (msgEl) msgEl.textContent = 'PDF 생성 실패: ' + m;
+  } finally {
+    host.innerHTML = '';
+    btn.removeAttribute('disabled');
+  }
+}
+
+function wirePlannerPdfExportOnce_(root) {
+  if (root.__spPlanPdfExportWired) return;
+  root.__spPlanPdfExportWired = true;
+  root.addEventListener('click', function (e) {
+    const t = e.target instanceof HTMLElement ? e.target : null;
+    if (!t) return;
+    const btn = t.id === 'sp-plan-pdf-export' ? t : t.closest ? t.closest('#sp-plan-pdf-export') : null;
+    if (!btn) return;
+    e.preventDefault();
+    void plannerExportPdfClick_(root);
+  });
+}
+
 /**
  * 저장 직전: 열린 일일 모달의 메모·타임라인을 `monthTodos`에 반영.
  * @param {HTMLElement} root
@@ -1289,52 +1596,6 @@ function plannerCurriculumLessonOutlineFromRange_(r) {
 }
 
 /**
- * @param {number} weekIndex 0..5
- * @param {Record<string, { min: number, max: number }>} [weekLessonRanges] subjectCode → {min,max}
- * @returns {PlannerCurriculumWeekPayload}
- */
-function plannerCurriculumMockWeekPayload_(weekIndex, weekLessonRanges) {
-  const phases = ['기본 개념·예문', '오답·심화', '실전 모의', '누적 복습', '약점 보완', '월말 정리'];
-  const phase = phases[weekIndex % phases.length];
-  const ranges = weekLessonRanges && typeof weekLessonRanges === 'object' ? weekLessonRanges : {};
-  return {
-    source: 'mock',
-    week_index: weekIndex,
-    focus_phase: phase,
-    rows: [
-      {
-        subject: '문법',
-        subject_code: 'grammar',
-        textbook_goal: '솔패스 문법 교재 · ' + phase,
-        lesson_outline: plannerCurriculumLessonOutlineFromRange_(ranges.grammar) || '—',
-        link_url: ''
-      },
-      {
-        subject: '논리',
-        subject_code: 'logic',
-        textbook_goal: '논리 추론 기초 교재 · ' + phase,
-        lesson_outline: plannerCurriculumLessonOutlineFromRange_(ranges.logic) || '—',
-        link_url: ''
-      },
-      {
-        subject: '독해',
-        subject_code: 'read',
-        textbook_goal: '실전 지문 독해 · ' + phase,
-        lesson_outline: plannerCurriculumLessonOutlineFromRange_(ranges.read) || '—',
-        link_url: ''
-      },
-      {
-        subject: '어휘',
-        subject_code: 'vocab',
-        textbook_goal: '핵심 어휘 · ' + phase,
-        lesson_outline: plannerCurriculumLessonOutlineFromRange_(ranges.vocab) || '—',
-        link_url: ''
-      }
-    ]
-  };
-}
-
-/**
  * 강좌 행(`subject`·`course_name`) → 빠른등록 코드 `grammar`|`logic`|`read`|`vocab` (없으면 빈 문자열).
  * @param {object} course
  * @returns {string}
@@ -1399,69 +1660,136 @@ function plannerLectureTitlesInRangeForCourse_(lectures, courseId, range) {
 }
 
 /**
- * 마스터 커리큘럼 시트 + 주간 빠른등록 범위 → 주간 표 payload (`source: catalog`).
- * @param {number} weekIndex
- * @param {Record<string, { min: number, max: number }>} weekLessonRanges
- * @param {object[]} courses
  * @param {object[]} lectures
+ * @param {string} lectureId
+ * @returns {object|null}
+ */
+function plannerFindCatalogLectureById_(lectures, lectureId) {
+  const id = String(lectureId != null ? lectureId : '').trim();
+  if (!id.length || !Array.isArray(lectures)) return null;
+  for (let i = 0; i < lectures.length; i++) {
+    const L = lectures[i];
+    if (L && String(L.lecture_id != null ? L.lecture_id : '').trim() === id) return L;
+  }
+  return null;
+}
+
+/**
+ * @param {object[]} courses
+ * @param {unknown} courseId
+ * @returns {object|null}
+ */
+function plannerFindCatalogCourseById_(courses, courseId) {
+  if (courseId === '' || courseId == null || !Array.isArray(courses)) return null;
+  const idStr = String(courseId);
+  for (let i = 0; i < courses.length; i++) {
+    const c = courses[i];
+    if (c && String(c.course_id != null ? c.course_id : '') === idStr) return c;
+  }
+  return null;
+}
+
+/**
+ * 해당 주 `monthTodos`만으로 주간 커리큘럼 표 payload (할 일 없으면 빈 `rows`).
+ * @param {object} st
+ * @param {number} weekIndex
+ * @param {string[]} weekDateKeys
+ * @param {{ courses?: object[], lectures?: object[] }|null|undefined} curriculum
  * @returns {PlannerCurriculumWeekPayload}
  */
-function plannerCurriculumWeekPayloadFromCatalog_(weekIndex, weekLessonRanges, courses, lectures) {
-  const phases = ['기본 개념·예문', '오답·심화', '실전 모의', '누적 복습', '약점 보완', '월말 정리'];
-  const phase = phases[weekIndex % phases.length];
-  const ranges = weekLessonRanges && typeof weekLessonRanges === 'object' ? weekLessonRanges : {};
-  const subjLabel = { grammar: '문법', logic: '논리', read: '독해', vocab: '어휘' };
-  const order = ['grammar', 'logic', 'read', 'vocab'];
+function plannerCurriculumWeekPayloadFromMonthTodos_(st, weekIndex, weekDateKeys, curriculum) {
+  const pack = plannerNormalizeCurriculumFromBootstrap_(curriculum);
+  const ranges = plannerCurriculumWeekLessonRangeFromQuickPlan_(st, weekDateKeys);
+  /** @type {Record<string, { titles: string[], lectureIds: string[] }>} */
+  const bySubj = {};
+  (weekDateKeys || []).forEach(function (key) {
+    plannerMonthTodosForDay_(st, key).forEach(function (t) {
+      if (!t || plannerIsTraceGhostDisplay_(t)) return;
+      const cat = String(t.category != null ? t.category : '').trim();
+      if (!cat || cat === PLAN_CATEGORY_FIXED || cat === 'memo' || cat === PLAN_CATEGORY_ROUTINE) return;
+      if (plannerIsRoutineExcludedFromStudyTotals_(t.task_id, cat)) return;
+      const subj = /^(grammar|logic|read|vocab|misc)$/.test(cat) ? cat : 'misc';
+      if (!bySubj[subj]) bySubj[subj] = { titles: [], lectureIds: [] };
+      const title = String(t.title != null ? t.title : '').trim();
+      if (title && bySubj[subj].titles.indexOf(title) < 0) bySubj[subj].titles.push(title);
+      const lid = String(t.lecture_id != null ? t.lecture_id : '').trim();
+      if (lid && bySubj[subj].lectureIds.indexOf(lid) < 0) bySubj[subj].lectureIds.push(lid);
+    });
+  });
   /** @type {PlannerCurriculumRowPayload[]} */
   const rows = [];
-  order.forEach(function (code) {
-    const course = plannerFindCatalogCourseForSubjectCode_(courses, code);
-    const label = subjLabel[code] != null ? subjLabel[code] : code;
-    const r = /** @type {{ min: number, max: number }|undefined} */ (ranges[code]);
+  PLANNER_STUDY_CATEGORY_ORDER.forEach(function (code) {
+    const bucket = bySubj[code];
+    if (!bucket || !bucket.titles.length) return;
+    const r = ranges[code];
+    let outline = plannerCurriculumLessonOutlineFromRange_(r) || '';
+    if (!outline.length) {
+      /** @type {number[]} */
+      const lessonNums = [];
+      bucket.titles.forEach(function (tit) {
+        plannerLessonsFromStudyTitle_(tit).forEach(function (n) {
+          lessonNums.push(n);
+        });
+      });
+      outline = plannerLessonsToOutline_(lessonNums) || '';
+    }
+    if (!outline.length) outline = '—';
     let textbook_goal = '';
     let link_url = '';
-    let courseIdForLec = '';
-    if (course) {
-      const cname = String(course.course_name != null ? course.course_name : '').trim();
-      const inst = String(course.instructor != null ? course.instructor : '').trim();
-      const parts = [];
-      if (inst.length) parts.push(inst);
-      if (cname.length) parts.push(cname);
-      textbook_goal = parts.join(' · ') || String(course.subject != null ? course.subject : '').trim() || '—';
-      link_url = String(course.link_url != null ? course.link_url : '').trim();
-      courseIdForLec = course.course_id;
-    } else {
-      textbook_goal = phase + ' · (마스터 강좌 시트에 과목을 문법/논리/독해/어휘로 맞춰 주세요)';
-      link_url = '';
+    let courseIdForTitles = '';
+    bucket.lectureIds.some(function (lid) {
+      const lec = plannerFindCatalogLectureById_(pack.lectures, lid);
+      if (!lec) return false;
+      const cid = lec.course_id;
+      const course = plannerFindCatalogCourseById_(pack.courses, cid);
+      if (course) {
+        const cname = String(course.course_name != null ? course.course_name : '').trim();
+        const inst = String(course.instructor != null ? course.instructor : '').trim();
+        const parts = [];
+        if (inst.length) parts.push(inst);
+        if (cname.length) parts.push(cname);
+        textbook_goal = parts.join(' · ');
+        link_url = String(course.link_url != null ? course.link_url : '').trim();
+        courseIdForTitles = course.course_id;
+      }
+      return Boolean(textbook_goal.length);
+    });
+    if (!textbook_goal.length) {
+      textbook_goal = bucket.titles.slice(0, 6).join(' · ');
+      if (bucket.titles.length > 6) textbook_goal += ' …';
+    } else if (courseIdForTitles) {
+      const titlesFromCat = plannerLectureTitlesInRangeForCourse_(pack.lectures, courseIdForTitles, r);
+      if (titlesFromCat.length) {
+        textbook_goal = textbook_goal + ' · ' + titlesFromCat;
+      }
     }
-    let outline = plannerCurriculumLessonOutlineFromRange_(r) || '';
-    const titles = plannerLectureTitlesInRangeForCourse_(lectures, courseIdForLec, r);
-    if (titles.length) outline = outline.length ? outline + ' · ' + titles : titles;
-    if (!outline.length) outline = '—';
+    if (!textbook_goal.length) textbook_goal = '—';
     rows.push({
-      subject: label,
+      subject: plannerCategoryLabelKo_(code),
       subject_code: code,
       textbook_goal: textbook_goal,
       lesson_outline: outline,
       link_url: link_url
     });
   });
-  return { source: 'catalog', week_index: weekIndex, focus_phase: phase, rows: rows };
+  return {
+    source: rows.length ? 'todos' : 'empty',
+    week_index: weekIndex,
+    focus_phase: '',
+    rows: rows
+  };
 }
 
 /**
- * bootstrap `curriculum` 이 있으면 카탈로그 표시, 없으면 목업.
+ * 주간 커리큘럼 표 — 해당 주 실제 todo만 (없으면 빈 표).
  * @param {number} weekIndex
- * @param {Record<string, { min: number, max: number }>} weekLessonRanges
+ * @param {string[]} weekDateKeys
  * @param {{ courses?: object[], lectures?: object[] }|null|undefined} curriculum
+ * @param {object} st
  * @returns {PlannerCurriculumWeekPayload}
  */
-function plannerCurriculumWeekPayloadForRender_(weekIndex, weekLessonRanges, curriculum) {
-  const pack = plannerNormalizeCurriculumFromBootstrap_(curriculum);
-  if (pack.courses.length || pack.lectures.length) {
-    return plannerCurriculumWeekPayloadFromCatalog_(weekIndex, weekLessonRanges, pack.courses, pack.lectures);
-  }
-  return plannerCurriculumMockWeekPayload_(weekIndex, weekLessonRanges);
+function plannerCurriculumWeekPayloadForRender_(weekIndex, weekDateKeys, curriculum, st) {
+  return plannerCurriculumWeekPayloadFromMonthTodos_(st, weekIndex, weekDateKeys, curriculum);
 }
 
 /**
@@ -1470,6 +1798,15 @@ function plannerCurriculumWeekPayloadForRender_(weekIndex, weekLessonRanges, cur
  * @returns {string}
  */
 function plannerCurriculumWeekTableHtml_(payload) {
+  if (!payload || !payload.rows || !payload.rows.length) {
+    return (
+      '<div class="sp-plan-cur sp-plan-cur--empty" data-sp-plan-cur-source="empty" data-sp-plan-cur-week="' +
+      String(payload && payload.week_index != null ? payload.week_index : '') +
+      '">' +
+      '<p class="sp-plan-cur__empty" role="status">이번 주 등록된 할 일이 없습니다.</p>' +
+      '</div>'
+    );
+  }
   let body = '';
   (payload.rows || []).forEach(function (r) {
     if (!r || typeof r !== 'object') return;
@@ -1548,6 +1885,10 @@ const PLAN_APP_MAIN_AND_CLOSE = `<main class="app-main sp-plan-app-main app-shel
           </div>
         </div>
       </section>
+      <div class="sp-plan-exportBar" id="sp-plan-export-bar">
+        <button type="button" class="btn btn--ghost sp-plan-exportBar__btn" id="sp-plan-pdf-export" title="학생 정보와 아래 월간 달력을 PDF 한 장으로 저장합니다">PDF 저장</button>
+        <span class="sp-plan-exportBar__msg" id="sp-plan-pdf-export-msg" hidden aria-live="polite"></span>
+      </div>
       <div class="sp-plan-monthly-title" id="sp-plan-monthly-label">월간 플랜</div>
       <div class="sp-plan-calendar-slot" id="sp-plan-calendar-slot" role="region" aria-labelledby="sp-plan-monthly-label"></div>
     </div>
@@ -4870,9 +5211,9 @@ function renderCalendar_(root, boot) {
           : '') +
         '</div>' +
         plannerCurriculumWeekTableHtml_(
-        plannerCurriculumWeekPayloadForRender_(
+          plannerCurriculumWeekPayloadForRender_(
             w,
-            plannerCurriculumWeekLessonRangeFromQuickPlan_(st, [
+            [
               ymd(new Date(sun.getFullYear(), sun.getMonth(), sun.getDate() + 0)),
               ymd(new Date(sun.getFullYear(), sun.getMonth(), sun.getDate() + 1)),
               ymd(new Date(sun.getFullYear(), sun.getMonth(), sun.getDate() + 2)),
@@ -4880,8 +5221,9 @@ function renderCalendar_(root, boot) {
               ymd(new Date(sun.getFullYear(), sun.getMonth(), sun.getDate() + 4)),
               ymd(new Date(sun.getFullYear(), sun.getMonth(), sun.getDate() + 5)),
               ymd(new Date(sun.getFullYear(), sun.getMonth(), sun.getDate() + 6))
-            ]),
-            st.plannerCurriculum
+            ],
+            st.plannerCurriculum,
+            st
           )
         ) +
         '</div>';
@@ -5794,6 +6136,7 @@ function main() {
   }
   wirePlannerAdminUnlockOnce_(el);
   wirePlannerStudentProfileSaveOnce_(el);
+  wirePlannerPdfExportOnce_(el);
   wirePlannerPersonalTodosApplyOnce_(el);
   plannerSetGatePending_(el);
   renderPlannerStudentProfile_(el, null);
