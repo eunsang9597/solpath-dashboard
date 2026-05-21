@@ -1,6 +1,6 @@
 /**
  * 플래너 임웹 전용 — 전화 확인 후 공통·개인 일정 표시 (드라이브 링크 없음).
- * GAS 호출: `doPost` + JSON 문자열 본문(`plannerGasJsonPost_`). `Content-Type` 헤더 없음(프리플라이트·CORS 회피, Tanaike/공식 Web App 패턴).
+ * GAS: 게이트·bootstrap 등 → JSONP(GET). 월 할 일 저장만 `doPost`+본문 JSON(헤더 없음).
  * 스니펫에서 먼저 `window.__SOLPATH__ = { gasBaseUrl: "…/exec", … }` 를 둔다.
  */
 function spReadPlanInjected_() {
@@ -604,6 +604,7 @@ function plannerMergeBootstrapMonthData_(root, pack) {
 }
 
 const PLANNER_GAS_POST_TIMEOUT_MS = 360000;
+const PLANNER_JSONP_TIMEOUT_MS = 360000;
 
 /**
  * GAS JSONP는 `{ error: { message } }` 와 `{ error: 'X', message: '…' }` 를 섞어 쓴다. 플래너 UI는 여기서 통일한다.
@@ -679,6 +680,18 @@ async function plannerGasJsonPost_(url, bodyObj, timeoutMs) {
       signal: ctrl ? ctrl.signal : undefined
     });
     const text = await res.text();
+    if (!res.ok) {
+      const code = res.status === 401 ? 'UNAUTHORIZED' : 'HTTP_' + String(res.status);
+      let msg =
+        'HTTP ' +
+        String(res.status) +
+        (text.length ? ': ' + text.slice(0, 280) : '');
+      if (res.status === 401) {
+        msg =
+          'GAS Web App 401 — 배포「액세스: 누구나(익명)」+ Execute as Me + **새 버전** URL을 gasBaseUrl에 넣었는지 확인하세요. (Google 계정 필요/옛 배포 URL이면 401+CORS로 보입니다.)';
+      }
+      return { ok: false, error: { code: code, message: msg } };
+    }
     let data;
     try {
       data = JSON.parse(text);
@@ -742,15 +755,67 @@ async function plannerGasPostAction_(url, bodyObj) {
       ok: false,
       error: {
         code: 'NETWORK',
-        message:
-          m +
-          ' (GAS Web App: Execute as Me + Anyone(익명), POST 본문만·Content-Type 헤더 없음, 배포 새 버전.)'
+        message: m
       }
     };
   }
 }
 
 /**
+ * JSONP 쿼리 (`p0`·`p1`·`p2`·`n`·`m` …) — 게이트·bootstrap 등 소량 요청.
+ * @param {string} action
+ * @param {Record<string, unknown>} payload
+ * @returns {Record<string, string>}
+ */
+function plannerGasJsonpExtraFromPayload_(action, payload) {
+  const segs = plannerPhoneSegmentsFromPayload_(payload);
+  const extra = {
+    p0: segs[0],
+    p1: segs[1],
+    p2: segs[2],
+    n: String(payload.name != null ? payload.name : ''),
+    m: plannerLinkKeyFromPayload_(payload)
+  };
+  const ym = String(payload.year_month != null ? payload.year_month : payload.yearMonth != null ? payload.yearMonth : '').trim();
+  if (ym.length) {
+    extra.year_month = ym;
+  }
+  if (action === 'plannerAdminVerify') {
+    extra.admin_secret = String(payload.admin_secret != null ? payload.admin_secret : '').trim();
+  }
+  if (action === 'plannerRegistryProfileSave') {
+    const prof =
+      payload.student_profile != null && typeof payload.student_profile === 'object'
+        ? payload.student_profile
+        : {};
+    try {
+      extra.student_profile = JSON.stringify(prof);
+    } catch (_e) {
+      extra.student_profile = '{}';
+    }
+  }
+  return extra;
+}
+
+/**
+ * @param {string} url
+ * @param {string} action
+ * @param {Record<string, unknown>} payload
+ * @return {Promise<Record<string, unknown>>}
+ */
+async function plannerGasJsonpAction_(url, action, payload) {
+  try {
+    const extra = plannerGasJsonpExtraFromPayload_(action, payload);
+    const raw = await plannerGasJsonpWithParams_(url, action, extra, PLANNER_JSONP_TIMEOUT_MS);
+    return plannerGasNormalizeResult_(raw);
+  } catch (e) {
+    const m = e && typeof e === 'object' && 'message' in e ? String(/** @type {{ message?: string }} */ (e).message) : String(e);
+    return { ok: false, error: { code: 'NETWORK', message: m } };
+  }
+}
+
+/**
+ * 소량 → JSONP(GET). 월 할 일 저장만 POST(본문 JSON, 헤더 없음).
  * @param {Record<string, unknown>} payload
  * @return {Promise<Record<string, unknown>>}
  */
@@ -760,42 +825,16 @@ async function plannerGasCall_(payload) {
     return { ok: false, error: { code: 'NO_GAS_URL', message: 'gasBaseUrl이 없습니다.' } };
   }
   const action = String(payload.action != null ? payload.action : '');
-  if (action === 'plannerRegistryRebuild' || action === 'plannerDevFullReset' || action === 'initPlannerMasterSheets') {
-    return plannerGasPostAction_(url, { action: action });
-  }
-  if (action === 'plannerMatch' || action === 'plannerBootstrap') {
-    const body = {
-      action: action,
-      phoneSegments: plannerPhoneSegmentsFromPayload_(payload),
-      name: String(payload.name != null ? payload.name : ''),
-      memberCode: plannerLinkKeyFromPayload_(payload),
-      link_key: plannerLinkKeyFromPayload_(payload)
-    };
-    const ym = String(payload.year_month != null ? payload.year_month : payload.yearMonth != null ? payload.yearMonth : '').trim();
-    if (ym.length) {
-      body.year_month = ym;
-    }
-    return plannerGasPostAction_(url, body);
-  }
-  if (action === 'plannerAdminVerify') {
-    return plannerGasPostAction_(url, {
-      action: action,
-      admin_secret: String(payload.admin_secret != null ? payload.admin_secret : '').trim()
-    });
-  }
-  if (action === 'plannerRegistryProfileSave') {
-    const prof =
-      payload.student_profile != null && typeof payload.student_profile === 'object'
-        ? payload.student_profile
-        : {};
-    return plannerGasPostAction_(url, {
-      action: action,
-      phoneSegments: plannerPhoneSegmentsFromPayload_(payload),
-      name: String(payload.name != null ? payload.name : ''),
-      memberCode: plannerLinkKeyFromPayload_(payload),
-      link_key: plannerLinkKeyFromPayload_(payload),
-      student_profile: prof
-    });
+  if (
+    action === 'plannerRegistryRebuild' ||
+    action === 'plannerDevFullReset' ||
+    action === 'initPlannerMasterSheets' ||
+    action === 'plannerMatch' ||
+    action === 'plannerBootstrap' ||
+    action === 'plannerAdminVerify' ||
+    action === 'plannerRegistryProfileSave'
+  ) {
+    return plannerGasJsonpAction_(url, action, payload);
   }
   if (action === 'plannerPersonalTodosApply') {
     const ym = String(payload.year_month != null ? payload.year_month : payload.yearMonth != null ? payload.yearMonth : '').trim();
