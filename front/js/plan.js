@@ -1069,115 +1069,11 @@ function plannerStudentProfileCellTextForExport_(td) {
 }
 
 /**
+ * PDF/PNG 파일명 베이스 (`솔패스플래너-…`).
  * @param {HTMLElement} root
  * @returns {string}
  */
-function plannerStudentProfileExportTableHtml_(root) {
-  const tbody = root.querySelector('#sp-plan-student-tbody');
-  if (!tbody) {
-    return '<p class="sp-plan-pdf__empty">학생 정보 없음</p>';
-  }
-  let h =
-    '<table class="sp-plan-pdf__profile"><tbody>';
-  tbody.querySelectorAll('tr').forEach(function (tr) {
-    const cells = tr.querySelectorAll('th, td');
-    if (!cells.length) return;
-    h += '<tr>';
-    cells.forEach(function (cell) {
-      const tag = cell.tagName === 'TH' ? 'th' : 'td';
-      const colspan = cell.getAttribute('colspan');
-      const cls = cell.className ? ' class="' + escAttr(cell.className) + '"' : '';
-      const cs = colspan ? ' colspan="' + escAttr(colspan) + '"' : '';
-      const val =
-        tag === 'th' ? String(cell.textContent || '').trim() : plannerStudentProfileCellTextForExport_(/** @type {HTMLTableCellElement} */ (cell));
-      h += '<' + tag + cls + cs + '>' + esc(val) + '</' + tag + '>';
-    });
-    h += '</tr>';
-  });
-  h += '</tbody></table>';
-  return h;
-}
-
-/**
- * @param {HTMLElement} monthWrap
- * @returns {HTMLElement}
- */
-function plannerCloneMonthForPdfExport_(monthWrap) {
-  const clone = /** @type {HTMLElement} */ (monthWrap.cloneNode(true));
-  const actions = clone.querySelector('.sp-plan-month__actions');
-  if (actions) actions.remove();
-  clone.querySelectorAll('.sp-plan-month__nav').forEach(function (el) {
-    el.remove();
-  });
-  const head = clone.querySelector('.sp-plan-month__head');
-  if (head) head.remove();
-  clone.querySelectorAll('button.sp-plan-day').forEach(function (btn) {
-    const div = document.createElement('div');
-    div.className = btn.className;
-    const ymd = btn.getAttribute('data-ymd');
-    if (ymd) div.setAttribute('data-ymd', ymd);
-    div.innerHTML = btn.innerHTML;
-    btn.replaceWith(div);
-  });
-  return clone;
-}
-
-/**
- * @param {HTMLElement} root
- * @returns {HTMLElement}
- */
-function plannerBuildPdfExportSheet_(root) {
-  const st = root.__spPlanState;
-  const monthWrap = root.querySelector('#sp-plan-month-wrap');
-  const sheet = document.createElement('div');
-  sheet.className = 'sp-plan-pdf-sheet';
-  sheet.setAttribute('aria-hidden', 'true');
-
-  const profSec = document.createElement('section');
-  profSec.className = 'sp-plan-pdf__section';
-  profSec.innerHTML =
-    '<h2 class="sp-plan-pdf__h">학생 정보</h2>' + plannerStudentProfileExportTableHtml_(root);
-  sheet.appendChild(profSec);
-
-  const calSec = document.createElement('section');
-  calSec.className = 'sp-plan-pdf__section sp-plan-pdf__section--cal';
-  if (monthWrap) {
-    calSec.appendChild(plannerCloneMonthForPdfExport_(monthWrap));
-  } else {
-    const empty = document.createElement('p');
-    empty.className = 'sp-plan-pdf__empty';
-    empty.textContent = '달력이 아직 표시되지 않았습니다.';
-    calSec.appendChild(empty);
-  }
-  sheet.appendChild(calSec);
-
-  const foot = document.createElement('p');
-  foot.className = 'sp-plan-pdf__foot';
-  const now = new Date();
-  const pad2 = function (n) {
-    return String(n < 10 ? '0' : '') + String(n);
-  };
-  foot.textContent =
-    '출력: ' +
-    now.getFullYear() +
-    '-' +
-    pad2(now.getMonth() + 1) +
-    '-' +
-    pad2(now.getDate()) +
-    ' ' +
-    pad2(now.getHours()) +
-    ':' +
-    pad2(now.getMinutes());
-  sheet.appendChild(foot);
-
-  return sheet;
-}
-
-/**
- * @param {HTMLElement} root
- * @returns {string}
- */
-function plannerPdfExportFilename_(root) {
+function plannerExportDownloadBasename_(root) {
   const st = root.__spPlanState;
   const tbody = root.querySelector('#sp-plan-student-tbody');
   let name = '';
@@ -1196,7 +1092,104 @@ function plannerPdfExportFilename_(root) {
     ymLabel = st.viewMonth.getFullYear() + '년' + (st.viewMonth.getMonth() + 1) + '월';
   }
   const base = '솔패스플래너-' + ymLabel + '-' + name;
-  return base.replace(/[\\/:*?"<>|]/g, '_').slice(0, 120) + '.pdf';
+  return base.replace(/[\\/:*?"<>|]/g, '_').slice(0, 120);
+}
+
+/**
+ * @param {HTMLElement} root
+ * @param {string} ext `.pdf` | `.png`
+ * @returns {string}
+ */
+function plannerExportDownloadFilename_(root, ext) {
+  const base = plannerExportDownloadBasename_(root);
+  const e = String(ext || '.pdf');
+  return base + (e.charAt(0) === '.' ? e : '.' + e);
+}
+
+/**
+ * 캡처 직전에만 숨김(화면과 동일·버튼 바 제외).
+ * @param {HTMLElement} root
+ * @returns {{ els: HTMLElement[], hiddenAttr: (string|null)[] }}
+ */
+function plannerExportCaptureHideChrome_(root) {
+  /** @type {HTMLElement[]} */
+  const els = [];
+  /** @type {(string|null)[]} */
+  const hiddenAttr = [];
+  const bar = root.querySelector('#sp-plan-export-bar');
+  if (bar instanceof HTMLElement) {
+    els.push(bar);
+    hiddenAttr.push(bar.hasAttribute('hidden') ? '' : null);
+    bar.setAttribute('hidden', 'hidden');
+    bar.setAttribute('aria-hidden', 'true');
+  }
+  return { els: els, hiddenAttr: hiddenAttr };
+}
+
+/**
+ * @param {{ els: HTMLElement[], hiddenAttr: (string|null)[] }} snap
+ */
+function plannerExportCaptureRestoreChrome_(snap) {
+  snap.els.forEach(function (el, i) {
+    if (snap.hiddenAttr[i] === null) {
+      el.removeAttribute('hidden');
+      el.removeAttribute('aria-hidden');
+    }
+  });
+}
+
+/**
+ * `#sp-plan-app-main` WYSIWYG — html2canvas(화면 그대로).
+ * @param {HTMLElement} main
+ * @returns {Promise<HTMLCanvasElement>}
+ */
+async function plannerCaptureAppMainCanvas_(main) {
+  const html2canvas = globalThis.html2canvas;
+  await new Promise(function (resolve) {
+    requestAnimationFrame(function () {
+      requestAnimationFrame(resolve);
+    });
+  });
+  return html2canvas(main, {
+    scale: 2,
+    backgroundColor: '#ffffff',
+    logging: false,
+    useCORS: true,
+    width: main.scrollWidth,
+    height: main.scrollHeight,
+    windowWidth: main.scrollWidth,
+    windowHeight: main.scrollHeight,
+    scrollX: 0,
+    scrollY: 0
+  });
+}
+
+/**
+ * 캔버스 → A4 여러 장(한 장에 축소하지 않음, 가로만 맞춤).
+ * @param {HTMLCanvasElement} canvas
+ * @param {string} filename
+ */
+function plannerSaveCanvasMultiPagePdf_(canvas, filename) {
+  const jsPDF = globalThis.jspdf.jsPDF;
+  const pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
+  const pageW = pdf.internal.pageSize.getWidth();
+  const pageH = pdf.internal.pageSize.getHeight();
+  const margin = 6;
+  const contentW = pageW - margin * 2;
+  const contentH = pageH - margin * 2;
+  const imgData = canvas.toDataURL('image/jpeg', 0.92);
+  const imgH = (canvas.height * contentW) / canvas.width;
+  let heightLeft = imgH;
+  let position = margin;
+  pdf.addImage(imgData, 'JPEG', margin, position, contentW, imgH);
+  heightLeft -= contentH;
+  while (heightLeft > 0) {
+    pdf.addPage();
+    position = margin - (imgH - heightLeft);
+    pdf.addImage(imgData, 'JPEG', margin, position, contentW, imgH);
+    heightLeft -= contentH;
+  }
+  pdf.save(filename);
 }
 
 /**
@@ -1226,53 +1219,11 @@ async function plannerExportPdfClick_(root) {
     msgEl.removeAttribute('hidden');
   }
 
-  let host = root.querySelector('#sp-plan-pdf-export-host');
-  if (!host) {
-    host = document.createElement('div');
-    host.id = 'sp-plan-pdf-export-host';
-    host.className = 'sp-plan-pdf-export-host';
-    root.appendChild(host);
-  }
-  host.innerHTML = '';
-  const sheet = plannerBuildPdfExportSheet_(root);
-  host.appendChild(sheet);
-  await new Promise(function (resolve) {
-    requestAnimationFrame(function () {
-      requestAnimationFrame(resolve);
-    });
-  });
-
+  const chrome = plannerExportCaptureHideChrome_(root);
   try {
     await plannerEnsurePdfLibs_();
-    const html2canvas = globalThis.html2canvas;
-    const jsPDF = globalThis.jspdf.jsPDF;
-    const canvas = await html2canvas(sheet, {
-      scale: 2,
-      backgroundColor: '#ffffff',
-      logging: false,
-      useCORS: true,
-      width: sheet.scrollWidth,
-      height: sheet.scrollHeight,
-      windowWidth: sheet.scrollWidth,
-      windowHeight: sheet.scrollHeight
-    });
-    const imgData = canvas.toDataURL('image/jpeg', 0.92);
-    const pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
-    const pageW = pdf.internal.pageSize.getWidth();
-    const pageH = pdf.internal.pageSize.getHeight();
-    const margin = 6;
-    const maxW = pageW - margin * 2;
-    const maxH = pageH - margin * 2;
-    let drawW = maxW;
-    let drawH = (canvas.height * drawW) / canvas.width;
-    if (drawH > maxH) {
-      drawH = maxH;
-      drawW = (canvas.width * drawH) / canvas.height;
-    }
-    const x = (pageW - drawW) / 2;
-    const y = margin;
-    pdf.addImage(imgData, 'JPEG', x, y, drawW, drawH);
-    pdf.save(plannerPdfExportFilename_(root));
+    const canvas = await plannerCaptureAppMainCanvas_(main);
+    plannerSaveCanvasMultiPagePdf_(canvas, plannerExportDownloadFilename_(root, '.pdf'));
     if (msgEl) {
       msgEl.textContent = '저장했습니다.';
       window.setTimeout(function () {
@@ -1283,7 +1234,7 @@ async function plannerExportPdfClick_(root) {
     const m = e && e.message != null ? String(e.message) : String(e);
     if (msgEl) msgEl.textContent = 'PDF 생성 실패: ' + m;
   } finally {
-    host.innerHTML = '';
+    plannerExportCaptureRestoreChrome_(chrome);
     btn.removeAttribute('disabled');
   }
 }
@@ -2204,7 +2155,7 @@ const PLAN_APP_MAIN_AND_CLOSE = `<main class="app-main sp-plan-app-main app-shel
         </div>
       </section>
       <div class="sp-plan-exportBar" id="sp-plan-export-bar">
-        <button type="button" class="btn btn--ghost sp-plan-exportBar__btn" id="sp-plan-pdf-export" title="학생 정보와 이번 달 달력을 PDF로 저장합니다">PDF로 저장</button>
+        <button type="button" class="btn btn--ghost sp-plan-exportBar__btn" id="sp-plan-pdf-export" title="화면에 보이는 학생 정보·달력을 그대로 캡처해 PDF로 저장합니다(여러 페이지)">PDF로 저장</button>
         <span class="sp-plan-exportBar__msg" id="sp-plan-pdf-export-msg" hidden aria-live="polite"></span>
       </div>
       <div class="sp-plan-monthly-title" id="sp-plan-monthly-label">월간 학습 달력</div>
