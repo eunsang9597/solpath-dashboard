@@ -1840,6 +1840,49 @@ function plannerFindCatalogCourseForSubjectCode_(courses, code) {
 }
 
 /**
+ * todo `title`·긴 라벨에서 강좌명만 (`[Day1]`·`N교시`·`N강` 구간 전까지).
+ * @param {string} title
+ * @returns {string}
+ */
+function plannerCurriculumCourseNameFromTodoTitle_(title) {
+  const s = String(title != null ? title : '').trim();
+  if (!s.length) return '';
+  const daySplit = s.split(/\s·\s*(?=\[Day\s*\d+)/i);
+  if (daySplit[0] && daySplit[0].trim().length) {
+    return daySplit[0].trim();
+  }
+  const segs = s.split(' · ').map(function (p) {
+    return p.trim();
+  }).filter(Boolean);
+  const keep = [];
+  for (let i = 0; i < segs.length; i++) {
+    const p = segs[i];
+    if (/^\[Day\s*\d+/i.test(p) || /^\d+교시\b/.test(p)) break;
+    if (/^\d+강$/.test(p) && keep.length > 0) break;
+    keep.push(p);
+  }
+  if (keep.length) return keep.join(' · ');
+  return s.length > 72 ? s.slice(0, 72) + '…' : s;
+}
+
+/**
+ * 교재명·학습 목표 칸 — 강사·강좌명만 (회차 상세 제외).
+ * @param {string} instructor
+ * @param {string} courseName
+ * @param {string} [fallbackTodoTitle]
+ * @returns {string}
+ */
+function plannerCurriculumCourseNameOnly_(instructor, courseName, fallbackTodoTitle) {
+  const inst = String(instructor != null ? instructor : '').trim();
+  const cname = String(courseName != null ? courseName : '').trim();
+  const parts = [];
+  if (inst.length) parts.push(inst);
+  if (cname.length) parts.push(cname);
+  if (parts.length) return parts.join(' · ');
+  return plannerCurriculumCourseNameFromTodoTitle_(fallbackTodoTitle);
+}
+
+/**
  * @param {object[]} lectures
  * @param {unknown} courseId
  * @param {{ min: number, max: number }|null|undefined} range
@@ -1947,32 +1990,23 @@ function plannerCurriculumWeekPayloadFromMonthTodos_(st, weekIndex, weekDateKeys
     if (!outline.length) outline = '—';
     let textbook_goal = '';
     let link_url = '';
-    let courseIdForTitles = '';
     bucket.lectureIds.some(function (lid) {
       const lec = plannerFindCatalogLectureById_(pack.lectures, lid);
       if (!lec) return false;
       const cid = lec.course_id;
       const course = plannerFindCatalogCourseById_(pack.courses, cid);
       if (course) {
-        const cname = String(course.course_name != null ? course.course_name : '').trim();
-        const inst = String(course.instructor != null ? course.instructor : '').trim();
-        const parts = [];
-        if (inst.length) parts.push(inst);
-        if (cname.length) parts.push(cname);
-        textbook_goal = parts.join(' · ');
+        textbook_goal = plannerCurriculumCourseNameOnly_(
+          course.instructor,
+          course.course_name,
+          ''
+        );
         link_url = String(course.link_url != null ? course.link_url : '').trim();
-        courseIdForTitles = course.course_id;
       }
       return Boolean(textbook_goal.length);
     });
-    if (!textbook_goal.length) {
-      textbook_goal = bucket.titles.slice(0, 6).join(' · ');
-      if (bucket.titles.length > 6) textbook_goal += ' …';
-    } else if (courseIdForTitles) {
-      const titlesFromCat = plannerLectureTitlesInRangeForCourse_(pack.lectures, courseIdForTitles, r);
-      if (titlesFromCat.length) {
-        textbook_goal = textbook_goal + ' · ' + titlesFromCat;
-      }
+    if (!textbook_goal.length && bucket.titles.length) {
+      textbook_goal = plannerCurriculumCourseNameFromTodoTitle_(bucket.titles[0]);
     }
     if (!textbook_goal.length) textbook_goal = '—';
     rows.push({
