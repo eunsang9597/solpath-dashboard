@@ -1,6 +1,6 @@
 /**
  * 플래너 임웹 전용 — 전화 확인 후 공통·개인 일정 표시 (드라이브 링크 없음).
- * GAS 호출: `doPost` + `Content-Type: text/plain` JSON 본문(`plannerGasJsonPost_`). 응답 CORS가 막히면 Network에서 확인.
+ * GAS 호출: `doPost` + JSON 문자열 본문(`plannerGasJsonPost_`). `Content-Type` 헤더 없음(프리플라이트·CORS 회피, Tanaike/공식 Web App 패턴).
  * 스니펫에서 먼저 `window.__SOLPATH__ = { gasBaseUrl: "…/exec", … }` 를 둔다.
  */
 function spReadPlanInjected_() {
@@ -652,7 +652,9 @@ function plannerGasNormalizeResult_(data) {
 }
 
 /**
- * GAS Web App POST — `Content-Type: text/plain` JSON 본문(임웹·README와 동일).
+ * GAS Web App POST — 본문만 `JSON.stringify` (커스텀 헤더 없음 → OPTIONS 프리플라이트 없음).
+ * `redirect: "follow"` — exec 302 → googleusercontent 최종 JSON 응답.
+ * @see https://stackoverflow.com/questions/53433938/how-do-i-allow-a-cors-requests-in-my-google-script
  * @param {string} url
  * @param {Record<string, unknown>} bodyObj
  * @return {Promise<unknown>}
@@ -670,7 +672,8 @@ async function plannerGasJsonPost_(url, bodyObj, timeoutMs) {
   try {
     const res = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      redirect: 'follow',
+      mode: 'cors',
       body: JSON.stringify(bodyObj),
       credentials: 'omit',
       signal: ctrl ? ctrl.signal : undefined
@@ -735,18 +738,13 @@ async function plannerGasPostAction_(url, bodyObj) {
     return plannerGasNormalizeResult_(raw);
   } catch (e) {
     const m = e && typeof e === 'object' && 'message' in e ? String(/** @type {{ message?: string }} */ (e).message) : String(e);
-    const corsHint =
-      /failed to fetch|networkerror|load failed|cors/i.test(m)
-        ? ' GAS Web App(TextOutput)은 cross-origin 응답에 CORS 헤더를 붙일 수 없어, 임웹(jsDelivr)에서 POST 응답을 읽지 못할 수 있습니다. Network 탭에서 확인해 주세요.'
-        : '';
     return {
       ok: false,
       error: {
         code: 'NETWORK',
         message:
           m +
-          corsHint +
-          ' (배포: Execute as Me + Anyone(익명) + clasp push 후 새 버전.)'
+          ' (GAS Web App: Execute as Me + Anyone(익명), POST 본문만·Content-Type 헤더 없음, 배포 새 버전.)'
       }
     };
   }
