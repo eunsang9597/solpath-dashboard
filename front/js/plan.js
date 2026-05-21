@@ -63,7 +63,7 @@ function plannerApplyAdminVisibility_(root) {
   if (tap) {
     tap.setAttribute(
       'aria-label',
-      admin ? '어드민 모드 켜짐 · 다시 5회 누르면 해제' : '플래너 · 5회 연속 누르면 어드민'
+      admin ? '어드민 모드 켜짐 · 로고 5회 누르면 해제' : '솔루션 학습 플래너 · 로고 5회 연속 누르면 관리자 모드'
     );
     tap.setAttribute('aria-pressed', admin ? 'true' : 'false');
   }
@@ -114,14 +114,113 @@ function plannerRevealPlanMain_(root) {
 }
 
 /**
- * 헤더 플래너 아이콘 5회 연속 클릭(약 2.6초 안) → 어드민 ON/OFF 토글(다시 5회면 해제) · sessionStorage 유지.
+ * @param {HTMLElement} root
+ */
+function plannerSetAdminMode_(root, on) {
+  root.__spPlanAdminMode = Boolean(on);
+  try {
+    sessionStorage.setItem(PLAN_SESSION_ADMIN_KEY, root.__spPlanAdminMode ? '1' : '0');
+  } catch (_e) {
+    /* ignore */
+  }
+  plannerApplyAdminVisibility_(root);
+}
+
+/**
+ * @param {HTMLElement} root
+ */
+function plannerShowAdminUnlockModal_(root) {
+  const modal = root.querySelector('#sp-plan-admin-modal');
+  const inp = root.querySelector('#sp-plan-admin-secret');
+  const err = root.querySelector('#sp-plan-admin-modal-err');
+  if (!modal) return;
+  if (err) {
+    err.textContent = '';
+    err.setAttribute('hidden', 'hidden');
+  }
+  if (inp) {
+    inp.value = '';
+  }
+  modal.removeAttribute('hidden');
+  modal.removeAttribute('aria-hidden');
+  if (inp) {
+    window.setTimeout(function () {
+      inp.focus();
+    }, 0);
+  }
+}
+
+/**
+ * @param {HTMLElement} root
+ */
+function plannerHideAdminUnlockModal_(root) {
+  const modal = root.querySelector('#sp-plan-admin-modal');
+  if (!modal) return;
+  modal.setAttribute('hidden', 'hidden');
+  modal.setAttribute('aria-hidden', 'true');
+}
+
+/**
+ * @param {HTMLElement} root
+ */
+async function plannerAdminUnlockSubmit_(root) {
+  const inp = /** @type {HTMLInputElement | null} */ (root.querySelector('#sp-plan-admin-secret'));
+  const err = root.querySelector('#sp-plan-admin-modal-err');
+  const submitBtn = root.querySelector('#sp-plan-admin-modal-submit');
+  const secret = inp ? String(inp.value || '').trim() : '';
+  if (!secret.length) {
+    if (err) {
+      err.textContent = '암호를 입력해 주세요.';
+      err.removeAttribute('hidden');
+    }
+    return;
+  }
+  if (GAS_MODE.useMock) {
+    if (err) {
+      err.textContent = 'gasBaseUrl이 없어 서버 확인을 할 수 없습니다.';
+      err.removeAttribute('hidden');
+    }
+    return;
+  }
+  if (submitBtn) submitBtn.setAttribute('disabled', 'disabled');
+  if (err) {
+    err.textContent = '확인 중…';
+    err.removeAttribute('hidden');
+  }
+  const res = await plannerGasCall_({ action: 'plannerAdminVerify', admin_secret: secret });
+  if (submitBtn) submitBtn.removeAttribute('disabled');
+  if (!res || !res.ok) {
+    const m = res && res.error && res.error.message != null ? String(res.error.message) : '확인에 실패했습니다.';
+    if (err) err.textContent = m;
+    return;
+  }
+  const data = /** @type {{ outcome?: string }} */ (res.data || {});
+  if (String(data.outcome || '') === 'ok') {
+    plannerSetAdminMode_(root, true);
+    plannerHideAdminUnlockModal_(root);
+    return;
+  }
+  if (err) {
+    err.textContent = '암호가 올바르지 않습니다.';
+    err.removeAttribute('hidden');
+  }
+  if (inp) {
+    inp.focus();
+    inp.select();
+  }
+}
+
+/**
+ * 헤더 플래너 로고 5회 연속 클릭 → 암호 모달 → GAS `plannerAdminVerify`. 켜진 뒤 5회면 해제.
  * @param {HTMLElement} root
  */
 function wirePlannerAdminUnlockOnce_(root) {
   if (root.__spPlanAdminUnlockWired) return;
   root.__spPlanAdminUnlockWired = true;
   const tap = root.querySelector('#sp-plan-admin-tap');
+  const modal = root.querySelector('#sp-plan-admin-modal');
   if (!tap) return;
+
   let count = 0;
   let lastAt = 0;
   const resetMs = 2600;
@@ -134,14 +233,38 @@ function wirePlannerAdminUnlockOnce_(root) {
     if (count < 5) return;
     count = 0;
     lastAt = 0;
-    root.__spPlanAdminMode = !root.__spPlanAdminMode;
-    try {
-      sessionStorage.setItem(PLAN_SESSION_ADMIN_KEY, root.__spPlanAdminMode ? '1' : '0');
-    } catch (_e) {
-      /* ignore */
+    if (root.__spPlanAdminMode) {
+      plannerSetAdminMode_(root, false);
+      plannerHideAdminUnlockModal_(root);
+      return;
     }
-    plannerApplyAdminVisibility_(root);
+    plannerShowAdminUnlockModal_(root);
   });
+
+  if (!modal) return;
+  modal.addEventListener('click', function (e) {
+    const t = e.target instanceof HTMLElement ? e.target : null;
+    if (!t) return;
+    if (t.getAttribute('data-sp-admin-close') === '1' || t.closest('[data-sp-admin-close="1"]')) {
+      plannerHideAdminUnlockModal_(root);
+    }
+  });
+  const submitBtn = root.querySelector('#sp-plan-admin-modal-submit');
+  if (submitBtn) {
+    submitBtn.addEventListener('click', function (e) {
+      e.preventDefault();
+      void plannerAdminUnlockSubmit_(root);
+    });
+  }
+  const inp = root.querySelector('#sp-plan-admin-secret');
+  if (inp) {
+    inp.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        void plannerAdminUnlockSubmit_(root);
+      }
+    });
+  }
 }
 
 /**
@@ -550,6 +673,16 @@ async function plannerGasCall_(payload) {
         extra.year_month = ym;
       }
       const raw = await plannerGasJsonpWithParams_(url, action, extra, PLANNER_JSONP_TIMEOUT_MS);
+      return plannerGasNormalizeResult_(raw);
+    }
+    if (action === 'plannerAdminVerify') {
+      const secret = String(payload.admin_secret != null ? payload.admin_secret : '').trim();
+      const raw = await plannerGasJsonpWithParams_(
+        url,
+        action,
+        { admin_secret: secret },
+        PLANNER_JSONP_TIMEOUT_MS
+      );
       return plannerGasNormalizeResult_(raw);
     }
     if (action === 'plannerRegistryProfileSave') {
@@ -1891,6 +2024,26 @@ const PLAN_APP_MAIN_AND_CLOSE = `<main class="app-main sp-plan-app-main app-shel
       </div>
       <div class="sp-plan-monthly-title" id="sp-plan-monthly-label">월간 플랜</div>
       <div class="sp-plan-calendar-slot" id="sp-plan-calendar-slot" role="region" aria-labelledby="sp-plan-monthly-label"></div>
+    </div>
+    <div class="sp-plan-modal sp-plan-modal--admin" id="sp-plan-admin-modal" hidden aria-hidden="true">
+      <div class="sp-plan-modal__backdrop" data-sp-admin-close="1"></div>
+      <div class="sp-plan-modal__panel" role="dialog" aria-modal="true" aria-labelledby="sp-plan-admin-modal-title">
+        <div class="sp-plan-modal__head">
+          <div class="sp-plan-modal__title" id="sp-plan-admin-modal-title">관리자 모드</div>
+          <button type="button" class="btn btn--ghost sp-plan-modal__close" data-sp-admin-close="1">닫기</button>
+        </div>
+        <div class="sp-plan-modal__body sp-plan-admin-modal__body">
+          <p class="sp-plan-admin-modal__hint">관리자 암호를 입력하세요.</p>
+          <label class="sp-plan-admin-modal__lbl">
+            <span class="sp-plan-admin-modal__lblText">암호</span>
+            <input type="password" class="sp-plan-admin-modal__input" id="sp-plan-admin-secret" autocomplete="off" spellcheck="false" maxlength="80" />
+          </label>
+          <p class="sp-plan-admin-modal__err" id="sp-plan-admin-modal-err" hidden role="alert"></p>
+          <div class="sp-plan-admin-modal__actions">
+            <button type="button" class="btn btn--primary" id="sp-plan-admin-modal-submit">확인</button>
+          </div>
+        </div>
+      </div>
     </div>
   </main>`;
 

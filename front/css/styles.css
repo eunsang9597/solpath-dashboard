@@ -4874,6 +4874,55 @@ button.sp-stu-remark__item--open:hover {
   padding: 0.3rem 0.65rem;
 }
 
+#solpath-plan-root #sp-plan-admin-modal .sp-plan-modal__panel {
+  width: min(22rem, calc(100vw - 1.5rem));
+}
+
+#solpath-plan-root .sp-plan-admin-modal__body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+#solpath-plan-root .sp-plan-admin-modal__hint {
+  margin: 0;
+  font-size: 0.88rem;
+  color: #64748b;
+}
+
+#solpath-plan-root .sp-plan-admin-modal__lbl {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+#solpath-plan-root .sp-plan-admin-modal__lblText {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #475569;
+}
+
+#solpath-plan-root .sp-plan-admin-modal__input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.45rem 0.55rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 0.95rem;
+}
+
+#solpath-plan-root .sp-plan-admin-modal__err {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #b91c1c;
+}
+
+#solpath-plan-root .sp-plan-admin-modal__actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 0.25rem;
+}
+
 #solpath-plan-root .sp-plan-modal__body {
   position: relative;
   padding: 0.85rem 0.9rem;
