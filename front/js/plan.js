@@ -67,6 +67,13 @@ function plannerApplyAdminVisibility_(root) {
     );
     tap.setAttribute('aria-pressed', admin ? 'true' : 'false');
   }
+  const profileTitle = root.querySelector('#sp-plan-student-info-title');
+  if (profileTitle) {
+    profileTitle.setAttribute(
+      'title',
+      admin ? '관리자 모드 켜짐 · 5회 누르면 해제' : '5회 연속 클릭 시 관리자 모드(게이트 통과 후에도 동작)'
+    );
+  }
   if (dev) {
     if (admin) {
       dev.removeAttribute('hidden');
@@ -129,11 +136,37 @@ function plannerSetAdminMode_(root, on) {
 /**
  * @param {HTMLElement} root
  */
+function plannerMountAdminSecretInput_(root) {
+  const slot = root.querySelector('#sp-plan-admin-secret-slot');
+  if (!slot || slot.querySelector('#sp-plan-admin-secret')) return;
+  const inp = document.createElement('input');
+  inp.type = 'password';
+  inp.id = 'sp-plan-admin-secret';
+  inp.className = 'sp-plan-admin-modal__input';
+  inp.setAttribute('autocomplete', 'new-password');
+  inp.setAttribute('name', 'sp-planner-admin-verify');
+  inp.setAttribute('spellcheck', 'false');
+  inp.maxLength = 80;
+  slot.appendChild(inp);
+}
+
+/**
+ * @param {HTMLElement} root
+ */
+function plannerUnmountAdminSecretInput_(root) {
+  const slot = root.querySelector('#sp-plan-admin-secret-slot');
+  if (slot) slot.innerHTML = '';
+}
+
+/**
+ * @param {HTMLElement} root
+ */
 function plannerShowAdminUnlockModal_(root) {
   const modal = root.querySelector('#sp-plan-admin-modal');
-  const inp = root.querySelector('#sp-plan-admin-secret');
   const err = root.querySelector('#sp-plan-admin-modal-err');
   if (!modal) return;
+  plannerMountAdminSecretInput_(root);
+  const inp = /** @type {HTMLInputElement | null} */ (root.querySelector('#sp-plan-admin-secret'));
   if (err) {
     err.textContent = '';
     err.setAttribute('hidden', 'hidden');
@@ -158,6 +191,7 @@ function plannerHideAdminUnlockModal_(root) {
   if (!modal) return;
   modal.setAttribute('hidden', 'hidden');
   modal.setAttribute('aria-hidden', 'true');
+  plannerUnmountAdminSecretInput_(root);
 }
 
 /**
@@ -211,28 +245,21 @@ async function plannerAdminUnlockSubmit_(root) {
 }
 
 /**
- * 헤더 플래너 로고 5회 연속 클릭 → 암호 모달 → GAS `plannerAdminVerify`. 켜진 뒤 5회면 해제.
+ * @param {HTMLElement} el
  * @param {HTMLElement} root
+ * @param {{ count: number, lastAt: number }} st
  */
-function wirePlannerAdminUnlockOnce_(root) {
-  if (root.__spPlanAdminUnlockWired) return;
-  root.__spPlanAdminUnlockWired = true;
-  const tap = root.querySelector('#sp-plan-admin-tap');
-  const modal = root.querySelector('#sp-plan-admin-modal');
-  if (!tap) return;
-
-  let count = 0;
-  let lastAt = 0;
+function plannerAdminUnlockOnFiveTap_(el, root, st) {
   const resetMs = 2600;
-  tap.addEventListener('click', function (e) {
+  el.addEventListener('click', function (e) {
     e.preventDefault();
     const now = Date.now();
-    if (now - lastAt > resetMs) count = 0;
-    lastAt = now;
-    count++;
-    if (count < 5) return;
-    count = 0;
-    lastAt = 0;
+    if (now - st.lastAt > resetMs) st.count = 0;
+    st.lastAt = now;
+    st.count++;
+    if (st.count < 5) return;
+    st.count = 0;
+    st.lastAt = 0;
     if (root.__spPlanAdminMode) {
       plannerSetAdminMode_(root, false);
       plannerHideAdminUnlockModal_(root);
@@ -240,6 +267,23 @@ function wirePlannerAdminUnlockOnce_(root) {
     }
     plannerShowAdminUnlockModal_(root);
   });
+}
+
+/**
+ * 헤더 로고·「학생 정보」제목 5회 연속 클릭 → 암호 모달(게이트에서도 표시). 켜진 뒤 5회면 해제.
+ * @param {HTMLElement} root
+ */
+function wirePlannerAdminUnlockOnce_(root) {
+  if (root.__spPlanAdminUnlockWired) return;
+  root.__spPlanAdminUnlockWired = true;
+  const tap = root.querySelector('#sp-plan-admin-tap');
+  const modal = root.querySelector('#sp-plan-admin-modal');
+  const profileTitle = root.querySelector('#sp-plan-student-info-title');
+  /** @type {{ count: number, lastAt: number }} */
+  const st = { count: 0, lastAt: 0 };
+  if (tap) plannerAdminUnlockOnFiveTap_(tap, root, st);
+  if (profileTitle) plannerAdminUnlockOnFiveTap_(profileTitle, root, st);
+  if (!tap && !profileTitle) return;
 
   if (!modal) return;
   modal.addEventListener('click', function (e) {
@@ -2025,7 +2069,10 @@ const PLAN_APP_MAIN_AND_CLOSE = `<main class="app-main sp-plan-app-main app-shel
       <div class="sp-plan-monthly-title" id="sp-plan-monthly-label">월간 플랜</div>
       <div class="sp-plan-calendar-slot" id="sp-plan-calendar-slot" role="region" aria-labelledby="sp-plan-monthly-label"></div>
     </div>
-    <div class="sp-plan-modal sp-plan-modal--admin" id="sp-plan-admin-modal" hidden aria-hidden="true">
+  </main>`;
+
+/** 게이트·본문과 분리 — `#sp-plan-app-main[hidden]` 안에 두면 모달이 안 보임 */
+const PLAN_ADMIN_MODAL_HTML = `<div class="sp-plan-modal sp-plan-modal--admin" id="sp-plan-admin-modal" hidden aria-hidden="true">
       <div class="sp-plan-modal__backdrop" data-sp-admin-close="1"></div>
       <div class="sp-plan-modal__panel" role="dialog" aria-modal="true" aria-labelledby="sp-plan-admin-modal-title">
         <div class="sp-plan-modal__head">
@@ -2036,7 +2083,7 @@ const PLAN_APP_MAIN_AND_CLOSE = `<main class="app-main sp-plan-app-main app-shel
           <p class="sp-plan-admin-modal__hint">관리자 암호를 입력하세요.</p>
           <label class="sp-plan-admin-modal__lbl">
             <span class="sp-plan-admin-modal__lblText">암호</span>
-            <input type="password" class="sp-plan-admin-modal__input" id="sp-plan-admin-secret" autocomplete="off" spellcheck="false" maxlength="80" />
+            <span id="sp-plan-admin-secret-slot" class="sp-plan-admin-modal__inputSlot"></span>
           </label>
           <p class="sp-plan-admin-modal__err" id="sp-plan-admin-modal-err" hidden role="alert"></p>
           <div class="sp-plan-admin-modal__actions">
@@ -2044,8 +2091,7 @@ const PLAN_APP_MAIN_AND_CLOSE = `<main class="app-main sp-plan-app-main app-shel
           </div>
         </div>
       </div>
-    </div>
-  </main>`;
+    </div>`;
 
 const GATE_HTML = `<div class="sp-plan-gate">
   <p class="sp-plan-gate__lead">솔패스 수강 이력이 있는 번호를 입력해 주세요. 입력 정보는 본인 확인·플래너 제공에만 사용됩니다.</p>
@@ -2058,37 +2104,44 @@ const GATE_HTML = `<div class="sp-plan-gate">
         id="sp-plan-name"
         type="text"
         maxlength="40"
-        autocomplete="name"
+        autocomplete="off"
+        name="sp-plan-gate-display-name"
         placeholder="선택 · 동일 번호 시"
       />
     </div>
     <div class="sp-plan-gate__stack sp-plan-gate__stack--tel">
       <span class="sp-plan-gate__lbl" id="sp-plan-phone-legend">휴대전화</span>
-      <div class="sp-plan-gate__tel" role="group" aria-labelledby="sp-plan-phone-legend">
+      <div class="sp-plan-gate__tel" role="group" aria-labelledby="sp-plan-phone-legend" autocomplete="off">
         <input
           class="sp-plan-gate__input sp-plan-gate__input--seg3"
           id="sp-plan-p0"
-          type="text"
+          type="tel"
+          inputmode="numeric"
           maxlength="3"
-          autocomplete="off"
+          autocomplete="one-time-code"
+          name="sp-plan-gate-tel-a"
           aria-label="휴대전화 앞자리 세 자리"
         />
         <span class="sp-plan-gate__dash" aria-hidden="true">-</span>
         <input
           class="sp-plan-gate__input sp-plan-gate__input--seg4"
           id="sp-plan-p1"
-          type="text"
+          type="tel"
+          inputmode="numeric"
           maxlength="4"
-          autocomplete="off"
+          autocomplete="one-time-code"
+          name="sp-plan-gate-tel-b"
           aria-label="휴대전화 중간 네 자리"
         />
         <span class="sp-plan-gate__dash" aria-hidden="true">-</span>
         <input
           class="sp-plan-gate__input sp-plan-gate__input--seg4"
           id="sp-plan-p2"
-          type="text"
+          type="tel"
+          inputmode="numeric"
           maxlength="4"
-          autocomplete="off"
+          autocomplete="one-time-code"
+          name="sp-plan-gate-tel-c"
           aria-label="휴대전화 끝 네 자리"
         />
       </div>
@@ -6281,7 +6334,7 @@ function main() {
   const el = document.getElementById(MOUNT_ID);
   if (!el) return;
   injectPlanGateFallbackCss_();
-  el.innerHTML = `<div class="sp-plan-rootinner">${PLAN_DEV_HTML}${PLAN_APP_SHELL_START}${GATE_HTML}${PLAN_APP_MAIN_AND_CLOSE}</div>`;
+  el.innerHTML = `<div class="sp-plan-rootinner">${PLAN_DEV_HTML}${PLAN_APP_SHELL_START}${GATE_HTML}${PLAN_ADMIN_MODAL_HTML}${PLAN_APP_MAIN_AND_CLOSE}</div>`;
   try {
     el.__spPlanAdminMode = sessionStorage.getItem(PLAN_SESSION_ADMIN_KEY) === '1';
   } catch (_e) {
