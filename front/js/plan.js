@@ -4161,7 +4161,8 @@ function plannerQuickReadCountByDow_(slot) {
 function plannerCurBadgeSpan_(mod, label, attrs) {
   const body = String(label != null ? label : '').trim();
   if (!body) return '';
-  const m = /^(grammar|logic|read|vocab)$/.test(mod) ? mod : 'misc';
+  const modStr = String(mod != null ? mod : '').trim();
+  const m = /^(grammar|logic|read|vocab|misc|fixed)$/.test(modStr) ? modStr : 'misc';
   const tid = attrs && attrs.taskId ? String(attrs.taskId).trim() : '';
   const data =
     tid.length > 0

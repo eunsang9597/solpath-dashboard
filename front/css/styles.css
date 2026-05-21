@@ -4492,7 +4492,7 @@ button.sp-stu-remark__item--open:hover {
   grid-template-columns: var(--sp-plan-month-lead) repeat(7, minmax(var(--sp-plan-day-col-min), 1fr));
   gap: 0.3rem;
   min-height: 5.8rem;
-  align-items: start;
+  align-items: stretch;
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
@@ -4752,6 +4752,8 @@ button.sp-stu-remark__item--open:hover {
   position: relative;
   overflow: hidden;
   align-items: stretch;
+  align-self: stretch;
+  height: 100%;
   min-height: 5.8rem;
 }
 
