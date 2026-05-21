@@ -124,6 +124,13 @@ function plannerSetAdminMode_(root, on) {
     /* ignore */
   }
   plannerApplyAdminVisibility_(root);
+  const prof =
+    root.__spPlanStudentProfileInitial && typeof root.__spPlanStudentProfileInitial === 'object'
+      ? root.__spPlanStudentProfileInitial
+      : null;
+  if (prof) {
+    renderPlannerStudentProfile_(root, prof);
+  }
 }
 
 /**
@@ -879,6 +886,15 @@ function plannerStudentProfileIsMemberView_(root) {
 }
 
 /**
+ * 회원 화면에서 학생 정보 빈 칸 입력·저장 — 관리자 모드(암호 해제)일 때만.
+ * @param {HTMLElement} root
+ * @returns {boolean}
+ */
+function plannerStudentProfileCanEdit_(root) {
+  return plannerStudentProfileIsMemberView_(root) && Boolean(root.__spPlanAdminMode);
+}
+
+/**
  * @param {HTMLElement} root
  * @returns {Record<string, string>}
  */
@@ -915,7 +931,7 @@ async function plannerStudentProfileSaveClick_(root) {
   const msgEl = root.querySelector('#sp-plan-student-save-msg');
   const ctx = root.__spPlannerBootstrapCtx;
   const st = root.__spPlanState;
-  if (!ctx || !st || !plannerStudentProfileIsMemberView_(root)) {
+  if (!ctx || !st || !plannerStudentProfileCanEdit_(root)) {
     if (msgEl) {
       msgEl.textContent = '저장할 수 없습니다.';
       msgEl.removeAttribute('hidden');
@@ -1653,14 +1669,14 @@ function plannerPrevMajorGpaParts_(raw) {
 }
 
 /**
- * 학생 정보 표 — bootstrap `student_profile`. **비어 있는 칸만** 회원에게 입력 허용(이미 있는 값은 수정 UI 없음).
+ * 학생 정보 표 — bootstrap `student_profile`. 회원·관리자 모드에서만 **비어 있는 칸** 입력(저장 후 이 화면에서 수정 UI 없음).
  * @param {HTMLElement} root
  * @param {Record<string, unknown>|null|undefined} profile
  */
 function renderPlannerStudentProfile_(root, profile) {
   const tbody = root.querySelector('#sp-plan-student-tbody');
   if (!tbody) return;
-  const memberView = plannerStudentProfileIsMemberView_(root);
+  const canEdit = plannerStudentProfileCanEdit_(root);
   const p = plannerNormalizeStudentProfileFromApi_(profile);
   root.__spPlanStudentProfileInitial = {};
   PLANNER_STUDENT_PROFILE_KEYS_FOR_SAVE.forEach(function (k) {
@@ -1693,9 +1709,21 @@ function renderPlannerStudentProfile_(root, profile) {
     );
   }
 
+  const hintEl = root.querySelector('.sp-plan-student__hint');
+  if (hintEl) {
+    if (canEdit) {
+      hintEl.textContent =
+        '비어 있는 항목만 입력할 수 있습니다. 저장한 내용은 이 화면에서 다시 수정할 수 없습니다.';
+    } else if (plannerStudentProfileIsMemberView_(root)) {
+      hintEl.textContent = '학생 정보는 조회만 가능합니다. 항목 입력은 관리자 모드에서만 할 수 있습니다.';
+    } else {
+      hintEl.textContent = '학생 정보는 조회만 가능합니다.';
+    }
+  }
+
   /** @param {string} key */
   const ed = function (key) {
-    return memberView && plannerStudentFieldIsEmpty_(p[key]);
+    return canEdit && plannerStudentFieldIsEmpty_(p[key]);
   };
 
   let h = '';
@@ -1754,7 +1782,7 @@ function renderPlannerStudentProfile_(root, profile) {
 
   const saveRow = root.querySelector('#sp-plan-student-save-row');
   if (saveRow) {
-    if (memberView) saveRow.removeAttribute('hidden');
+    if (canEdit) saveRow.removeAttribute('hidden');
     else saveRow.setAttribute('hidden', 'hidden');
   }
 }
@@ -4449,7 +4477,7 @@ function plannerTimelineBarRole_(slots, slotKey, todoId) {
 }
 
 /**
- * 같은 할 일 막대 안에서 이 칸이 몇 번째 10분 칸인지(0부터).
+ * 같은 할 일이 **연속**인 막대(run) 안에서 이 칸이 몇 번째 10분 칸인지(0부터). 끊기면 다시 0.
  * @param {Record<string, string>} slots
  * @param {string} slotKey
  * @param {string} todoId
@@ -4458,25 +4486,25 @@ function plannerTimelineBarRole_(slots, slotKey, todoId) {
 function plannerTimelineBarChunkIndex_(slots, slotKey, todoId) {
   const order = plannerTimelineOrderedSlotKeys_();
   const tid = String(todoId != null ? todoId : '').trim();
-  let n = 0;
-  let i;
-  for (i = 0; i < order.length; i++) {
-    const k = order[i];
-    if (String(slots[k] != null ? slots[k] : '').trim() !== tid) {
-      continue;
-    }
-    if (k === slotKey) {
-      return n;
-    }
-    n++;
+  const ix = order.indexOf(String(slotKey));
+  if (ix < 0) {
+    return 0;
   }
-  return 0;
+  let runStart = ix;
+  while (runStart > 0) {
+    const prevT = String(slots[order[runStart - 1]] != null ? slots[order[runStart - 1]] : '').trim();
+    if (prevT !== tid) {
+      break;
+    }
+    runStart--;
+  }
+  return ix - runStart;
 }
 
 /**
- * 할 일 제목(공백 제거)을 막대 칸마다 2글자씩 표시. 막대가 길면 처음부터 반복.
+ * 할 일 제목(공백 제거)을 막대 칸마다 2글자씩. 한 바퀴(전체 글자) 지나면 `--`, 제목 반복 없음.
  * @param {string} title
- * @param {number} chunkIndex
+ * @param {number} chunkIndex run 내 0부터
  * @returns {string}
  */
 function plannerTodoBarLabelChunk_(title, chunkIndex) {
@@ -4487,13 +4515,12 @@ function plannerTodoBarLabelChunk_(title, chunkIndex) {
     return '··';
   }
   const n = Math.max(0, chunkIndex);
-  const pairStart = (n * 2) % t.length;
-  let chunk = '';
-  let i = 0;
-  while (chunk.length < 2 && i < t.length) {
-    chunk += t.charAt((pairStart + i) % t.length);
-    i++;
+  const chunksInLap = Math.ceil(t.length / 2);
+  if (n >= chunksInLap) {
+    return '--';
   }
+  const pairStart = n * 2;
+  let chunk = t.slice(pairStart, pairStart + 2);
   while (chunk.length < 2) {
     chunk += ' ';
   }
