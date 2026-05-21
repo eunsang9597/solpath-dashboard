@@ -1779,7 +1779,7 @@ function plannerCurriculumWeekLessonRangeFromQuickPlan_(st, weekDateKeys) {
     plannerMonthTodosForDay_(st, key).forEach(function (t) {
       if (!t || plannerIsTraceGhostDisplay_(t)) return;
       const subj = String(t.category != null ? t.category : '').trim();
-      if (!/^(grammar|logic|read|vocab)$/.test(subj)) return;
+      if (!/^(grammar|logic|read|vocab|misc)$/.test(subj)) return;
       const lessons = plannerLessonsFromStudyTitle_(String(t.title != null ? t.title : ''));
       lessons.forEach(function (L) {
         if (!isFinite(L) || L <= 0) return;
@@ -1820,7 +1820,8 @@ function plannerSubjectCodeFromCatalogCourse_(course) {
   if (/\blogic\b|논리/.test(blob)) return 'logic';
   if (/\bread\b|독해/.test(blob)) return 'read';
   if (/\bvocab\b|어휘/.test(blob)) return 'vocab';
-  return '';
+  if (/\bmisc\b|기타/.test(blob)) return 'misc';
+  return 'misc';
 }
 
 /**
@@ -1974,7 +1975,18 @@ function plannerCurriculumWeekPayloadFromMonthTodos_(st, weekIndex, weekDateKeys
   const rows = [];
   PLANNER_STUDY_CATEGORY_ORDER.forEach(function (code) {
     const bucket = bySubj[code];
-    if (!bucket || !bucket.titles.length) return;
+    if (!bucket || !bucket.titles.length) {
+      if (code === 'misc') {
+        rows.push({
+          subject: plannerCategoryLabelKo_('misc'),
+          subject_code: 'misc',
+          textbook_goal: '—',
+          lesson_outline: '—',
+          link_url: ''
+        });
+      }
+      return;
+    }
     const r = ranges[code];
     let outline = plannerCurriculumLessonOutlineFromRange_(r) || '';
     if (!outline.length) {
@@ -3222,8 +3234,27 @@ const PLANNER_CURR_SUBJECT_OPTS = [
   { code: 'vocab', label: '어휘' },
   { code: 'grammar', label: '문법' },
   { code: 'logic', label: '논리' },
-  { code: 'read', label: '독해' }
+  { code: 'read', label: '독해' },
+  { code: 'misc', label: '기타' }
 ];
+
+/**
+ * 커리큘럼 등록 과목 셀렉트 옵션 — `기타`는 카탈로그 없어도 항상 노출.
+ * @param {object[]} courses
+ * @returns {{ value: string, label: string }[]}
+ */
+function plannerCurriculumSubjectSelectItems_(courses) {
+  const out = [];
+  PLANNER_CURR_SUBJECT_OPTS.forEach(function (o) {
+    if (o.code === 'misc') {
+      out.push({ value: o.code, label: o.label });
+      return;
+    }
+    const rows = plannerCurriculumCoursesForSubject_(courses, o.code);
+    if (rows.length) out.push({ value: o.code, label: o.label });
+  });
+  return out;
+}
 
 /**
  * @param {object} st
@@ -3342,11 +3373,7 @@ function plannerCurriculumRefreshCascade_(slot, st, fromLevel) {
   lecEl.disabled = !has;
 
   if (fromLevel === 'all') {
-    const subjItems = [];
-    PLANNER_CURR_SUBJECT_OPTS.forEach(function (o) {
-      const rows = plannerCurriculumCoursesForSubject_(cat.courses, o.code);
-      if (rows.length) subjItems.push({ value: o.code, label: o.label });
-    });
+    const subjItems = plannerCurriculumSubjectSelectItems_(cat.courses);
     plannerSelectFillOptions_(subjEl, subjItems, '과목 선택');
     subjEl.value = subjItems.length ? subjItems[0].value : '';
     fromLevel = 'subject';
@@ -3909,11 +3936,7 @@ function plannerQuickCurriculumRefreshCascade_(slot, st, fromLevel) {
   fromEl.disabled = !has;
   toEl.disabled = !has;
   if (fromLevel === 'all') {
-    const subjItems = [];
-    PLANNER_CURR_SUBJECT_OPTS.forEach(function (o) {
-      const rows = plannerCurriculumCoursesForSubject_(cat.courses, o.code);
-      if (rows.length) subjItems.push({ value: o.code, label: o.label });
-    });
+    const subjItems = plannerCurriculumSubjectSelectItems_(cat.courses);
     plannerSelectFillOptions_(subjEl, subjItems, '과목 선택');
     subjEl.value = subjItems.length ? subjItems[0].value : '';
     fromLevel = 'subject';
