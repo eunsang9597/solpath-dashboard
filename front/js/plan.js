@@ -1,6 +1,6 @@
 /**
  * 플래너 임웹 전용 — 전화 확인 후 공통·개인 일정 표시 (드라이브 링크 없음).
- * GAS 호출은 관리자 `app.js` 와 동일하게 **JSONP(GET)**. `fetch` POST는 GAS `TextOutput` CORS 한계로 막힐 수 있음.
+ * GAS 호출: `doPost` + `Content-Type: text/plain` JSON 본문(`plannerGasJsonPost_`). 응답 CORS가 막히면 Network에서 확인.
  * 스니펫에서 먼저 `window.__SOLPATH__ = { gasBaseUrl: "…/exec", … }` 를 둔다.
  */
 function spReadPlanInjected_() {
@@ -603,7 +603,7 @@ function plannerMergeBootstrapMonthData_(root, pack) {
   }
 }
 
-const PLANNER_JSONP_TIMEOUT_MS = 360000;
+const PLANNER_GAS_POST_TIMEOUT_MS = 360000;
 
 /**
  * GAS JSONP는 `{ error: { message } }` 와 `{ error: 'X', message: '…' }` 를 섞어 쓴다. 플래너 UI는 여기서 통일한다.
@@ -657,31 +657,102 @@ function plannerGasNormalizeResult_(data) {
  * @param {Record<string, unknown>} bodyObj
  * @return {Promise<unknown>}
  */
-async function plannerGasJsonPost_(url, bodyObj) {
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-    body: JSON.stringify(bodyObj),
-    credentials: 'omit'
-  });
-  const text = await res.text();
-  let data;
+async function plannerGasJsonPost_(url, bodyObj, timeoutMs) {
+  const lim = timeoutMs != null ? timeoutMs : PLANNER_GAS_POST_TIMEOUT_MS;
+  const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  const timer =
+    ctrl &&
+    window.setTimeout(function () {
+      try {
+        ctrl.abort();
+      } catch (_e) {}
+    }, lim);
   try {
-    data = JSON.parse(text);
-  } catch (_e) {
-    return {
-      ok: false,
-      error: {
-        code: 'INVALID_RESPONSE',
-        message: 'JSON 파싱 실패: ' + text.slice(0, 400)
-      }
-    };
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(bodyObj),
+      credentials: 'omit',
+      signal: ctrl ? ctrl.signal : undefined
+    });
+    const text = await res.text();
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch (_e) {
+      return {
+        ok: false,
+        error: {
+          code: 'INVALID_RESPONSE',
+          message: 'JSON 파싱 실패(HTTP ' + String(res.status) + '): ' + text.slice(0, 400)
+        }
+      };
+    }
+    return data;
+  } finally {
+    if (timer) {
+      window.clearTimeout(timer);
+    }
   }
-  return data;
 }
 
 /**
- * `HttpOpenSync.js` JSONP 분기 — 쿼리 `p0`·`p1`·`p2`·`n`·`m`(memberCode).
+ * @param {Record<string, unknown>} payload
+ * @returns {string[]}
+ */
+function plannerPhoneSegmentsFromPayload_(payload) {
+  const segs = /** @type {unknown[]} */ (Array.isArray(payload.phoneSegments) ? payload.phoneSegments : []);
+  return [
+    String(segs[0] != null ? segs[0] : '').replace(/\D/g, ''),
+    String(segs[1] != null ? segs[1] : '').replace(/\D/g, ''),
+    String(segs[2] != null ? segs[2] : '').replace(/\D/g, '')
+  ];
+}
+
+/**
+ * @param {Record<string, unknown>} payload
+ * @returns {string}
+ */
+function plannerLinkKeyFromPayload_(payload) {
+  return String(
+    payload.memberCode != null
+      ? payload.memberCode
+      : payload.link_key != null
+        ? payload.link_key
+        : ''
+  ).trim();
+}
+
+/**
+ * `HttpOpenSync.js` `doPost` — JSON 본문 `action` + 필드 (`phoneSegments` 배열, `todos` 배열 등).
+ * @param {string} url
+ * @param {Record<string, unknown>} bodyObj
+ * @return {Promise<Record<string, unknown>>}
+ */
+async function plannerGasPostAction_(url, bodyObj) {
+  try {
+    const raw = await plannerGasJsonPost_(url, bodyObj, PLANNER_GAS_POST_TIMEOUT_MS);
+    return plannerGasNormalizeResult_(raw);
+  } catch (e) {
+    const m = e && typeof e === 'object' && 'message' in e ? String(/** @type {{ message?: string }} */ (e).message) : String(e);
+    const corsHint =
+      /failed to fetch|networkerror|load failed|cors/i.test(m)
+        ? ' GAS Web App(TextOutput)은 cross-origin 응답에 CORS 헤더를 붙일 수 없어, 임웹(jsDelivr)에서 POST 응답을 읽지 못할 수 있습니다. Network 탭에서 확인해 주세요.'
+        : '';
+    return {
+      ok: false,
+      error: {
+        code: 'NETWORK',
+        message:
+          m +
+          corsHint +
+          ' (배포: Execute as Me + Anyone(익명) + clasp push 후 새 버전.)'
+      }
+    };
+  }
+}
+
+/**
  * @param {Record<string, unknown>} payload
  * @return {Promise<Record<string, unknown>>}
  */
@@ -691,120 +762,57 @@ async function plannerGasCall_(payload) {
     return { ok: false, error: { code: 'NO_GAS_URL', message: 'gasBaseUrl이 없습니다.' } };
   }
   const action = String(payload.action != null ? payload.action : '');
-  try {
-    if (action === 'plannerRegistryRebuild' || action === 'plannerDevFullReset' || action === 'initPlannerMasterSheets') {
-      const raw = await plannerGasJsonpWithParams_(url, action, null, PLANNER_JSONP_TIMEOUT_MS);
-      return plannerGasNormalizeResult_(raw);
-    }
-    if (action === 'plannerMatch' || action === 'plannerBootstrap') {
-      const segs = /** @type {unknown[]} */ (Array.isArray(payload.phoneSegments) ? payload.phoneSegments : []);
-      const extra = {
-        p0: String(segs[0] != null ? segs[0] : '').replace(/\D/g, ''),
-        p1: String(segs[1] != null ? segs[1] : '').replace(/\D/g, ''),
-        p2: String(segs[2] != null ? segs[2] : '').replace(/\D/g, ''),
-        n: String(payload.name != null ? payload.name : ''),
-        m: String(payload.memberCode != null ? payload.memberCode : '')
-      };
-      const ym = String(payload.year_month != null ? payload.year_month : payload.yearMonth != null ? payload.yearMonth : '').trim();
-      if (ym.length) {
-        extra.year_month = ym;
-      }
-      const raw = await plannerGasJsonpWithParams_(url, action, extra, PLANNER_JSONP_TIMEOUT_MS);
-      return plannerGasNormalizeResult_(raw);
-    }
-    if (action === 'plannerAdminVerify') {
-      const secret = String(payload.admin_secret != null ? payload.admin_secret : '').trim();
-      const raw = await plannerGasJsonpWithParams_(
-        url,
-        action,
-        { admin_secret: secret },
-        PLANNER_JSONP_TIMEOUT_MS
-      );
-      return plannerGasNormalizeResult_(raw);
-    }
-    if (action === 'plannerRegistryProfileSave') {
-      const segs = /** @type {unknown[]} */ (Array.isArray(payload.phoneSegments) ? payload.phoneSegments : []);
-      const prof =
-        payload.student_profile != null && typeof payload.student_profile === 'object'
-          ? payload.student_profile
-          : {};
-      let profStr = '{}';
-      try {
-        profStr = JSON.stringify(prof);
-      } catch (_e) {
-        profStr = '{}';
-      }
-      const extra = {
-        p0: String(segs[0] != null ? segs[0] : '').replace(/\D/g, ''),
-        p1: String(segs[1] != null ? segs[1] : '').replace(/\D/g, ''),
-        p2: String(segs[2] != null ? segs[2] : '').replace(/\D/g, ''),
-        n: String(payload.name != null ? payload.name : ''),
-        m: String(payload.memberCode != null ? payload.memberCode : ''),
-        student_profile: profStr
-      };
-      const raw = await plannerGasJsonpWithParams_(url, action, extra, PLANNER_JSONP_TIMEOUT_MS);
-      return plannerGasNormalizeResult_(raw);
-    }
-    if (action === 'plannerPersonalTodosApply') {
-      const segs = /** @type {unknown[]} */ (Array.isArray(payload.phoneSegments) ? payload.phoneSegments : []);
-      const p0 = String(segs[0] != null ? segs[0] : '').replace(/\D/g, '');
-      const p1 = String(segs[1] != null ? segs[1] : '').replace(/\D/g, '');
-      const p2 = String(segs[2] != null ? segs[2] : '').replace(/\D/g, '');
-      const ym = String(payload.year_month != null ? payload.year_month : payload.yearMonth != null ? payload.yearMonth : '').trim();
-      const todos = Array.isArray(payload.todos) ? payload.todos : [];
-      let todosStr = '[]';
-      try {
-        todosStr = JSON.stringify(todos);
-      } catch (_eTodo) {
-        todosStr = '[]';
-      }
-      const extra = {
-        p0: p0,
-        p1: p1,
-        p2: p2,
-        n: String(payload.name != null ? payload.name : ''),
-        m: String(payload.memberCode != null ? payload.memberCode : ''),
-        year_month: ym,
-        todos: todosStr
-      };
-      let probe;
-      try {
-        probe = new URL(url);
-        probe.searchParams.set('format', 'jsonp');
-        probe.searchParams.set('callback', '_probe');
-        probe.searchParams.set('action', action);
-        Object.keys(extra).forEach(function (k) {
-          probe.searchParams.set(k, extra[k]);
-        });
-        if (probe.toString().length > 7500) {
-          return {
-            ok: false,
-            error: {
-              code: 'PAYLOAD_TOO_LARGE',
-              message:
-                '이번 달 할 일 데이터가 너무 많아 JSONP로 보낼 수 없습니다. 달력에서 불필요한 할 일을 줄인 뒤 다시 저장해 주세요.'
-            }
-          };
-        }
-      } catch (_eUrl) {
-        /* probe skip */
-      }
-      const raw = await plannerGasJsonpWithParams_(url, action, extra, PLANNER_JSONP_TIMEOUT_MS);
-      return plannerGasNormalizeResult_(raw);
-    }
-    return { ok: false, error: { code: 'BAD_ACTION', message: '지원하지 않는 action: ' + action } };
-  } catch (e) {
-    const m = e && typeof e === 'object' && 'message' in e ? String(/** @type {{ message?: string }} */ (e).message) : String(e);
-    return {
-      ok: false,
-      error: {
-        code: 'NETWORK',
-        message:
-          m +
-          ' (GAS Web App: "Anyone(익명)" + Execute as Me + 새 버전 배포. 관리자와 동일 JSONP 경로입니다.)'
-      }
-    };
+  if (action === 'plannerRegistryRebuild' || action === 'plannerDevFullReset' || action === 'initPlannerMasterSheets') {
+    return plannerGasPostAction_(url, { action: action });
   }
+  if (action === 'plannerMatch' || action === 'plannerBootstrap') {
+    const body = {
+      action: action,
+      phoneSegments: plannerPhoneSegmentsFromPayload_(payload),
+      name: String(payload.name != null ? payload.name : ''),
+      memberCode: plannerLinkKeyFromPayload_(payload),
+      link_key: plannerLinkKeyFromPayload_(payload)
+    };
+    const ym = String(payload.year_month != null ? payload.year_month : payload.yearMonth != null ? payload.yearMonth : '').trim();
+    if (ym.length) {
+      body.year_month = ym;
+    }
+    return plannerGasPostAction_(url, body);
+  }
+  if (action === 'plannerAdminVerify') {
+    return plannerGasPostAction_(url, {
+      action: action,
+      admin_secret: String(payload.admin_secret != null ? payload.admin_secret : '').trim()
+    });
+  }
+  if (action === 'plannerRegistryProfileSave') {
+    const prof =
+      payload.student_profile != null && typeof payload.student_profile === 'object'
+        ? payload.student_profile
+        : {};
+    return plannerGasPostAction_(url, {
+      action: action,
+      phoneSegments: plannerPhoneSegmentsFromPayload_(payload),
+      name: String(payload.name != null ? payload.name : ''),
+      memberCode: plannerLinkKeyFromPayload_(payload),
+      link_key: plannerLinkKeyFromPayload_(payload),
+      student_profile: prof
+    });
+  }
+  if (action === 'plannerPersonalTodosApply') {
+    const ym = String(payload.year_month != null ? payload.year_month : payload.yearMonth != null ? payload.yearMonth : '').trim();
+    const todos = Array.isArray(payload.todos) ? payload.todos : [];
+    return plannerGasPostAction_(url, {
+      action: action,
+      phoneSegments: plannerPhoneSegmentsFromPayload_(payload),
+      name: String(payload.name != null ? payload.name : ''),
+      memberCode: plannerLinkKeyFromPayload_(payload),
+      link_key: plannerLinkKeyFromPayload_(payload),
+      year_month: ym,
+      todos: todos
+    });
+  }
+  return { ok: false, error: { code: 'BAD_ACTION', message: '지원하지 않는 action: ' + action } };
 }
 
 /** 부트스트랩 `student_profile` / registry 저장에 쓰는 키 (`phone_display` 제외). */
@@ -2165,6 +2173,7 @@ const GATE_HTML = `<div class="sp-plan-gate">
       <p class="sp-plan-gate__telhint">숫자만 입력해 주세요. (010-0000-0000 형식)</p>
     </div>
   </div>
+  <p class="sp-plan-gate__status" id="sp-plan-gate-status" hidden aria-live="polite" aria-busy="false"></p>
   <p class="sp-plan-gate__err" id="sp-plan-gate-err" hidden></p>
   <button type="button" class="btn btn--primary sp-plan-gate__btn" id="sp-plan-gate-submit">확인</button>
 </div>`;
@@ -3612,7 +3621,8 @@ function plannerDayTodosFromPayloadHtml_(dateYmd, st) {
         if (toD) title += esc(' → ' + toD);
       }
       const isTrace = plannerIsTraceGhostDisplay_(r);
-      const isB = !isTrace && Boolean(brush && brush === id);
+      const isFixedSched = String(r.category || '').trim() === PLAN_CATEGORY_FIXED;
+      const isB = !isTrace && !isFixedSched && Boolean(brush && brush === id);
       const comp = plannerTodoCompletionGet_(st, dateYmd, id);
       const selNone = comp === 'none' ? ' selected' : '';
       const selO = comp === 'circle' ? ' selected' : '';
@@ -3639,7 +3649,10 @@ function plannerDayTodosFromPayloadHtml_(dateYmd, st) {
           '</th>';
       }
       body += '<td class="sp-plan-todoSide__tdTodo"><span class="sp-plan-todoSide__title">' + title + '</span>';
-      if (!isTrace) {
+      if (!isTrace && isFixedSched) {
+        body +=
+          '<button type="button" class="sp-plan-todoSide__brushBtn is-fixedNoBrush" disabled aria-disabled="true" title="고정 일정은 시간표에 칠 수 없습니다">체크</button>';
+      } else if (!isTrace) {
         body +=
           '<button type="button" class="sp-plan-todoSide__brushBtn' +
           (isB ? ' is-brush' : '') +
@@ -4525,6 +4538,14 @@ function plannerTimelineSlotApplyBrush_(slots, slotKey, brush, st, ymd) {
     return cur0;
   }
   const b = brush ? String(brush).trim() : '';
+  if (b && st && ymd) {
+    const todoMap = plannerDayTodoIdMapForDay_(String(ymd), st);
+    const row = todoMap[b];
+    if (row && String(row.category || '').trim() === PLAN_CATEGORY_FIXED) {
+      const curFix = slots[sk] != null ? String(slots[sk]).trim() : '';
+      return curFix;
+    }
+  }
   const cur = slots[sk] != null ? String(slots[sk]).trim() : '';
   if (!b) {
     slots[sk] = '';
@@ -5327,8 +5348,10 @@ function wirePlannerDayModalUiOnce_(modalEl, root) {
     if (!t || !side.contains(t)) return;
     const brushBtn = t.closest ? t.closest('[data-action="todo-brush"]') : null;
     if (!brushBtn || !side.contains(brushBtn)) return;
+    if (brushBtn instanceof HTMLButtonElement && brushBtn.disabled) return;
     const tr = brushBtn.closest ? brushBtn.closest('.sp-plan-todoSide__row') : null;
     if (!(tr instanceof HTMLElement)) return;
+    if (tr.classList.contains('sp-plan-todoSide__row--fixed')) return;
     const st = root.__spPlanState;
     if (!st || !st.selectedDate) return;
     const id = tr.getAttribute('data-todo-id') || '';
@@ -5892,6 +5915,15 @@ function renderCalendar_(root, boot) {
     const m = root.querySelector('#sp-plan-day-modal');
     if (!m) return;
     st.selectedDate = String(dateYmd || '');
+    if (st.modalBrushTodoId) {
+      const brushId = String(st.modalBrushTodoId);
+      const brushRow = plannerMonthTodosForDay_(st, st.selectedDate).find(function (r) {
+        return r && String(r.task_id || '') === brushId;
+      });
+      if (brushRow && String(brushRow.category || '').trim() === PLAN_CATEGORY_FIXED) {
+        st.modalBrushTodoId = '';
+      }
+    }
     plannerInvalidateDayTimelineCache_(st, st.selectedDate);
     const title = m.querySelector('#sp-plan-day-modal-title');
     if (title) title.textContent = st.selectedDate ? st.selectedDate + ' · 일일 플래너' : '일일 플래너';
@@ -6450,6 +6482,13 @@ function wireGate_(root) {
 
   wirePlanPhoneDigitsOnly_(root);
 
+  const statusEl = root.querySelector('#sp-plan-gate-status');
+  const phoneInputs = [
+    root.querySelector('#sp-plan-p0'),
+    root.querySelector('#sp-plan-p1'),
+    root.querySelector('#sp-plan-p2')
+  ];
+
   function showErr(msg) {
     if (!errEl) return;
     if (msg) {
@@ -6458,6 +6497,53 @@ function wireGate_(root) {
     } else {
       errEl.textContent = '';
       errEl.setAttribute('hidden', 'hidden');
+    }
+  }
+
+  /**
+   * @param {boolean} on
+   * @param {string} [statusText]
+   */
+  function setGateLoading_(on, statusText) {
+    const msg = String(statusText != null ? statusText : '').trim();
+    if (on) {
+      root.classList.add('is-plan-gate-loading');
+      gate.setAttribute('aria-busy', 'true');
+      btn.setAttribute('disabled', 'disabled');
+      if (msg) {
+        btn.textContent = msg;
+      }
+      if (nameInput instanceof HTMLInputElement) {
+        nameInput.disabled = true;
+      }
+      phoneInputs.forEach(function (inp) {
+        if (inp instanceof HTMLInputElement) {
+          inp.disabled = true;
+        }
+      });
+      if (statusEl) {
+        statusEl.textContent = msg || '처리 중…';
+        statusEl.removeAttribute('hidden');
+        statusEl.setAttribute('aria-busy', 'true');
+      }
+    } else {
+      root.classList.remove('is-plan-gate-loading');
+      gate.setAttribute('aria-busy', 'false');
+      btn.removeAttribute('disabled');
+      btn.textContent = '확인';
+      if (nameInput instanceof HTMLInputElement) {
+        nameInput.disabled = false;
+      }
+      phoneInputs.forEach(function (inp) {
+        if (inp instanceof HTMLInputElement) {
+          inp.disabled = false;
+        }
+      });
+      if (statusEl) {
+        statusEl.textContent = '';
+        statusEl.setAttribute('hidden', 'hidden');
+        statusEl.setAttribute('aria-busy', 'false');
+      }
     }
   }
 
@@ -6518,38 +6604,44 @@ function wireGate_(root) {
     }
     const name = nameInput ? String(nameInput.value || '').trim() : '';
 
-    const res = await plannerGasCall_({
-      action: 'plannerMatch',
-      phoneSegments: segs,
-      name: name
-    });
-    if (!res || !res.ok) {
-      const m = res && res.error && res.error.message != null ? String(res.error.message) : '확인에 실패했습니다.';
-      showErr(m);
-      return;
-    }
-    const data = /** @type {{ outcome?: string, needName?: boolean, link_key?: string | null, memberCode?: string | null }} */ (
-      res.data || {}
-    );
-    const oc = String(data.outcome || '');
-    if (oc === 'need_name') {
-      if (nameInput) {
-        nameInput.focus();
+    setGateLoading_(true, '등록 여부 확인 중…');
+    try {
+      const res = await plannerGasCall_({
+        action: 'plannerMatch',
+        phoneSegments: segs,
+        name: name
+      });
+      if (!res || !res.ok) {
+        const m = res && res.error && res.error.message != null ? String(res.error.message) : '확인에 실패했습니다.';
+        showErr(m);
+        return;
       }
-      showErr('같은 번호로 등록된 분이 여러 명입니다. 이름을 입력한 뒤 다시 확인을 눌러 주세요.');
-      return;
+      const data = /** @type {{ outcome?: string, needName?: boolean, link_key?: string | null, memberCode?: string | null }} */ (
+        res.data || {}
+      );
+      const oc = String(data.outcome || '');
+      if (oc === 'need_name') {
+        if (nameInput) {
+          nameInput.focus();
+        }
+        showErr('같은 번호로 등록된 분이 여러 명입니다. 이름을 입력한 뒤 다시 확인을 눌러 주세요.');
+        return;
+      }
+      const linkKey =
+        data.link_key != null && String(data.link_key).trim()
+          ? String(data.link_key).trim()
+          : data.memberCode != null && String(data.memberCode).trim()
+            ? String(data.memberCode).trim()
+            : '';
+      setGateLoading_(true, '플래너 불러오는 중…');
+      if (oc === 'matched' && linkKey) {
+        await runBootstrap(linkKey, segs, name);
+        return;
+      }
+      await runBootstrap('', segs, name);
+    } finally {
+      setGateLoading_(false);
     }
-    const linkKey =
-      data.link_key != null && String(data.link_key).trim()
-        ? String(data.link_key).trim()
-        : data.memberCode != null && String(data.memberCode).trim()
-          ? String(data.memberCode).trim()
-          : '';
-    if (oc === 'matched' && linkKey) {
-      await runBootstrap(linkKey, segs, name);
-      return;
-    }
-    await runBootstrap('', segs, name);
   });
 }
 

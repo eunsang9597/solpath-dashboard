@@ -3537,6 +3537,51 @@ button.sp-stu-remark__item--open:hover {
   padding-right: 0.45rem;
 }
 
+#solpath-plan-root .sp-plan-gate__status {
+  margin: 0.65rem 0 0;
+  width: 100%;
+  max-width: 100%;
+  min-height: 1.35rem;
+  text-align: center;
+  font-size: calc(0.8rem + var(--sp-text-bump));
+  font-weight: 650;
+  color: #4a148c;
+  line-height: 1.4;
+}
+
+#solpath-plan-root .sp-plan-gate__status[hidden] {
+  display: none !important;
+}
+
+#solpath-plan-root.is-plan-gate-loading .sp-plan-gate__status::before {
+  content: '';
+  display: inline-block;
+  width: 0.85rem;
+  height: 0.85rem;
+  margin-right: 0.4rem;
+  vertical-align: -0.12em;
+  border: 2px solid #c4b5fd;
+  border-top-color: #4a148c;
+  border-radius: 50%;
+  animation: sp-plan-gate-spin 0.75s linear infinite;
+}
+
+@keyframes sp-plan-gate-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+#solpath-plan-root.is-plan-gate-loading .sp-plan-gate__input:disabled {
+  opacity: 0.72;
+  cursor: wait;
+}
+
+#solpath-plan-root.is-plan-gate-loading .sp-plan-gate__btn:disabled {
+  opacity: 0.92;
+  cursor: wait;
+}
+
 #solpath-plan-root .sp-plan-gate__err {
   margin: 0.5rem 0 0;
   width: 100%;
@@ -5197,6 +5242,16 @@ button.sp-stu-remark__item--open:hover {
   box-sizing: border-box;
 }
 
+#solpath-plan-root .sp-plan-todoSide__brushBtn.is-fixedNoBrush,
+#solpath-plan-root .sp-plan-todoSide__brushBtn.is-fixedNoBrush:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  background: #f1f5f9;
+  color: #94a3b8;
+  border-color: #e2e8f0;
+  box-shadow: none;
+}
+
 #solpath-plan-root .sp-plan-todoSide__brushBtn.is-brush {
   background: #ede9fe;
   border-color: #7c3aed;
@@ -5350,7 +5405,11 @@ button.sp-stu-remark__item--open:hover {
 #solpath-plan-root .sp-plan-day__splitCol--time .sp-plan-day__timegrid {
   max-height: none;
   flex: 1 1 auto;
-  min-height: 12rem;
+  min-height: 14rem;
+}
+
+#solpath-plan-root #sp-plan-day-modal .sp-plan-day__splitCol--time .sp-plan-day__timegrid {
+  min-height: 16.5rem;
 }
 
 #solpath-plan-root #sp-plan-day-modal .sp-plan-day__timeline {
@@ -5805,11 +5864,25 @@ button.sp-stu-remark__item--open:hover {
   border-color: #22d3ee;
 }
 
+#solpath-plan-root #sp-plan-day-modal .sp-plan-hourRow {
+  min-height: 2.15rem;
+}
+
+#solpath-plan-root #sp-plan-day-modal .sp-plan-hourRow__time {
+  font-size: calc(0.74rem + var(--sp-text-bump));
+  padding-right: 0.45rem;
+}
+
 #solpath-plan-root #sp-plan-day-modal .sp-plan-hourRow__cells {
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 0;
   min-width: 0;
+}
+
+#solpath-plan-root #sp-plan-day-modal .sp-plan-slotcell {
+  min-height: 1.65rem;
+  border-radius: 3px;
 }
 
 #solpath-plan-root .sp-plan-hourRow__cells {
@@ -5968,7 +6041,7 @@ button.sp-stu-remark__item--open:hover {
   top: 50%;
   transform: translate(-50%, -50%);
   max-width: 92%;
-  font-size: 0.52rem;
+  font-size: calc(0.62rem + var(--sp-text-bump));
   font-weight: 800;
   line-height: 1;
   letter-spacing: -0.04em;
