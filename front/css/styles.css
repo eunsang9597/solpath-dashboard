@@ -6013,7 +6013,7 @@ button.sp-stu-remark__item--open:hover {
   border-right-color: transparent;
 }
 
-/* 막대 칸 — 할 일 제목 2글자씩(이어진 순서대로) */
+/* 막대 칸 — 할 일 제목 4글자씩(run 순서, 한 바퀴 후 ----) */
 #solpath-plan-root #sp-plan-day-modal .sp-plan-slotcell--todo.is-on[data-bar-chunk] {
   position: relative;
   overflow: hidden;
@@ -6024,12 +6024,12 @@ button.sp-stu-remark__item--open:hover {
   position: absolute;
   left: 50%;
   top: 50%;
-  transform: translate(-50%, -50%);
-  max-width: 92%;
-  font-size: calc(0.62rem + var(--sp-text-bump));
-  font-weight: 800;
+  transform: translate(-50%, -50%) scale(0.92);
+  max-width: 96%;
+  font-size: calc(0.5rem + var(--sp-text-bump));
+  font-weight: 750;
   line-height: 1;
-  letter-spacing: -0.04em;
+  letter-spacing: -0.06em;
   color: inherit;
   white-space: nowrap;
   overflow: hidden;

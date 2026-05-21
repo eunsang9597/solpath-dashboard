@@ -2399,6 +2399,8 @@ const PLAN_TIMELINE_HOURS_ORDERED = Object.freeze([
 ]);
 const PLAN_TIMELINE_CELLS_PER_HOUR = 6;
 const PLAN_TIMELINE_CELL_MIN = 10;
+/** 타임라인 막대 칸 라벨 — 제목(공백 제거)을 칸마다 이 글자 수만큼 */
+const PLAN_TIMELINE_BAR_LABEL_CHUNK_LEN = 4;
 /** 예전 30분 슬롯 마이그레이션용 */
 const PLAN_TIMELINE_LEGACY_START_H = 6;
 const PLAN_TIMELINE_LEGACY_STEP_MIN = 30;
@@ -4503,26 +4505,28 @@ function plannerTimelineBarChunkIndex_(slots, slotKey, todoId) {
 }
 
 /**
- * 할 일 제목(공백 제거)을 막대 칸마다 2글자씩. 한 바퀴(전체 글자) 지나면 `--`, 제목 반복 없음.
+ * 할 일 제목(공백 제거)을 막대 칸마다 N글자씩(`PLAN_TIMELINE_BAR_LABEL_CHUNK_LEN`). 한 바퀴 지나면 `----`.
  * @param {string} title
  * @param {number} chunkIndex run 내 0부터
  * @returns {string}
  */
 function plannerTodoBarLabelChunk_(title, chunkIndex) {
+  const w = PLAN_TIMELINE_BAR_LABEL_CHUNK_LEN;
+  const padDash = '-'.repeat(w);
   const t = String(title != null ? title : '')
     .replace(/\s+/g, '')
     .trim();
   if (!t.length) {
-    return '··';
+    return padDash;
   }
   const n = Math.max(0, chunkIndex);
-  const chunksInLap = Math.ceil(t.length / 2);
+  const chunksInLap = Math.ceil(t.length / w);
   if (n >= chunksInLap) {
-    return '--';
+    return padDash;
   }
-  const pairStart = n * 2;
-  let chunk = t.slice(pairStart, pairStart + 2);
-  while (chunk.length < 2) {
+  const start = n * w;
+  let chunk = t.slice(start, start + w);
+  while (chunk.length < w) {
     chunk += ' ';
   }
   return chunk;
