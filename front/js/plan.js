@@ -1107,58 +1107,59 @@ function plannerExportDownloadFilename_(root, ext) {
 }
 
 /**
- * 캡처 직전에만 숨김(화면과 동일·버튼 바 제외).
+ * PDF 캡처용 — 학생 정보 + 월간 달력만(배너·export바·할일등록 제외), 본문과 동일 너비 clone.
  * @param {HTMLElement} root
- * @returns {{ els: HTMLElement[], hiddenAttr: (string|null)[] }}
+ * @returns {HTMLElement}
  */
-function plannerExportCaptureHideChrome_(root) {
-  /** @type {HTMLElement[]} */
-  const els = [];
-  /** @type {(string|null)[]} */
-  const hiddenAttr = [];
-  const bar = root.querySelector('#sp-plan-export-bar');
-  if (bar instanceof HTMLElement) {
-    els.push(bar);
-    hiddenAttr.push(bar.hasAttribute('hidden') ? '' : null);
-    bar.setAttribute('hidden', 'hidden');
-    bar.setAttribute('aria-hidden', 'true');
+function plannerBuildExportCaptureHost_(root) {
+  const body = root.querySelector('.sp-plan-body');
+  const profile = root.querySelector('#sp-plan-student-info');
+  const monthLabel = root.querySelector('#sp-plan-monthly-label');
+  const monthWrap = root.querySelector('#sp-plan-month-wrap');
+  const host = document.createElement('div');
+  host.className = 'sp-plan-export-capture';
+  host.setAttribute('aria-hidden', 'true');
+  const w = body && body.offsetWidth > 0 ? body.offsetWidth : root.clientWidth;
+  if (w > 0) {
+    host.style.width = String(w) + 'px';
+    host.style.maxWidth = String(w) + 'px';
   }
-  return { els: els, hiddenAttr: hiddenAttr };
+  if (profile) {
+    host.appendChild(profile.cloneNode(true));
+  }
+  if (monthLabel) {
+    host.appendChild(monthLabel.cloneNode(true));
+  }
+  if (monthWrap) {
+    const cal = /** @type {HTMLElement} */ (monthWrap.cloneNode(true));
+    const actions = cal.querySelector('.sp-plan-month__actions');
+    if (actions) actions.remove();
+    host.appendChild(cal);
+  }
+  root.appendChild(host);
+  return host;
 }
 
 /**
- * @param {{ els: HTMLElement[], hiddenAttr: (string|null)[] }} snap
- */
-function plannerExportCaptureRestoreChrome_(snap) {
-  snap.els.forEach(function (el, i) {
-    if (snap.hiddenAttr[i] === null) {
-      el.removeAttribute('hidden');
-      el.removeAttribute('aria-hidden');
-    }
-  });
-}
-
-/**
- * `#sp-plan-app-main` WYSIWYG — html2canvas(화면 그대로).
- * @param {HTMLElement} main
+ * @param {HTMLElement} el
  * @returns {Promise<HTMLCanvasElement>}
  */
-async function plannerCaptureAppMainCanvas_(main) {
+async function plannerCaptureElementCanvas_(el) {
   const html2canvas = globalThis.html2canvas;
   await new Promise(function (resolve) {
     requestAnimationFrame(function () {
       requestAnimationFrame(resolve);
     });
   });
-  return html2canvas(main, {
+  return html2canvas(el, {
     scale: 2,
     backgroundColor: '#ffffff',
     logging: false,
     useCORS: true,
-    width: main.scrollWidth,
-    height: main.scrollHeight,
-    windowWidth: main.scrollWidth,
-    windowHeight: main.scrollHeight,
+    width: el.scrollWidth,
+    height: el.scrollHeight,
+    windowWidth: el.scrollWidth,
+    windowHeight: el.scrollHeight,
     scrollX: 0,
     scrollY: 0
   });
@@ -1219,10 +1220,11 @@ async function plannerExportPdfClick_(root) {
     msgEl.removeAttribute('hidden');
   }
 
-  const chrome = plannerExportCaptureHideChrome_(root);
+  let captureHost = null;
   try {
     await plannerEnsurePdfLibs_();
-    const canvas = await plannerCaptureAppMainCanvas_(main);
+    captureHost = plannerBuildExportCaptureHost_(root);
+    const canvas = await plannerCaptureElementCanvas_(captureHost);
     plannerSaveCanvasMultiPagePdf_(canvas, plannerExportDownloadFilename_(root, '.pdf'));
     if (msgEl) {
       msgEl.textContent = '저장했습니다.';
@@ -1234,7 +1236,9 @@ async function plannerExportPdfClick_(root) {
     const m = e && e.message != null ? String(e.message) : String(e);
     if (msgEl) msgEl.textContent = 'PDF 생성 실패: ' + m;
   } finally {
-    plannerExportCaptureRestoreChrome_(chrome);
+    if (captureHost && captureHost.parentNode) {
+      captureHost.parentNode.removeChild(captureHost);
+    }
     btn.removeAttribute('disabled');
   }
 }
@@ -2155,7 +2159,7 @@ const PLAN_APP_MAIN_AND_CLOSE = `<main class="app-main sp-plan-app-main app-shel
         </div>
       </section>
       <div class="sp-plan-exportBar" id="sp-plan-export-bar">
-        <button type="button" class="btn btn--ghost sp-plan-exportBar__btn" id="sp-plan-pdf-export" title="화면에 보이는 학생 정보·달력을 그대로 캡처해 PDF로 저장합니다(여러 페이지)">PDF로 저장</button>
+        <button type="button" class="btn btn--ghost sp-plan-exportBar__btn" id="sp-plan-pdf-export" title="학생 정보와 월간 달력만 캡처해 PDF로 저장합니다(여러 페이지)">PDF로 저장</button>
         <span class="sp-plan-exportBar__msg" id="sp-plan-pdf-export-msg" hidden aria-live="polite"></span>
       </div>
       <div class="sp-plan-monthly-title" id="sp-plan-monthly-label">월간 학습 달력</div>

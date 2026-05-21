@@ -3207,7 +3207,36 @@ button.sp-stu-remark__item--open:hover {
   color: #4a148c;
 }
 
-/* PDF보내기 — #solpath-plan-root 안에서 캡처(달력 grid CSS 동일 적용) */
+/* PDF — 학생 정보·달력만 캡처(본문 너비 clone, 화면 밖) */
+#solpath-plan-root .sp-plan-export-capture {
+  position: fixed;
+  left: -120vw;
+  top: 0;
+  z-index: -1;
+  box-sizing: border-box;
+  background: #fff;
+  pointer-events: none;
+  overflow: visible;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  padding: 0;
+}
+
+#solpath-plan-root .sp-plan-export-capture .sp-plan-month__actions {
+  display: none !important;
+}
+
+#solpath-plan-root .sp-plan-export-capture .sp-plan-month__weekRow {
+  align-items: start;
+}
+
+#solpath-plan-root .sp-plan-export-capture .sp-plan-month .sp-plan-day {
+  height: auto;
+  align-self: auto;
+}
+
+/* PDF보내기 — 레거시 off-screen host(미사용) */
 #solpath-plan-root .sp-plan-pdf-export-host {
   position: fixed;
   left: -120vw;
