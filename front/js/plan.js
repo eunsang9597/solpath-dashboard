@@ -1174,11 +1174,16 @@ async function plannerExportPdfClick_(root) {
     host = document.createElement('div');
     host.id = 'sp-plan-pdf-export-host';
     host.className = 'sp-plan-pdf-export-host';
-    document.body.appendChild(host);
+    root.appendChild(host);
   }
   host.innerHTML = '';
   const sheet = plannerBuildPdfExportSheet_(root);
   host.appendChild(sheet);
+  await new Promise(function (resolve) {
+    requestAnimationFrame(function () {
+      requestAnimationFrame(resolve);
+    });
+  });
 
   try {
     await plannerEnsurePdfLibs_();
@@ -1188,7 +1193,11 @@ async function plannerExportPdfClick_(root) {
       scale: 2,
       backgroundColor: '#ffffff',
       logging: false,
-      useCORS: true
+      useCORS: true,
+      width: sheet.scrollWidth,
+      height: sheet.scrollHeight,
+      windowWidth: sheet.scrollWidth,
+      windowHeight: sheet.scrollHeight
     });
     const imgData = canvas.toDataURL('image/jpeg', 0.92);
     const pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });

@@ -3206,8 +3206,8 @@ button.sp-stu-remark__item--open:hover {
   color: #4a148c;
 }
 
-/* PDF보내기 — 화면 밖 렌더 후 html2canvas 캡처 */
-.sp-plan-pdf-export-host {
+/* PDF보내기 — #solpath-plan-root 안에서 캡처(달력 grid CSS 동일 적용) */
+#solpath-plan-root .sp-plan-pdf-export-host {
   position: fixed;
   left: -120vw;
   top: 0;
@@ -3216,6 +3216,7 @@ button.sp-stu-remark__item--open:hover {
   max-width: 794px;
   pointer-events: none;
   overflow: hidden;
+  box-sizing: border-box;
 }
 
 .sp-plan-pdf-sheet {
@@ -3288,16 +3289,46 @@ button.sp-stu-remark__item--open:hover {
   color: #475569;
 }
 
-.sp-plan-pdf-sheet .sp-plan-month {
-  min-width: 0 !important;
-  width: 100%;
+#solpath-plan-root .sp-plan-pdf-export-host .sp-plan-month {
   --sp-plan-month-lead: 8.5rem;
   --sp-plan-day-col-min: 2.35rem;
+  min-width: 0 !important;
+  width: 100%;
+  max-width: 100%;
+  padding: 0.35rem;
+  gap: 0.3rem;
+  font-size: 8px;
+  overflow: visible;
+}
+
+.sp-plan-pdf-sheet .sp-plan-month {
   border: 1px solid #e2e8f0;
   border-radius: 8px;
-  padding: 4px;
   box-sizing: border-box;
-  font-size: 8px;
+}
+
+#solpath-plan-root .sp-plan-pdf-export-host .sp-plan-month__dow,
+#solpath-plan-root .sp-plan-pdf-export-host .sp-plan-month__weekRow {
+  gap: 0.2rem;
+}
+
+#solpath-plan-root .sp-plan-pdf-export-host .sp-plan-month__weekRow {
+  min-height: 4.2rem;
+}
+
+#solpath-plan-root .sp-plan-pdf-export-host .sp-plan-month__weekMeta {
+  padding: 0.2rem 0.25rem;
+}
+
+#solpath-plan-root .sp-plan-pdf-export-host .sp-plan-cur {
+  overflow: hidden;
+}
+
+#solpath-plan-root .sp-plan-pdf-export-host .sp-plan-month .sp-plan-day {
+  padding: 0.2rem 0.25rem 0.28rem;
+  gap: 0.15rem;
+  min-height: 0;
+  cursor: default;
 }
 
 .sp-plan-pdf-sheet .sp-plan-month__head {
