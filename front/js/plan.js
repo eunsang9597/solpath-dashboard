@@ -4474,13 +4474,15 @@ function plannerTimelineBarChunkIndex_(slots, slotKey, todoId) {
 }
 
 /**
- * 할 일 제목을 막대 칸마다 2글자씩 표시. 막대가 제목보다 길면 처음부터 반복(… 없음).
+ * 할 일 제목(공백 제거)을 막대 칸마다 2글자씩 표시. 막대가 길면 처음부터 반복.
  * @param {string} title
  * @param {number} chunkIndex
  * @returns {string}
  */
 function plannerTodoBarLabelChunk_(title, chunkIndex) {
-  const t = String(title != null ? title : '').trim();
+  const t = String(title != null ? title : '')
+    .replace(/\s+/g, '')
+    .trim();
   if (!t.length) {
     return '··';
   }
@@ -5003,15 +5005,7 @@ function plannerFixedScheduleFooterHtml_(st, key) {
     '<div class="sp-plan-day__fixedFoot" aria-label="고정 일정">' +
     lines
       .map(function (item) {
-        return (
-          '<div class="sp-plan-day__fixedLine" data-sp-task-id="' +
-          esc(item.task_id) +
-          '" data-sp-ymd-parent="1" title="' +
-          esc(item.title) +
-          '">' +
-          esc(item.title) +
-          '</div>'
-        );
+        return plannerCurBadgeSpan_('fixed', item.title, { taskId: item.task_id });
       })
       .join('') +
     '</div>'
@@ -5958,8 +5952,10 @@ function renderCalendar_(root, boot) {
         html += `
         <button type="button" class="sp-plan-day${wkCls}${inMonth ? '' : ' is-out'}${memoIcon ? ' has-memo' : ''}" data-ymd="${key}" ${inMonth ? '' : 'disabled'}>
           <div class="sp-plan-day__top">
-            <span class="sp-plan-day__num">${d.getDate()}</span>
-            ${memoIcon}
+            <span class="sp-plan-day__topLead">
+              <span class="sp-plan-day__num">${d.getDate()}</span>
+              ${memoIcon}
+            </span>
             ${badge ? `<span class="sp-plan-day__badge" aria-label="요약 ${badge}건">${badge}</span>` : ''}
           </div>
           <div class="sp-plan-day__dots" aria-hidden="true">${dots}</div>
