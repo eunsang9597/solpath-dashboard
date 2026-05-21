@@ -895,6 +895,15 @@ function plannerStudentProfileCanEdit_(root) {
 }
 
 /**
+ * 월간 「일정 저장·삭제」·할 일 등록 POST — 관리자 모드(암호 해제)일 때만.
+ * @param {HTMLElement} root
+ * @returns {boolean}
+ */
+function plannerPlanAdminBulkScheduleAllowed_(root) {
+  return Boolean(root.__spPlanAdminMode);
+}
+
+/**
  * @param {HTMLElement} root
  * @returns {Record<string, string>}
  */
@@ -1326,6 +1335,13 @@ async function plannerPersonalTodosApplyClick_(root, opts) {
   const ctx = root.__spPlannerBootstrapCtx;
   const st = root.__spPlanState;
   const memberUi = st && (st.role === 'member' || st.planGuestUnlockMock);
+  if (opts && opts.requireAdmin && !plannerPlanAdminBulkScheduleAllowed_(root)) {
+    if (msgEl) {
+      msgEl.textContent = '관리자 모드에서만 할 수 있습니다.';
+      msgEl.removeAttribute('hidden');
+    }
+    return false;
+  }
   if (!ctx || !st || !memberUi) {
     if (msgEl) {
       msgEl.textContent = '회원 확인 후에만 저장할 수 있습니다.';
@@ -1402,7 +1418,9 @@ function wirePlannerPersonalTodosApplyOnce_(root) {
       if (saveBtn.id === 'sp-plan-month-save') msgEl = root.querySelector('#sp-plan-month-apply-msg');
       else if (saveBtn.id === 'sp-plan-day-save') msgEl = root.querySelector('#sp-plan-day-apply-msg');
       else msgEl = root.querySelector('#sp-plan-todos-apply-msg');
-      void plannerPersonalTodosApplyClick_(root, { msgEl: msgEl });
+      const requireAdmin =
+        saveBtn.id === 'sp-plan-month-save' || saveBtn.id === 'sp-plan-todos-apply';
+      void plannerPersonalTodosApplyClick_(root, { msgEl: msgEl, requireAdmin: requireAdmin });
       return;
     }
     const clearBtn =
@@ -1593,6 +1611,13 @@ async function plannerClearMonthScheduleClick_(root) {
   const msgEl = root.querySelector('#sp-plan-month-apply-msg');
   const ctx = root.__spPlannerBootstrapCtx;
   const st = root.__spPlanState;
+  if (!plannerPlanAdminBulkScheduleAllowed_(root)) {
+    if (msgEl) {
+      msgEl.textContent = '관리자 모드에서만 삭제할 수 있습니다.';
+      msgEl.removeAttribute('hidden');
+    }
+    return;
+  }
   const memberUi = st && (st.role === 'member' || st.planGuestUnlockMock);
   if (!ctx || !st || !memberUi) {
     if (msgEl) {

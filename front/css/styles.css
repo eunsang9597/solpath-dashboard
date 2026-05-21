@@ -2977,7 +2977,8 @@ button.sp-stu-remark__item--open:hover {
 #solpath-plan-root:not(.is-plan-admin) #sp-plan-devbar,
 #solpath-plan-root #sp-plan-devbar[hidden],
 #solpath-plan-root:not(.is-plan-admin) #sp-plan-quick-reg,
-#solpath-plan-root #sp-plan-quick-reg[hidden] {
+#solpath-plan-root #sp-plan-quick-reg[hidden],
+#solpath-plan-root:not(.is-plan-admin) .sp-plan-month__actions {
   display: none !important;
 }
 
