@@ -61,19 +61,12 @@ function plannerApplyAdminVisibility_(root) {
   const reg = root.querySelector('#sp-plan-quick-reg');
   const tap = root.querySelector('#sp-plan-admin-tap');
   if (tap) {
-    tap.setAttribute(
-      'aria-label',
-      admin ? '어드민 모드 켜짐 · 로고 5회 누르면 해제' : '솔루션 학습 플래너 · 로고 5회 연속 누르면 관리자 모드'
-    );
-    tap.setAttribute('aria-pressed', admin ? 'true' : 'false');
+    tap.setAttribute('aria-label', '솔루션 학습 플래너');
+    if (admin) tap.setAttribute('aria-pressed', 'true');
+    else tap.removeAttribute('aria-pressed');
   }
   const profileTitle = root.querySelector('#sp-plan-student-info-title');
-  if (profileTitle) {
-    profileTitle.setAttribute(
-      'title',
-      admin ? '관리자 모드 켜짐 · 5회 누르면 해제' : '5회 연속 클릭 시 관리자 모드(게이트 통과 후에도 동작)'
-    );
-  }
+  if (profileTitle) profileTitle.removeAttribute('title');
   if (dev) {
     if (admin) {
       dev.removeAttribute('hidden');
@@ -589,7 +582,7 @@ function plannerMergeBootstrapMonthData_(root, pack) {
   const ban = root.querySelector('#sp-plan-banner');
   if (ban) {
     if (st.role === 'guest') {
-      ban.textContent = '등록된 번호로 확인되지 않아 공통 일정만 표시합니다.';
+      ban.textContent = '수강 확인이 되지 않아 학원 공통 일정만 표시됩니다. 문의가 필요하면 담당자에게 연락해 주세요.';
       ban.removeAttribute('hidden');
     } else {
       ban.setAttribute('hidden', 'hidden');
@@ -2040,7 +2033,7 @@ const PLAN_APP_SHELL_START = `<div class="app-shell app-shell--plan">
       <button type="button" class="brand-mark sp-plan-adminTap" id="sp-plan-admin-tap" aria-label="플래너"></button>
       <div>
         <div class="brand__title" style="color:#4a148c">솔루션 학습 플래너</div>
-        <p class="sp-plan-desc">공통 일정과 나만의 할 일을 달력에서 한눈에 볼 수 있게 연결할 예정입니다.</p>
+        <p class="sp-plan-desc">한 달 학습 일정과 할 일을 달력에서 확인하고 기록합니다.</p>
       </div>
     </div>
   </header>
@@ -2051,7 +2044,7 @@ const PLAN_APP_MAIN_AND_CLOSE = `<main class="app-main sp-plan-app-main app-shel
     <div class="panel panel--hero sp-plan-body">
       <section class="sp-plan-student" id="sp-plan-student-info" aria-labelledby="sp-plan-student-info-title">
         <h2 class="sp-plan-student__title" id="sp-plan-student-info-title">학생 정보</h2>
-        <p class="sp-plan-student__hint">마스터 <code class="sp-plan-student__code">planner_registry</code>와 동기화됩니다. 빈 칸만 입력·저장할 수 있으며, 이미 적힌 값은 이 화면에서 바꿀 수 없습니다.</p>
+        <p class="sp-plan-student__hint">비어 있는 항목만 입력할 수 있습니다. 저장한 내용은 이 화면에서 다시 수정할 수 없습니다.</p>
         <div class="sp-plan-student__wrap">
           <table class="sp-plan-student__tbl">
             <tbody id="sp-plan-student-tbody"></tbody>
@@ -2063,10 +2056,10 @@ const PLAN_APP_MAIN_AND_CLOSE = `<main class="app-main sp-plan-app-main app-shel
         </div>
       </section>
       <div class="sp-plan-exportBar" id="sp-plan-export-bar">
-        <button type="button" class="btn btn--ghost sp-plan-exportBar__btn" id="sp-plan-pdf-export" title="학생 정보와 아래 월간 달력을 PDF 한 장으로 저장합니다">PDF 저장</button>
+        <button type="button" class="btn btn--ghost sp-plan-exportBar__btn" id="sp-plan-pdf-export" title="학생 정보와 이번 달 달력을 PDF로 저장합니다">PDF로 저장</button>
         <span class="sp-plan-exportBar__msg" id="sp-plan-pdf-export-msg" hidden aria-live="polite"></span>
       </div>
-      <div class="sp-plan-monthly-title" id="sp-plan-monthly-label">월간 플랜</div>
+      <div class="sp-plan-monthly-title" id="sp-plan-monthly-label">월간 학습 달력</div>
       <div class="sp-plan-calendar-slot" id="sp-plan-calendar-slot" role="region" aria-labelledby="sp-plan-monthly-label"></div>
     </div>
   </main>`;
@@ -2080,7 +2073,7 @@ const PLAN_ADMIN_MODAL_HTML = `<div class="sp-plan-modal sp-plan-modal--admin" i
           <button type="button" class="btn btn--ghost sp-plan-modal__close" data-sp-admin-close="1">닫기</button>
         </div>
         <div class="sp-plan-modal__body sp-plan-admin-modal__body">
-          <p class="sp-plan-admin-modal__hint">관리자 암호를 입력하세요.</p>
+          <p class="sp-plan-admin-modal__hint">운영자 암호를 입력해 주세요.</p>
           <label class="sp-plan-admin-modal__lbl">
             <span class="sp-plan-admin-modal__lblText">암호</span>
             <span id="sp-plan-admin-secret-slot" class="sp-plan-admin-modal__inputSlot"></span>
@@ -2094,8 +2087,8 @@ const PLAN_ADMIN_MODAL_HTML = `<div class="sp-plan-modal sp-plan-modal--admin" i
     </div>`;
 
 const GATE_HTML = `<div class="sp-plan-gate">
-  <p class="sp-plan-gate__lead">솔패스 수강 이력이 있는 번호를 입력해 주세요. 입력 정보는 본인 확인·플래너 제공에만 사용됩니다.</p>
-  <p class="sp-plan-gate__privacy">전화번호와 이름(필요 시)은 매칭·기록용으로만 처리되며, 구글 드라이브 연결 등은 요청하지 않습니다.</p>
+  <p class="sp-plan-gate__lead">솔패스 수강 확인을 위해 휴대전화 번호를 입력해 주세요.</p>
+  <p class="sp-plan-gate__privacy">입력하신 정보는 본인 확인과 플래너 이용에만 사용됩니다.</p>
   <div class="sp-plan-gate__pair" role="group" aria-label="이름 및 휴대전화">
     <div class="sp-plan-gate__stack">
       <label class="sp-plan-gate__lbl" for="sp-plan-name">이름</label>
@@ -2106,7 +2099,7 @@ const GATE_HTML = `<div class="sp-plan-gate">
         maxlength="40"
         autocomplete="off"
         name="sp-plan-gate-display-name"
-        placeholder="선택 · 동일 번호 시"
+        placeholder="동일 번호가 여러 명일 때만 입력"
       />
     </div>
     <div class="sp-plan-gate__stack sp-plan-gate__stack--tel">
@@ -2145,7 +2138,7 @@ const GATE_HTML = `<div class="sp-plan-gate">
           aria-label="휴대전화 끝 네 자리"
         />
       </div>
-      <p class="sp-plan-gate__telhint">휴대전화 11자리(앞 3 · 가운데 4 · 끝 4). 숫자만 입력됩니다.</p>
+      <p class="sp-plan-gate__telhint">숫자만 입력해 주세요. (010-0000-0000 형식)</p>
     </div>
   </div>
   <p class="sp-plan-gate__err" id="sp-plan-gate-err" hidden></p>
@@ -3260,7 +3253,7 @@ function plannerCurriculumRefreshCascade_(slot, st, fromLevel) {
   const has = plannerCurriculumHasCatalog_(st);
   if (hintEl) {
     if (!has) {
-      hintEl.textContent = '커리큘럼 마스터(강좌·강의)가 없습니다. 관리자 시트를 확인해 주세요.';
+      hintEl.textContent = '등록된 강좌가 없습니다. 담당자에게 문의해 주세요.';
       hintEl.removeAttribute('hidden');
     } else {
       hintEl.textContent = '';
@@ -3408,7 +3401,7 @@ function plannerAppendCurriculumTodoFromForm_(slot, st) {
   const lecEl = slot.querySelector('#sp-curr-lecture');
   const due = dueEl && 'value' in dueEl ? String(/** @type {HTMLInputElement} */ (dueEl).value).trim() : '';
   const lecId = lecEl && 'value' in lecEl ? String(/** @type {HTMLSelectElement} */ (lecEl).value).trim() : '';
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(due)) return '등록·예정일을 선택해 주세요.';
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(due)) return '날짜를 선택해 주세요.';
   if (!lecId.length) return '회차(강의)를 선택해 주세요.';
 
   const cat = plannerCurriculumCatalog_(st);
@@ -3471,7 +3464,7 @@ function plannerAppendManualTodoFromForm_(slot, st) {
   const due = dueEl && 'value' in dueEl ? String(/** @type {HTMLInputElement} */ (dueEl).value).trim() : '';
   const category = catEl && 'value' in catEl ? String(/** @type {HTMLSelectElement} */ (catEl).value).trim() : 'misc';
   if (!title.length) return '할 일 제목을 입력해 주세요.';
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(due)) return '등록·예정일을 선택해 주세요.';
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(due)) return '날짜를 선택해 주세요.';
   const allowedC = { grammar: true, logic: true, read: true, vocab: true, misc: true };
   const c = allowedC[category] ? category : 'misc';
   let task_id = '';
@@ -3821,7 +3814,7 @@ function plannerQuickCurriculumRefreshCascade_(slot, st, fromLevel) {
   const has = plannerCurriculumHasCatalog_(st);
   if (hintEl) {
     if (!has) {
-      hintEl.textContent = '커리큘럼 마스터(강좌·강의)가 없습니다.';
+      hintEl.textContent = '등록된 강좌가 없습니다.';
       hintEl.removeAttribute('hidden');
     } else {
       hintEl.textContent = '';
@@ -5326,7 +5319,7 @@ function renderCalendar_(root, boot) {
   if (typeof st.planGuestUnlockMock !== 'boolean') st.planGuestUnlockMock = false;
   if (ban) {
     if (st.role === 'guest') {
-      ban.textContent = '등록된 번호로 확인되지 않아 공통 일정만 표시합니다.';
+      ban.textContent = '수강 확인이 되지 않아 학원 공통 일정만 표시됩니다. 문의가 필요하면 담당자에게 연락해 주세요.';
       ban.removeAttribute('hidden');
     } else {
       ban.setAttribute('hidden', 'hidden');
@@ -5494,13 +5487,13 @@ function renderCalendar_(root, boot) {
       <div class="sp-plan-modal__backdrop" data-sp-plan-close="1"></div>
       <div class="sp-plan-modal__panel" role="dialog" aria-modal="true" aria-labelledby="sp-plan-day-modal-title">
         <div class="sp-plan-modal__head">
-          <div class="sp-plan-modal__title" id="sp-plan-day-modal-title">일일 플래너</div>
+          <div class="sp-plan-modal__title" id="sp-plan-day-modal-title">오늘의 학습</div>
           <button type="button" class="btn btn--ghost sp-plan-modal__close" data-sp-plan-close="1">닫기</button>
         </div>
         <div class="sp-plan-modal__body">
           <div class="sp-plan-day sp-plan-day--daily">
             <section class="sp-plan-day__timeline" aria-label="할 일·시간표">
-              <div class="sp-plan-day__secTitle">할 일 목록 · 시간표 (10분 단위)</div>
+              <div class="sp-plan-day__secTitle">할 일과 학습 시간</div>
               <div class="sp-plan-day__split" role="presentation">
                 <aside class="sp-plan-day__splitCol sp-plan-day__splitCol--todos" aria-label="할 일 요약">
                   <div class="sp-plan-day__splitColHead">할 일</div>
@@ -5514,15 +5507,15 @@ function renderCalendar_(root, boot) {
               <div id="sp-plan-day-study-footer" class="sp-plan-day__studyFooter" aria-live="polite"></div>
               <div class="sp-plan-day__memo" aria-label="일일 메모">
                 <div class="sp-plan-day__memoHead">메모</div>
-                <textarea id="sp-plan-day-memo" class="sp-plan-day__memoTa" rows="4" maxlength="3000" spellcheck="true" placeholder="이 날짜 메모(한 칸만 저장됩니다)"></textarea>
+                <textarea id="sp-plan-day-memo" class="sp-plan-day__memoTa" rows="4" maxlength="3000" spellcheck="true" placeholder="오늘 기억할 내용을 적어 주세요."></textarea>
               </div>
             </section>
           </div>
           <div class="sp-plan-lock" id="sp-plan-day-lock" hidden>
             <div class="sp-plan-lock__card">
-              <div class="sp-plan-lock__title">회원 전용 기능입니다</div>
-              <div class="sp-plan-lock__desc">일일 플래너(시간 배치·개인 할 일)는 회원에게만 제공됩니다.</div>
-              <button type="button" id="sp-plan-lock-buy" class="btn btn--primary sp-plan-lock__cta">구매하기</button>
+              <div class="sp-plan-lock__title">수강 확인 후 이용할 수 있습니다</div>
+              <div class="sp-plan-lock__desc">날짜별 할 일과 시간표는 수강이 확인된 회원에게 제공됩니다.</div>
+              <button type="button" id="sp-plan-lock-buy" class="btn btn--primary sp-plan-lock__cta">솔패스 안내</button>
             </div>
           </div>
         </div>
@@ -5648,16 +5641,15 @@ function renderCalendar_(root, boot) {
     '</button>' +
     '<div class="sp-plan-todoReg__headMain">' +
     '<span class="sp-plan-todoReg__outerTitle">할 일 등록</span>' +
-    '<span class="sp-plan-todoReg__outerSub">빠른 배치와 개별 입력 · 시트 저장 전 미리보기</span>' +
-    '</div></div>' +
-    '<span class="sp-plan-todoReg__pill">로컬만</span></header>' +
+    '<span class="sp-plan-todoReg__outerSub">한 달 일정을 빠르게 채우거나 날짜별로 추가합니다.</span>' +
+    '</div></div></header>' +
     '<div id="sp-plan-todo-reg-body" class="sp-plan-quick__body sp-plan-todoReg__scroll">' +
     '<div class="sp-plan-todoReg__panel sp-plan-todoReg__panel--quick">' +
     '<div class="sp-plan-todoReg__panelHead">' +
     '<span class="sp-plan-todoReg__panelBadge" aria-hidden="true">빠른</span>' +
     '<div class="sp-plan-todoReg__panelHeadText">' +
     '<h3 class="sp-plan-todoReg__panelTitle">빠른 등록</h3>' +
-    '<p class="sp-plan-todoReg__panelSub">커리큘럼 강좌·회차 구간을 선택 요일에 나눠 todo를 한 번에 추가합니다. 요일별 강 수를 비우면 n빵으로 채웁니다.</p>' +
+    '<p class="sp-plan-todoReg__panelSub">강좌와 회차 범위를 고른 뒤, 선택한 요일에 나눠 넣습니다. 요일별 강 수를 비우면 균등하게 배분합니다.</p>' +
     '</div></div>' +
     '<p class="sp-plan-quick__err" id="sp-plan-quick-err" hidden></p>' +
     '<p class="sp-plan-curr__hint" id="sp-quick-catalog-hint" hidden></p>' +
@@ -5681,14 +5673,14 @@ function renderCalendar_(root, boot) {
     '</div>' +
     '<div class="sp-plan-quick__applyRow">' +
     '<button type="button" class="btn btn--primary sp-plan-quick__apply" id="sp-quick-apply">이 달에 반영</button>' +
-    '<button type="button" class="btn btn--ghost sp-plan-quick__clear" id="sp-quick-clear">이 달 지우기</button>' +
+    '<button type="button" class="btn btn--ghost sp-plan-quick__clear" id="sp-quick-clear">이 달 추가분 지우기</button>' +
     '</div></div>' +
     '<div class="sp-plan-todoReg__panel sp-plan-todoReg__panel--fixed" id="sp-plan-fixed-reg" aria-label="고정 일정">' +
     '<div class="sp-plan-todoReg__panelHead">' +
     '<span class="sp-plan-todoReg__panelBadge sp-plan-todoReg__panelBadge--fixed" aria-hidden="true">고정</span>' +
     '<div class="sp-plan-todoReg__panelHeadText">' +
     '<h3 class="sp-plan-todoReg__panelTitle">고정 일정</h3>' +
-    '<p class="sp-plan-todoReg__panelSub">선택한 요일마다 같은 시간대는 시간표에서 비활성(회색)으로 막고, 고정 항목이 할 일 목록에 들어갑니다. 시작·끝 시각은 30분 단위로 고릅니다(막힌 칸은 기존과 같이 10분 격자). 취침·식사처럼 합산·달력 숫자 배지에는 포함되지 않습니다.</p>' +
+    '<p class="sp-plan-todoReg__panelSub">매주 같은 요일·시간에 반복되는 일정입니다. 해당 시간은 시간표에서 사용할 수 없습니다.</p>' +
     '</div></div>' +
     '<p class="sp-plan-quick__err" id="sp-plan-fixed-err" hidden></p>' +
     '<div class="sp-plan-quick__row sp-plan-quick__row--horiz">' +
@@ -5703,8 +5695,8 @@ function renderCalendar_(root, boot) {
     '<label class="sp-plan-quick__chk"><input type="checkbox" name="sp-fixed-dow" value="0"/>일</label>' +
     '</div></div>' +
     '<div class="sp-plan-fixed__nameRow">' +
-    '<label class="sp-plan-fixed__nameLbl"><span class="sp-plan-quick__lbl">이름</span>' +
-    '<input type="text" id="sp-fixed-title" class="sp-plan-manual__input" maxlength="200" placeholder="예: 학원 이동" autocomplete="off"/></label>' +
+    '<label class="sp-plan-fixed__nameLbl"><span class="sp-plan-quick__lbl">일정 이름</span>' +
+    '<input type="text" id="sp-fixed-title" class="sp-plan-manual__input" maxlength="200" placeholder="예: 학원 수업" autocomplete="off"/></label>' +
     '</div>' +
     '<div class="sp-plan-quick__row sp-plan-quick__row--horiz">' +
     '<span class="sp-plan-quick__lbl">시간</span>' +
@@ -5724,7 +5716,7 @@ function renderCalendar_(root, boot) {
     '<span class="sp-plan-todoReg__panelBadge sp-plan-todoReg__panelBadge--manual" aria-hidden="true">개별</span>' +
     '<div class="sp-plan-todoReg__panelHeadText">' +
     '<h3 class="sp-plan-todoReg__panelTitle">개별 등록</h3>' +
-    '<p class="sp-plan-todoReg__panelSub">직접 입력 또는 커리큘럼(마스터 강좌·회차)으로 한 건씩 추가합니다.</p>' +
+    '<p class="sp-plan-todoReg__panelSub">제목을 직접 쓰거나, 등록된 강좌·회차를 골라 한 건씩 추가합니다.</p>' +
     '</div></div>' +
     '<p class="sp-plan-manual__err" id="sp-plan-manual-err" hidden></p>' +
     '<p class="sp-plan-manual__err sp-plan-manual__err--curr" id="sp-plan-curr-err" hidden></p>' +
@@ -5736,7 +5728,7 @@ function renderCalendar_(root, boot) {
     '<div id="sp-plan-manual-direct" class="sp-plan-manual__block">' +
     '<div class="sp-plan-manual__grid">' +
     '<label class="sp-plan-manual__lbl">제목<input type="text" id="sp-manual-title" class="sp-plan-manual__input" maxlength="200" placeholder="예: 모의고사 오답" autocomplete="off"/></label>' +
-    '<label class="sp-plan-manual__lbl">등록·예정일<input type="date" id="sp-manual-due" class="sp-plan-manual__input" value="' +
+    '<label class="sp-plan-manual__lbl">날짜<input type="date" id="sp-manual-due" class="sp-plan-manual__input" value="' +
     esc(defManDue) +
     '"/></label>' +
     '<label class="sp-plan-manual__lbl">과목<select id="sp-manual-cat" class="sp-plan-manual__select">' +
@@ -5750,20 +5742,19 @@ function renderCalendar_(root, boot) {
     '<label class="sp-plan-manual__lbl">선생님<select id="sp-curr-instructor" class="sp-plan-manual__select"></select></label>' +
     '<label class="sp-plan-manual__lbl">강좌명<select id="sp-curr-course" class="sp-plan-manual__select"></select></label>' +
     '<label class="sp-plan-manual__lbl">회차<select id="sp-curr-lecture" class="sp-plan-manual__select"></select></label>' +
-    '<label class="sp-plan-manual__lbl">등록·예정일<input type="date" id="sp-curr-due" class="sp-plan-manual__input" value="' +
+    '<label class="sp-plan-manual__lbl">날짜<input type="date" id="sp-curr-due" class="sp-plan-manual__input" value="' +
     esc(defManDue) +
     '"/></label>' +
-    '<label class="sp-plan-manual__lbl sp-plan-manual__lbl--preview">저장 제목<input type="text" id="sp-curr-title-preview" class="sp-plan-manual__input" readonly tabindex="-1" aria-readonly="true" placeholder="회차 선택 시 자동"/></label>' +
+    '<label class="sp-plan-manual__lbl sp-plan-manual__lbl--preview">제목<input type="text" id="sp-curr-title-preview" class="sp-plan-manual__input" readonly tabindex="-1" aria-readonly="true" placeholder="회차를 선택하면 자동 입력"/></label>' +
     '</div>' +
     '<button type="button" class="btn btn--primary sp-plan-manual__add" id="sp-curr-add">할 일 추가</button>' +
     '</div></div>' +
     '<div class="sp-plan-quick__postPreview sp-plan-todoReg__postPreview">' +
-    '<div class="sp-plan-quick__postPreviewLbl">POST 미리보기 · <code>plannerPersonalTodosApply</code> (빠른+개별 합본)</div>' +
     '<div class="sp-plan-quick__postActions">' +
     '<button type="button" class="btn btn--primary" id="sp-plan-todos-apply">일정 저장하기</button>' +
     '<span class="sp-plan-quick__applyMsg" id="sp-plan-todos-apply-msg" hidden></span>' +
     '</div>' +
-    '<pre class="sp-plan-quick__postPre" id="sp-plan-post-preview"></pre>' +
+    '<pre class="sp-plan-quick__postPre" id="sp-plan-post-preview" hidden aria-hidden="true"></pre>' +
     '</div></div></section>' +
     '<div class="sp-plan-month" id="sp-plan-month-wrap">' +
     '<div class="sp-plan-month__head">' +
@@ -5779,7 +5770,7 @@ function renderCalendar_(root, boot) {
     '<span class="sp-plan-month__applyMsg" id="sp-plan-month-apply-msg" hidden></span>' +
     '</div>' +
     '<div class="sp-plan-month__dow" role="row" aria-label="요일">' +
-    '<div class="sp-plan-month__dowCorner" aria-hidden="true">주차 · 커리큘럼</div>' +
+    '<div class="sp-plan-month__dowCorner" aria-hidden="true">주간 안내</div>' +
     '<div class="sp-plan-month__dowCell is-sun">SUN</div>' +
     '<div class="sp-plan-month__dowCell">MON</div>' +
     '<div class="sp-plan-month__dowCell">TUE</div>' +
@@ -6352,7 +6343,7 @@ function main() {
     const g = el.querySelector('.sp-plan-gate');
     if (g) {
       g.innerHTML =
-        '<p class="sp-plan-gate__err">스니펫에 Web App 주소(<code>gasBaseUrl</code>)가 없어 플래너를 불러올 수 없습니다.</p>';
+        '<p class="sp-plan-gate__err">플래너를 불러올 수 없습니다. 잠시 후 다시 시도하거나 담당자에게 문의해 주세요.</p>';
     }
     return;
   }
