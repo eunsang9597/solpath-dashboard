@@ -752,15 +752,44 @@ async function plannerGasCall_(payload) {
       const p2 = String(segs[2] != null ? segs[2] : '').replace(/\D/g, '');
       const ym = String(payload.year_month != null ? payload.year_month : payload.yearMonth != null ? payload.yearMonth : '').trim();
       const todos = Array.isArray(payload.todos) ? payload.todos : [];
-      const body = /** @type {Record<string, unknown>} */ ({
-        action: 'plannerPersonalTodosApply',
-        phoneSegments: [p0, p1, p2],
-        name: String(payload.name != null ? payload.name : ''),
-        memberCode: String(payload.memberCode != null ? payload.memberCode : ''),
+      let todosStr = '[]';
+      try {
+        todosStr = JSON.stringify(todos);
+      } catch (_eTodo) {
+        todosStr = '[]';
+      }
+      const extra = {
+        p0: p0,
+        p1: p1,
+        p2: p2,
+        n: String(payload.name != null ? payload.name : ''),
+        m: String(payload.memberCode != null ? payload.memberCode : ''),
         year_month: ym,
-        todos: todos
-      });
-      const raw = await plannerGasJsonPost_(url, body);
+        todos: todosStr
+      };
+      let probe;
+      try {
+        probe = new URL(url);
+        probe.searchParams.set('format', 'jsonp');
+        probe.searchParams.set('callback', '_probe');
+        probe.searchParams.set('action', action);
+        Object.keys(extra).forEach(function (k) {
+          probe.searchParams.set(k, extra[k]);
+        });
+        if (probe.toString().length > 7500) {
+          return {
+            ok: false,
+            error: {
+              code: 'PAYLOAD_TOO_LARGE',
+              message:
+                '이번 달 할 일 데이터가 너무 많아 JSONP로 보낼 수 없습니다. 달력에서 불필요한 할 일을 줄인 뒤 다시 저장해 주세요.'
+            }
+          };
+        }
+      } catch (_eUrl) {
+        /* probe skip */
+      }
+      const raw = await plannerGasJsonpWithParams_(url, action, extra, PLANNER_JSONP_TIMEOUT_MS);
       return plannerGasNormalizeResult_(raw);
     }
     return { ok: false, error: { code: 'BAD_ACTION', message: '지원하지 않는 action: ' + action } };
@@ -1039,11 +1068,7 @@ function plannerCloneMonthForPdfExport_(monthWrap) {
     el.remove();
   });
   const head = clone.querySelector('.sp-plan-month__head');
-  const titleEl = head ? head.querySelector('.sp-plan-month__title') : null;
-  if (head && titleEl) {
-    head.innerHTML = '';
-    head.appendChild(titleEl);
-  }
+  if (head) head.remove();
   clone.querySelectorAll('button.sp-plan-day').forEach(function (btn) {
     const div = document.createElement('div');
     div.className = btn.className;
@@ -1066,11 +1091,6 @@ function plannerBuildPdfExportSheet_(root) {
   sheet.className = 'sp-plan-pdf-sheet';
   sheet.setAttribute('aria-hidden', 'true');
 
-  const title = document.createElement('div');
-  title.className = 'sp-plan-pdf__brand';
-  title.textContent = '솔루션 학습 플래너';
-  sheet.appendChild(title);
-
   const profSec = document.createElement('section');
   profSec.className = 'sp-plan-pdf__section';
   profSec.innerHTML =
@@ -1079,11 +1099,6 @@ function plannerBuildPdfExportSheet_(root) {
 
   const calSec = document.createElement('section');
   calSec.className = 'sp-plan-pdf__section sp-plan-pdf__section--cal';
-  const calH = document.createElement('h2');
-  calH.className = 'sp-plan-pdf__h';
-  const monthTitle = monthWrap ? monthWrap.querySelector('.sp-plan-month__title') : null;
-  calH.textContent = monthTitle ? String(monthTitle.textContent || '').trim() || '월간 플랜' : '월간 플랜';
-  calSec.appendChild(calH);
   if (monthWrap) {
     calSec.appendChild(plannerCloneMonthForPdfExport_(monthWrap));
   } else {
@@ -3571,6 +3586,7 @@ function plannerDayTodosFromPayloadHtml_(dateYmd, st) {
       '<p class="sp-plan-todoSideEmpty" role="status">이 날짜에 표시할 할 일이 없습니다.</p>'
     );
   }
+  const hueMapDay = plannerDayTodoHueMapForDay_(st, dateYmd);
   let body = '';
   let i = 0;
   while (i < rows.length) {
@@ -3602,7 +3618,8 @@ function plannerDayTodosFromPayloadHtml_(dateYmd, st) {
       const selO = comp === 'circle' ? ' selected' : '';
       const selTri = comp === 'triangle' ? ' selected' : '';
       const selX = comp === 'x' ? ' selected' : '';
-      const hueCls = isTrace ? '' : ' sp-plan-todoHue-' + plannerTodoHueClass_(id);
+      const hueCls =
+        isTrace || rowKind ? '' : ' sp-plan-todoHue-' + (hueMapDay[id] || plannerTodoHueClass_(id));
       body +=
         '<tr class="sp-plan-todoSide__row' +
         rowKind +
@@ -4177,7 +4194,7 @@ function plannerTodoCategoryToken_(id) {
 }
 
 /**
- * 타임라인 칸·할 일 행 색: task_id마다 고정 hue (`c0`…`c11`).
+ * 타임라인 칸·할 일 행 색: task_id마다 고정 hue (`c0`…`c11`) — 레거시·미분류 fallback.
  * @param {string} id
  * @returns {string}
  */
@@ -4189,6 +4206,306 @@ function plannerTodoHueClass_(id) {
     h = Math.imul(h, 16777619) >>> 0;
   }
   return 'c' + String(h % 12);
+}
+
+/** 타임라인 10분 칸 키 — 6시~23시 순서 고정 */
+function plannerTimelineOrderedSlotKeys_() {
+  /** @type {string[]} */
+  const keys = [];
+  let hi;
+  for (hi = 0; hi < PLAN_TIMELINE_HOURS_ORDERED.length; hi++) {
+    const h = PLAN_TIMELINE_HOURS_ORDERED[hi];
+    let sub;
+    for (sub = 0; sub < PLAN_TIMELINE_CELLS_PER_HOUR; sub++) {
+      keys.push(plannerTimelineSlotKey_(h, sub));
+    }
+  }
+  return keys;
+}
+
+/**
+ * 같은 할 일이 이어진 구간 — 막대 모양 (`solo`|`start`|`mid`|`end`).
+ * @param {Record<string, string>} slots
+ * @param {string} slotKey
+ * @param {string} todoId
+ * @returns {string}
+ */
+function plannerTimelineBarRole_(slots, slotKey, todoId) {
+  const tid = String(todoId != null ? todoId : '').trim();
+  if (!tid.length) {
+    return '';
+  }
+  const order = plannerTimelineOrderedSlotKeys_();
+  const ix = order.indexOf(String(slotKey));
+  if (ix < 0) {
+    return 'solo';
+  }
+  const prevT = ix > 0 ? String(slots[order[ix - 1]] != null ? slots[order[ix - 1]] : '').trim() : '';
+  const nextT =
+    ix < order.length - 1 ? String(slots[order[ix + 1]] != null ? slots[order[ix + 1]] : '').trim() : '';
+  const prevSame = prevT === tid;
+  const nextSame = nextT === tid;
+  if (!prevSame && !nextSame) {
+    return 'solo';
+  }
+  if (!prevSame && nextSame) {
+    return 'start';
+  }
+  if (prevSame && nextSame) {
+    return 'mid';
+  }
+  return 'end';
+}
+
+/**
+ * 같은 할 일 막대 안에서 이 칸이 몇 번째 10분 칸인지(0부터).
+ * @param {Record<string, string>} slots
+ * @param {string} slotKey
+ * @param {string} todoId
+ * @returns {number}
+ */
+function plannerTimelineBarChunkIndex_(slots, slotKey, todoId) {
+  const order = plannerTimelineOrderedSlotKeys_();
+  const tid = String(todoId != null ? todoId : '').trim();
+  let n = 0;
+  let i;
+  for (i = 0; i < order.length; i++) {
+    const k = order[i];
+    if (String(slots[k] != null ? slots[k] : '').trim() !== tid) {
+      continue;
+    }
+    if (k === slotKey) {
+      return n;
+    }
+    n++;
+  }
+  return 0;
+}
+
+/**
+ * 할 일 제목을 막대 길이만큼 2글자씩 잘라 표시.
+ * @param {string} title
+ * @param {number} chunkIndex
+ * @returns {string}
+ */
+function plannerTodoBarLabelChunk_(title, chunkIndex) {
+  const t = String(title != null ? title : '').trim();
+  if (!t.length) {
+    return '··';
+  }
+  const start = Math.max(0, chunkIndex) * 2;
+  if (start >= t.length) {
+    return '··';
+  }
+  let chunk = t.slice(start, start + 2);
+  if (chunk.length === 1) {
+    chunk += ' ';
+  }
+  return chunk;
+}
+
+/**
+ * @param {Record<string, string>} slots
+ * @param {string} slotKey
+ * @param {string} todoId
+ * @param {Record<string, { task_id: string, title: string, category: string }>} todoMap
+ * @returns {string}
+ */
+function plannerSlotBarChunkLabel_(slots, slotKey, todoId, todoMap) {
+  const tid = String(todoId != null ? todoId : '').trim();
+  if (!tid.length) {
+    return '';
+  }
+  const row = todoMap[tid];
+  let title = row && row.title ? String(row.title).trim() : '';
+  if (!title.length) {
+    title = tid;
+  }
+  const chunkIx = plannerTimelineBarChunkIndex_(slots, slotKey, tid);
+  return plannerTodoBarLabelChunk_(title, chunkIx);
+}
+
+/**
+ * 그날 할 일마다 서로 다른 hue (`c0`…`c11`) — 타임라인·왼쪽 표 공통.
+ * @param {object} st
+ * @param {string} dateYmd
+ * @param {Record<string, string>} [slotsOpt]
+ * @returns {Record<string, string>}
+ */
+function plannerDayTodoHueMapForDay_(st, dateYmd, slotsOpt) {
+  const slots = slotsOpt != null ? slotsOpt : plannerEnsureTimelineTodoSlots_(st, dateYmd);
+  const order = plannerTimelineOrderedSlotKeys_();
+  /** @type {string[]} */
+  const todoOrder = [];
+  const seen = {};
+  let ki;
+  for (ki = 0; ki < order.length; ki++) {
+    const tid = String(slots[order[ki]] != null ? slots[order[ki]] : '').trim();
+    if (!tid.length || seen[tid]) {
+      continue;
+    }
+    seen[tid] = true;
+    todoOrder.push(tid);
+  }
+  const rows = plannerOrderedDayTodos_(st, dateYmd);
+  let ri;
+  for (ri = 0; ri < rows.length; ri++) {
+    const r = rows[ri];
+    if (!r || plannerIsTraceGhostDisplay_(r)) {
+      continue;
+    }
+    const tid = String(r.task_id != null ? r.task_id : '').trim();
+    if (!tid.length || seen[tid]) {
+      continue;
+    }
+    seen[tid] = true;
+    todoOrder.push(tid);
+  }
+  /** @type {Record<string, string>} */
+  const map = {};
+  let i;
+  for (i = 0; i < todoOrder.length; i++) {
+    map[todoOrder[i]] = 'c' + String(i % 12);
+  }
+  return map;
+}
+
+/**
+ * @param {object} st
+ * @param {string} dateYmd
+ * @param {HTMLElement} timegrid
+ */
+function plannerRefreshTimegridSlotcellsUi_(st, dateYmd, timegrid) {
+  if (!timegrid || !st) {
+    return;
+  }
+  const ymd = String(dateYmd || '').trim();
+  if (!ymd.length) {
+    return;
+  }
+  const slots = plannerEnsureTimelineTodoSlots_(st, ymd);
+  const hueMap = plannerDayTodoHueMapForDay_(st, ymd, slots);
+  const todoMap = plannerDayTodoIdMapForDay_(ymd, st);
+  timegrid.querySelectorAll('.sp-plan-slotcell').forEach(function (el) {
+    if (!(el instanceof HTMLButtonElement)) {
+      return;
+    }
+    const sk = el.getAttribute('data-slot') || '';
+    if (!sk.length) {
+      return;
+    }
+    if (plannerFixedSlotBlocked_(st, ymd, sk)) {
+      el.className = 'sp-plan-slotcell sp-plan-slotcell--fixedBlock is-fixedBlock';
+      el.setAttribute('aria-pressed', 'false');
+      el.setAttribute('disabled', 'disabled');
+      el.setAttribute('aria-disabled', 'true');
+      el.removeAttribute('data-todo-id');
+      const p0 = plannerTimelineSlotKeyParse_(sk);
+      if (p0) {
+        const m0 = p0.sub * PLAN_TIMELINE_CELL_MIN;
+        const m1 = m0 + PLAN_TIMELINE_CELL_MIN;
+        const lab =
+          plannerPad2_(p0.hour) +
+          ':' +
+          plannerPad2_(m0) +
+          '–' +
+          plannerPad2_(p0.hour) +
+          ':' +
+          plannerPad2_(m1);
+        el.setAttribute('aria-label', esc(lab + ' · 고정 일정(비활성)'));
+      }
+      return;
+    }
+    el.removeAttribute('disabled');
+    el.removeAttribute('aria-disabled');
+    const tid = String(slots[sk] != null ? slots[sk] : '').trim();
+    const hue = tid ? hueMap[tid] || plannerTodoHueClass_(tid) : '';
+    const bar = tid ? plannerTimelineBarRole_(slots, sk, tid) : '';
+    let cls = 'sp-plan-slotcell';
+    if (tid) {
+      cls += ' is-on sp-plan-slotcell--todo sp-plan-slotcell--todo--' + hue;
+      if (bar) {
+        cls += ' sp-plan-slotcell--bar-' + bar;
+      }
+      el.setAttribute('data-todo-id', tid);
+      const chunk = plannerSlotBarChunkLabel_(slots, sk, tid, todoMap);
+      if (chunk) {
+        el.setAttribute('data-bar-chunk', chunk);
+      } else {
+        el.removeAttribute('data-bar-chunk');
+      }
+    } else {
+      el.removeAttribute('data-todo-id');
+      el.removeAttribute('data-bar-chunk');
+    }
+    el.className = cls;
+    el.setAttribute('aria-pressed', tid ? 'true' : 'false');
+    const p = plannerTimelineSlotKeyParse_(sk);
+    if (p) {
+      const m0 = p.sub * PLAN_TIMELINE_CELL_MIN;
+      const m1 = m0 + PLAN_TIMELINE_CELL_MIN;
+      const lab =
+        plannerPad2_(p.hour) +
+        ':' +
+        plannerPad2_(m0) +
+        '–' +
+        plannerPad2_(p.hour) +
+        ':' +
+        plannerPad2_(m1);
+      let title = tid;
+      const row = tid && todoMap[tid] ? todoMap[tid] : null;
+      if (row && row.title) {
+        title = String(row.title).trim();
+      }
+      const chunkLbl = tid ? plannerSlotBarChunkLabel_(slots, sk, tid, todoMap) : '';
+      el.setAttribute(
+        'aria-label',
+        esc(lab + (tid ? ' · ' + title + (chunkLbl ? ' · ' + chunkLbl : '') : '') + ' 칸')
+      );
+    }
+  });
+}
+
+/**
+ * 과목·루틴 기준 색 클래스 (`sp-plan-todoCat--*`) — 타임라인 외 레거시.
+ * @param {string} taskId
+ * @param {string} [category]
+ * @returns {string}
+ */
+function plannerCategoryHueClassForTodo_(taskId, category) {
+  const id = String(taskId != null ? taskId : '').trim();
+  if (id === PLAN_FIXED_SLEEP_TODO_ID) return 'sleep';
+  if (id === PLAN_FIXED_MEAL_TODO_ID) return 'meal';
+  const c = String(category != null ? category : '').trim();
+  if (c === PLAN_CATEGORY_FIXED) return 'fixed';
+  if (c === PLAN_CATEGORY_ROUTINE) return 'routine';
+  if (c === 'memo') return 'memo';
+  if (/^(grammar|logic|read|vocab|misc)$/.test(c)) return c;
+  return 'misc';
+}
+
+/**
+ * 타임라인 칸 안 1글자 라벨.
+ * @param {string} taskId
+ * @param {string} [category]
+ * @returns {string}
+ */
+function plannerCategoryShortLabelForTodo_(taskId, category) {
+  const id = String(taskId != null ? taskId : '').trim();
+  if (id === PLAN_FIXED_SLEEP_TODO_ID) return '취';
+  if (id === PLAN_FIXED_MEAL_TODO_ID) return '식';
+  const c = String(category != null ? category : '').trim();
+  const m = {
+    grammar: '문',
+    logic: '논',
+    read: '독',
+    vocab: '어',
+    misc: '기',
+    fixed: '고',
+    routine: '루',
+    memo: '메'
+  };
+  return m[c] != null ? m[c] : '기';
 }
 
 /**
@@ -4631,13 +4948,14 @@ function plannerHourTodoColHtmlFromSlots_(slots, dateYmd, st, hour) {
   order.forEach(function (tid) {
     const row = map[tid];
     const txt = row && row.title ? String(row.title).trim() : tid.length > 10 ? tid.slice(0, 10) + '…' : tid;
-    const suf = plannerTodoHueClass_(tid);
+    const hueMap = plannerDayTodoHueMapForDay_(st, dateYmd);
+    const suf = hueMap[tid] || plannerTodoHueClass_(tid);
     const short = txt.length > 10 ? txt.slice(0, 10) + '…' : txt;
     h +=
       '<span class="sp-plan-hourTodoPill sp-plan-hourTodoPill--' +
       esc(suf) +
       '" title="' +
-      esc(tid) +
+      esc(row && row.title ? String(row.title).trim() : tid) +
       '">' +
       esc(short) +
       '</span>';
@@ -4852,6 +5170,8 @@ function plannerEnsureTimelineTodoSlots_(st, d) {
  */
 function plannerDayTimelineHtml_(st, dateYmd) {
   const slots = plannerEnsureTimelineTodoSlots_(st, dateYmd);
+  const hueMap = plannerDayTodoHueMapForDay_(st, dateYmd, slots);
+  const todoMap = plannerDayTodoIdMapForDay_(dateYmd, st);
   let html = '';
   let idx;
   for (idx = 0; idx < PLAN_TIMELINE_HOURS_ORDERED.length; idx++) {
@@ -4861,21 +5181,32 @@ function plannerDayTimelineHtml_(st, dateYmd) {
       const k = plannerTimelineSlotKey_(h, sub);
       const blocked = plannerFixedSlotBlocked_(st, dateYmd, k);
       const tid = !blocked && slots[k] ? String(slots[k]).trim() : '';
-      const suf = tid ? plannerTodoHueClass_(tid) : '';
+      const row = tid && todoMap[tid] ? todoMap[tid] : null;
+      const hue = tid ? hueMap[tid] || plannerTodoHueClass_(tid) : '';
+      const bar = tid ? plannerTimelineBarRole_(slots, k, tid) : '';
       const m0 = sub * PLAN_TIMELINE_CELL_MIN;
       const m1 = m0 + PLAN_TIMELINE_CELL_MIN;
       const lab = plannerPad2_(h) + ':' + plannerPad2_(m0) + '–' + plannerPad2_(h) + ':' + plannerPad2_(m1);
-      const cls =
+      let cls =
         'sp-plan-slotcell' +
         (blocked ? ' sp-plan-slotcell--fixedBlock is-fixedBlock' : '') +
-        (tid ? ' is-on sp-plan-slotcell--todo sp-plan-slotcell--todo--' + suf : '');
-      const al = blocked ? lab + ' · 고정 일정(비활성)' : lab + (tid ? ' · ' + tid : '') + ' 칸';
+        (tid ? ' is-on sp-plan-slotcell--todo sp-plan-slotcell--todo--' + hue : '');
+      if (tid && bar) {
+        cls += ' sp-plan-slotcell--bar-' + bar;
+      }
+      const chunkLbl = tid ? plannerSlotBarChunkLabel_(slots, k, tid, todoMap) : '';
+      const titleFull = row && row.title ? String(row.title).trim() : tid;
+      const al = blocked
+        ? lab + ' · 고정 일정(비활성)'
+        : lab + (tid ? ' · ' + titleFull + (chunkLbl ? ' · ' + chunkLbl : '') : '') + ' 칸';
       cells +=
         '<button type="button" tabindex="-1" class="' +
         cls +
         '" data-slot="' +
         esc(k) +
         '"' +
+        (tid ? ' data-todo-id="' + esc(tid) + '"' : '') +
+        (chunkLbl ? ' data-bar-chunk="' + esc(chunkLbl) + '"' : '') +
         (blocked ? ' disabled aria-disabled="true"' : '') +
         ' aria-pressed="' +
         (tid ? 'true' : 'false') +
@@ -4911,50 +5242,27 @@ function plannerDayTimelineHtml_(st, dateYmd) {
  * @param {object} [st]
  * @param {string} [ymd]
  */
-function plannerSyncSlotcellUi_(btn, slots, slot, st, ymd) {
-  const sk = String(slot);
-  if (st && ymd && plannerFixedSlotBlocked_(st, String(ymd), sk)) {
-    btn.className = 'sp-plan-slotcell sp-plan-slotcell--fixedBlock is-fixedBlock';
-    btn.setAttribute('aria-pressed', 'false');
-    btn.setAttribute('disabled', 'disabled');
-    btn.setAttribute('aria-disabled', 'true');
-    const p0 = plannerTimelineSlotKeyParse_(sk);
-    if (p0) {
-      const m0 = p0.sub * PLAN_TIMELINE_CELL_MIN;
-      const m1 = m0 + PLAN_TIMELINE_CELL_MIN;
-      const lab =
-        plannerPad2_(p0.hour) +
-        ':' +
-        plannerPad2_(m0) +
-        '–' +
-        plannerPad2_(p0.hour) +
-        ':' +
-        plannerPad2_(m1);
-      btn.setAttribute('aria-label', esc(lab + ' · 고정 일정(비활성)'));
-    }
+function plannerSyncSlotcellUi_(btn, slots, slot, st, ymd, timegrid) {
+  if (st && ymd && timegrid) {
+    plannerRefreshTimegridSlotcellsUi_(st, String(ymd), timegrid);
     return;
   }
-  btn.removeAttribute('disabled');
-  btn.removeAttribute('aria-disabled');
+  const sk = String(slot);
   const tid = slots[sk] != null ? String(slots[sk]).trim() : '';
-  const suf = tid ? plannerTodoHueClass_(tid) : '';
-  btn.className =
-    'sp-plan-slotcell' + (tid ? ' is-on sp-plan-slotcell--todo sp-plan-slotcell--todo--' + suf : '');
-  btn.setAttribute('aria-pressed', tid ? 'true' : 'false');
-  const p = plannerTimelineSlotKeyParse_(sk);
-  if (p) {
-    const m0 = p.sub * PLAN_TIMELINE_CELL_MIN;
-    const m1 = m0 + PLAN_TIMELINE_CELL_MIN;
-    const lab =
-      plannerPad2_(p.hour) +
-      ':' +
-      plannerPad2_(m0) +
-      '–' +
-      plannerPad2_(p.hour) +
-      ':' +
-      plannerPad2_(m1);
-    btn.setAttribute('aria-label', esc(lab + (tid ? ' · ' + tid : '') + ' 칸'));
+  const hue = tid ? plannerTodoHueClass_(tid) : '';
+  const bar = tid ? plannerTimelineBarRole_(slots, sk, tid) : '';
+  let cls = 'sp-plan-slotcell';
+  if (tid) {
+    cls += ' is-on sp-plan-slotcell--todo sp-plan-slotcell--todo--' + hue;
+    if (bar) {
+      cls += ' sp-plan-slotcell--bar-' + bar;
+    }
+    btn.setAttribute('data-todo-id', tid);
+  } else {
+    btn.removeAttribute('data-todo-id');
   }
+  btn.className = cls;
+  btn.setAttribute('aria-pressed', tid ? 'true' : 'false');
 }
 
 /**
@@ -4971,7 +5279,11 @@ function plannerPaintSlotcellFromState_(root, btn, timegrid) {
   const slots = plannerEnsureTimelineTodoSlots_(st, st.selectedDate);
   const brush = st.modalBrushTodoId ? String(st.modalBrushTodoId) : '';
   plannerTimelineSlotApplyBrush_(slots, slot, brush, st, st.selectedDate);
-  plannerSyncSlotcellUi_(btn, slots, String(slot), st, st.selectedDate);
+  if (timegrid) {
+    plannerRefreshTimegridSlotcellsUi_(st, st.selectedDate, timegrid);
+  } else {
+    plannerSyncSlotcellUi_(btn, slots, String(slot), st, st.selectedDate, null);
+  }
   plannerRefreshDayModalTodoSide_(root);
 }
 
@@ -5096,7 +5408,7 @@ function wirePlannerDayModalUiOnce_(modalEl, root) {
       const slots = plannerEnsureTimelineTodoSlots_(st, st.selectedDate);
       const brush = st.modalBrushTodoId ? String(st.modalBrushTodoId) : '';
       plannerTimelineSlotApplyBrush_(slots, String(slot), brush, st, st.selectedDate);
-      plannerSyncSlotcellUi_(btn, slots, String(slot), st, st.selectedDate);
+      plannerRefreshTimegridSlotcellsUi_(st, st.selectedDate, timegrid);
       plannerPersistTimelineSlotMapToMonthTodos_(st, st.selectedDate);
       plannerRefreshDayModalStudyFooter_(root);
       plannerRefreshDayModalTodoSide_(root);
