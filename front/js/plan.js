@@ -2050,6 +2050,18 @@ function plannerCurriculumWeekPayloadForRender_(weekIndex, weekDateKeys, curricu
 }
 
 /**
+ * 주차 표 링크 — 시트에 `https://` 없이 넣은 값도 열리게.
+ * @param {string} href
+ * @returns {string}
+ */
+function plannerNormalizeCurriculumLinkUrl_(href) {
+  const s = String(href != null ? href : '').trim();
+  if (!s.length) return '';
+  if (/^(https?:|mailto:|tel:)/i.test(s)) return s;
+  return 'https://' + s;
+}
+
+/**
  * `PlannerCurriculumWeekPayload` → 표 HTML (내용은 전부 `esc` / 링크는 `escAttr`).
  * @param {PlannerCurriculumWeekPayload} payload
  * @returns {string}
@@ -2070,7 +2082,7 @@ function plannerCurriculumWeekTableHtml_(payload) {
     const subj = String(r.subject != null ? r.subject : '').trim();
     const goal = String(r.textbook_goal != null ? r.textbook_goal : '').trim();
     const outl = String(r.lesson_outline != null ? r.lesson_outline : '').trim();
-    const href = String(r.link_url != null ? r.link_url : '').trim();
+    const href = plannerNormalizeCurriculumLinkUrl_(r.link_url);
     const linkInner = href.length
       ? '<a class="sp-plan-cur__a" href="' +
         escAttr(href) +
@@ -3291,6 +3303,79 @@ function plannerCurriculumTodoTitle_(courseName, lectureNo) {
   return name + ' · ' + String(no) + '강';
 }
 
+/** @type {HTMLSpanElement|null} */
+let plannerControlFitMeasureEl_ = null;
+
+/**
+ * @param {string} text
+ * @param {HTMLElement} refEl
+ * @returns {number}
+ */
+function plannerControlFitMeasureWidth_(text, refEl) {
+  if (!plannerControlFitMeasureEl_) {
+    plannerControlFitMeasureEl_ = document.createElement('span');
+    plannerControlFitMeasureEl_.setAttribute('aria-hidden', 'true');
+    plannerControlFitMeasureEl_.style.cssText =
+      'position:absolute;left:-9999px;top:0;visibility:hidden;white-space:nowrap;pointer-events:none;';
+    document.body.appendChild(plannerControlFitMeasureEl_);
+  }
+  const cs = getComputedStyle(refEl);
+  plannerControlFitMeasureEl_.style.font = cs.font;
+  plannerControlFitMeasureEl_.textContent = text || '';
+  return plannerControlFitMeasureEl_.offsetWidth;
+}
+
+/**
+ * 기본(첫 측정) 너비는 유지하고, 선택·표시 텍스트 길이에 맞춰 가로 확장.
+ * @param {HTMLSelectElement|HTMLInputElement} el
+ * @param {string} [textOverride]
+ */
+function plannerControlFitSyncWidth_(el, textOverride) {
+  if (!el || !el.classList || !el.classList.contains('sp-plan-manual__control--fit')) {
+    return;
+  }
+  const padKey = 'data-sp-fit-pad';
+  let pad = Number(el.getAttribute(padKey));
+  if (!pad) {
+    pad = el instanceof HTMLSelectElement ? 38 : 24;
+    el.setAttribute(padKey, String(pad));
+  }
+  const minKey = 'data-sp-fit-min-px';
+  let minPx = Number(el.getAttribute(minKey));
+  if (!minPx) {
+    const ph =
+      el.getAttribute('data-sp-fit-ph') ||
+      (el instanceof HTMLSelectElement && el.options[0] ? String(el.options[0].textContent || '') : '') ||
+      (el instanceof HTMLInputElement ? String(el.placeholder || '') : '') ||
+      '선택';
+    minPx = plannerControlFitMeasureWidth_(ph, el) + pad;
+    el.setAttribute(minKey, String(Math.ceil(minPx)));
+    el.style.setProperty('--sp-plan-control-fit-min', minPx + 'px');
+  }
+  let text = textOverride != null ? String(textOverride) : '';
+  if (!text.length) {
+    if (el instanceof HTMLSelectElement) {
+      const opt = el.options[el.selectedIndex];
+      text = opt ? String(opt.textContent || '').trim() : '';
+    } else if (el instanceof HTMLInputElement) {
+      text = String(el.value || el.placeholder || '').trim();
+    }
+  }
+  const contentW = text.length ? plannerControlFitMeasureWidth_(text, el) + pad : minPx;
+  el.style.width = Math.ceil(Math.max(minPx, contentW)) + 'px';
+}
+
+/**
+ * @param {HTMLElement} slot
+ */
+function plannerControlFitSyncWidthsIn_(slot) {
+  slot.querySelectorAll('.sp-plan-manual__control--fit').forEach(function (node) {
+    if (node instanceof HTMLSelectElement || node instanceof HTMLInputElement) {
+      plannerControlFitSyncWidth_(node);
+    }
+  });
+}
+
 /**
  * @param {HTMLSelectElement} sel
  * @param {{ value: string, label: string }[]} items
@@ -3316,6 +3401,9 @@ function plannerSelectFillOptions_(sel, items, placeholder) {
       return opt.value === prev;
     });
     if (ok) sel.value = prev;
+  }
+  if (sel.classList.contains('sp-plan-manual__control--fit')) {
+    plannerControlFitSyncWidth_(sel);
   }
 }
 
@@ -3440,6 +3528,7 @@ function plannerCurriculumRefreshCascade_(slot, st, fromLevel) {
   }
 
   plannerCurriculumUpdateTitlePreview_(slot, st, lecEl, titleEl);
+  plannerControlFitSyncWidthsIn_(slot);
 }
 
 /**
@@ -3463,7 +3552,13 @@ function plannerCurriculumUpdateTitlePreview_(slot, st, lecEl, titleEl) {
       preview = plannerCurriculumTodoTitle_(courseRow.course_name, lec.lecture_no);
     }
   }
-  if (titleEl && 'value' in titleEl) /** @type {HTMLInputElement} */ (titleEl).value = preview;
+  if (titleEl && 'value' in titleEl) {
+    const inp = /** @type {HTMLInputElement} */ (titleEl);
+    inp.value = preview;
+    if (inp.classList.contains('sp-plan-manual__control--fit')) {
+      plannerControlFitSyncWidth_(inp, preview);
+    }
+  }
 }
 
 /**
@@ -3607,7 +3702,11 @@ function plannerAppendManualTodoFromForm_(slot, st) {
  */
 function plannerOrderedDayTodos_(st, dateYmd) {
   const day = String(dateYmd || '').trim();
-  const rows = plannerMonthTodosForDay_(st, day).slice();
+  const rows = plannerMonthTodosForDay_(st, day)
+    .filter(function (r) {
+      return r && String(r.category || '').trim() !== 'memo';
+    })
+    .slice();
   rows.sort(plannerCompareMonthTodoDisplay_);
   return plannerWithFixedRoutineTodosFirst_(day, rows);
 }
@@ -4003,6 +4102,7 @@ function plannerQuickCurriculumRefreshCascade_(slot, st, fromLevel) {
       toEl.value = lecItems[lecItems.length - 1].value;
     }
   }
+  plannerControlFitSyncWidthsIn_(slot);
 }
 
 /**
@@ -4027,14 +4127,27 @@ function plannerQuickReadCountByDow_(slot) {
  * @param {string} label
  * @returns {string}
  */
-function plannerCurBadgeSpan_(mod, label) {
+/**
+ * @param {string} mod
+ * @param {string} label
+ * @param {{ taskId?: string }} [attrs]
+ * @returns {string}
+ */
+function plannerCurBadgeSpan_(mod, label, attrs) {
   const body = String(label != null ? label : '').trim();
   if (!body) return '';
   const m = /^(grammar|logic|read|vocab)$/.test(mod) ? mod : 'misc';
+  const tid = attrs && attrs.taskId ? String(attrs.taskId).trim() : '';
+  const data =
+    tid.length > 0
+      ? ' data-sp-task-id="' + esc(tid) + '" data-sp-ymd-parent="1"'
+      : '';
   return (
     '<span class="sp-plan-curBadge sp-plan-curBadge--' +
     esc(m) +
-    '" title="' +
+    '"' +
+    data +
+    ' title="' +
     esc(body) +
     '">' +
     esc(body) +
@@ -4103,60 +4216,47 @@ function plannerLessonsToOutline_(nums) {
 }
 
 /**
- * 달력 칸 todo 칩 1개.
+ * 달력 칸 todo 칩 1개 (과목색 `sp-plan-curBadge`).
  * @param {{ title: string, task_id: string }} item
+ * @param {string} [mod] grammar|logic|read|vocab|misc
  * @returns {string}
  */
-function plannerDayCellTodoChipHtml_(item) {
+function plannerDayCellTodoChipHtml_(item, mod) {
   const t = String(item && item.title != null ? item.title : '').trim();
   const tid = String(item && item.task_id != null ? item.task_id : '').trim();
   if (!t || !tid) return '';
-  return (
-    '<span class="sp-plan-dayCellSum__sub" data-sp-task-id="' +
-    esc(tid) +
-    '" data-sp-ymd-parent="1" title="' +
-    esc(t) +
-    '">' +
-    esc(t) +
-    '</span>'
-  );
+  const m =
+    mod && /^(grammar|logic|read|vocab|misc)$/.test(mod)
+      ? mod
+      : plannerTodoCategoryToken_(tid);
+  return plannerCurBadgeSpan_(m, t, { taskId: tid });
 }
 
 /**
- * 과목별 접기/펼치기 그룹 — 펼치면 칸 높이가 늘어나며 todo마다 칩(우클릭 삭제는 어드민).
+ * 과목별 그룹 — 할 일마다 칩을 항상 표시(접기 없음).
  * @param {string} mod
- * @param {string} headLabel 접힌 때 요약 한 줄
+ * @param {string} _headLabel unused (호환)
  * @param {{ title: string, task_id: string }[]} items
  * @returns {string}
  */
-function plannerDayCellGroupHtml_(mod, headLabel, items) {
+function plannerDayCellGroupHtml_(mod, _headLabel, items) {
   const list = Array.isArray(items) ? items : [];
   if (!list.length) return '';
   const m = /^(grammar|logic|read|vocab)$/.test(mod) ? mod : 'misc';
   const chips = list
-    .map(plannerDayCellTodoChipHtml_)
+    .map(function (it) {
+      return plannerDayCellTodoChipHtml_(it, m);
+    })
     .filter(Boolean)
     .join('');
   if (!chips) return '';
-  if (list.length === 1) {
-    return (
-      '<div class="sp-plan-dayCellGroup sp-plan-dayCellGroup--' +
-      esc(m) +
-      ' sp-plan-dayCellGroup--solo">' +
-      chips +
-      '</div>'
-    );
-  }
   return (
     '<div class="sp-plan-dayCellGroup sp-plan-dayCellGroup--' +
     esc(m) +
+    (list.length === 1 ? ' sp-plan-dayCellGroup--solo' : '') +
     '">' +
-    '<button type="button" class="sp-plan-dayCellGroup__head" aria-expanded="false">' +
-    esc(headLabel) +
-    '</button>' +
-    '<div class="sp-plan-dayCellGroup__body" hidden>' +
     chips +
-    '</div></div>'
+    '</div>'
   );
 }
 
@@ -4177,12 +4277,11 @@ function plannerDayCellMemoHtml_(st, ymd) {
     text = String(st.dayMemoByDate[day]).trim();
   }
   if (!text) return '';
-  const prev = text.length > 36 ? text.slice(0, 36) + '…' : text;
   return (
     '<button type="button" class="sp-plan-dayCellMemo" data-sp-open-memo="1" data-sp-ymd-parent="1" title="' +
     esc(text) +
     '">메모 · ' +
-    esc(prev) +
+    esc(text) +
     '</button>'
   );
 }
@@ -4246,7 +4345,7 @@ function plannerQuickPlanCellSummaryHtml_(st, key) {
   const memoHtml = plannerDayCellMemoHtml_(st, key);
   if (memoHtml) blocks.unshift(memoHtml);
   if (!blocks.length) return '';
-  return blocks.join('');
+  return '<div class="sp-plan-dayCellSum">' + blocks.join('') + '</div>';
 }
 
 /** @param {Record<string, unknown>} legacy */
@@ -4362,7 +4461,7 @@ function plannerTimelineBarChunkIndex_(slots, slotKey, todoId) {
 }
 
 /**
- * 할 일 제목을 막대 길이만큼 2글자씩 잘라 표시.
+ * 할 일 제목을 막대 칸마다 2글자씩 표시. 막대가 제목보다 길면 처음부터 반복(… 없음).
  * @param {string} title
  * @param {number} chunkIndex
  * @returns {string}
@@ -4372,12 +4471,15 @@ function plannerTodoBarLabelChunk_(title, chunkIndex) {
   if (!t.length) {
     return '··';
   }
-  const start = Math.max(0, chunkIndex) * 2;
-  if (start >= t.length) {
-    return '··';
+  const n = Math.max(0, chunkIndex);
+  const pairStart = (n * 2) % t.length;
+  let chunk = '';
+  let i = 0;
+  while (chunk.length < 2 && i < t.length) {
+    chunk += t.charAt((pairStart + i) % t.length);
+    i++;
   }
-  let chunk = t.slice(start, start + 2);
-  if (chunk.length === 1) {
+  while (chunk.length < 2) {
     chunk += ' ';
   }
   return chunk;
@@ -4497,7 +4599,8 @@ function plannerRefreshTimegridSlotcellsUi_(st, dateYmd, timegrid) {
     }
     el.removeAttribute('disabled');
     el.removeAttribute('aria-disabled');
-    const tid = String(slots[sk] != null ? slots[sk] : '').trim();
+    const tidRaw = String(slots[sk] != null ? slots[sk] : '').trim();
+    const tid = tidRaw && todoMap[tidRaw] ? tidRaw : '';
     const hue = tid ? hueMap[tid] || plannerTodoHueClass_(tid) : '';
     const bar = tid ? plannerTimelineBarRole_(slots, sk, tid) : '';
     let cls = 'sp-plan-slotcell';
@@ -5034,7 +5137,8 @@ function plannerHourTodoColHtmlFromSlots_(slots, dateYmd, st, hour) {
   let h = '';
   order.forEach(function (tid) {
     const row = map[tid];
-    const txt = row && row.title ? String(row.title).trim() : tid.length > 10 ? tid.slice(0, 10) + '…' : tid;
+    if (!row) return;
+    const txt = row.title ? String(row.title).trim() : tid.length > 10 ? tid.slice(0, 10) + '…' : tid;
     const hueMap = plannerDayTodoHueMapForDay_(st, dateYmd);
     const suf = hueMap[tid] || plannerTodoHueClass_(tid);
     const short = txt.length > 10 ? txt.slice(0, 10) + '…' : txt;
@@ -5569,6 +5673,7 @@ function plannerManualTodosCountForDay_(st, ymd) {
   return plannerMonthTodosForDay_(st, ymd).filter(function (t) {
     if (!t || plannerIsTraceGhostDisplay_(t)) return false;
     if (String(t.category || '').trim() === PLAN_CATEGORY_FIXED) return false;
+    if (String(t.category || '').trim() === 'memo') return false;
     return true;
   }).length;
 }
@@ -5986,7 +6091,11 @@ function renderCalendar_(root, boot) {
       const brushRow = plannerMonthTodosForDay_(st, st.selectedDate).find(function (r) {
         return r && String(r.task_id || '') === brushId;
       });
-      if (brushRow && String(brushRow.category || '').trim() === PLAN_CATEGORY_FIXED) {
+      if (
+        brushRow &&
+        (String(brushRow.category || '').trim() === PLAN_CATEGORY_FIXED ||
+          String(brushRow.category || '').trim() === 'memo')
+      ) {
         st.modalBrushTodoId = '';
       }
     }
@@ -6084,11 +6193,11 @@ function renderCalendar_(root, boot) {
     '<div class="sp-plan-quick__dowItem"><label class="sp-plan-quick__chk"><input type="checkbox" name="sp-dow" value="0"/>일</label><input type="text" class="sp-plan-quick__dowCnt" data-dow="0" inputmode="numeric" pattern="[0-9]*" autocomplete="off" placeholder="강 수" hidden/></div>' +
     '</div></div>' +
     '<div class="sp-plan-manual__grid sp-plan-manual__grid--quick">' +
-    '<label class="sp-plan-manual__lbl">과목<select id="sp-quick-subj" class="sp-plan-manual__select"></select></label>' +
-    '<label class="sp-plan-manual__lbl">선생님<select id="sp-quick-instructor" class="sp-plan-manual__select"></select></label>' +
-    '<label class="sp-plan-manual__lbl">강좌명<select id="sp-quick-course" class="sp-plan-manual__select"></select></label>' +
-    '<label class="sp-plan-manual__lbl">시작<select id="sp-quick-lec-from" class="sp-plan-manual__select"></select></label>' +
-    '<label class="sp-plan-manual__lbl">끝<select id="sp-quick-lec-to" class="sp-plan-manual__select"></select></label>' +
+    '<label class="sp-plan-manual__lbl">과목<select id="sp-quick-subj" class="sp-plan-manual__select sp-plan-manual__control--fit" data-sp-fit-ph="과목 선택"></select></label>' +
+    '<label class="sp-plan-manual__lbl">선생님<select id="sp-quick-instructor" class="sp-plan-manual__select sp-plan-manual__control--fit" data-sp-fit-ph="선생님 선택"></select></label>' +
+    '<label class="sp-plan-manual__lbl">강좌명<select id="sp-quick-course" class="sp-plan-manual__select sp-plan-manual__control--fit" data-sp-fit-ph="강좌명 선택"></select></label>' +
+    '<label class="sp-plan-manual__lbl">시작<select id="sp-quick-lec-from" class="sp-plan-manual__select sp-plan-manual__control--fit" data-sp-fit-ph="시작 회차"></select></label>' +
+    '<label class="sp-plan-manual__lbl">끝<select id="sp-quick-lec-to" class="sp-plan-manual__select sp-plan-manual__control--fit" data-sp-fit-ph="끝 회차"></select></label>' +
     '</div>' +
     '<div class="sp-plan-quick__applyRow">' +
     '<button type="button" class="btn btn--primary sp-plan-quick__apply" id="sp-quick-apply">이 달에 반영</button>' +
@@ -6157,14 +6266,14 @@ function renderCalendar_(root, boot) {
     '</div>' +
     '<div id="sp-plan-manual-curriculum" class="sp-plan-manual__block" hidden>' +
     '<div class="sp-plan-manual__grid sp-plan-manual__grid--curr">' +
-    '<label class="sp-plan-manual__lbl">과목<select id="sp-curr-subj" class="sp-plan-manual__select"></select></label>' +
-    '<label class="sp-plan-manual__lbl">선생님<select id="sp-curr-instructor" class="sp-plan-manual__select"></select></label>' +
-    '<label class="sp-plan-manual__lbl">강좌명<select id="sp-curr-course" class="sp-plan-manual__select"></select></label>' +
-    '<label class="sp-plan-manual__lbl">회차<select id="sp-curr-lecture" class="sp-plan-manual__select"></select></label>' +
+    '<label class="sp-plan-manual__lbl">과목<select id="sp-curr-subj" class="sp-plan-manual__select sp-plan-manual__control--fit" data-sp-fit-ph="과목 선택"></select></label>' +
+    '<label class="sp-plan-manual__lbl">선생님<select id="sp-curr-instructor" class="sp-plan-manual__select sp-plan-manual__control--fit" data-sp-fit-ph="선생님 선택"></select></label>' +
+    '<label class="sp-plan-manual__lbl">강좌명<select id="sp-curr-course" class="sp-plan-manual__select sp-plan-manual__control--fit" data-sp-fit-ph="강좌명 선택"></select></label>' +
+    '<label class="sp-plan-manual__lbl">회차<select id="sp-curr-lecture" class="sp-plan-manual__select sp-plan-manual__control--fit" data-sp-fit-ph="회차 선택"></select></label>' +
     '<label class="sp-plan-manual__lbl">날짜<input type="date" id="sp-curr-due" class="sp-plan-manual__input" value="' +
     esc(defManDue) +
     '"/></label>' +
-    '<label class="sp-plan-manual__lbl sp-plan-manual__lbl--preview">제목<input type="text" id="sp-curr-title-preview" class="sp-plan-manual__input" readonly tabindex="-1" aria-readonly="true" placeholder="회차를 선택하면 자동 입력"/></label>' +
+    '<label class="sp-plan-manual__lbl sp-plan-manual__lbl--preview">제목<input type="text" id="sp-curr-title-preview" class="sp-plan-manual__input sp-plan-manual__control--fit" readonly tabindex="-1" aria-readonly="true" data-sp-fit-ph="회차를 선택하면 자동 입력" placeholder="회차를 선택하면 자동 입력"/></label>' +
     '</div>' +
     '<button type="button" class="btn btn--primary sp-plan-manual__add" id="sp-curr-add">할 일 추가</button>' +
     '</div></div>' +
@@ -6214,6 +6323,7 @@ function renderCalendar_(root, boot) {
 
   plannerSetManualRegMode_(slot, st, st.manualRegMode === 'curriculum' ? 'curriculum' : 'direct');
   plannerQuickCurriculumRefreshCascade_(slot, st, 'all');
+  plannerControlFitSyncWidthsIn_(slot);
   plannerQuickSyncDowCountInputs_(slot);
 
   if (!slot.__spPlanCalWired) {
@@ -6437,23 +6547,6 @@ function renderCalendar_(root, boot) {
         }
         return;
       }
-      const grpHead = t.closest ? t.closest('.sp-plan-dayCellGroup__head') : null;
-      if (grpHead) {
-        e.preventDefault();
-        e.stopPropagation();
-        const grp = grpHead.closest('.sp-plan-dayCellGroup');
-        if (grp instanceof HTMLElement) {
-          const body = grp.querySelector('.sp-plan-dayCellGroup__body');
-          const open = !grp.classList.contains('is-expanded');
-          grp.classList.toggle('is-expanded', open);
-          grpHead.setAttribute('aria-expanded', open ? 'true' : 'false');
-          if (body instanceof HTMLElement) {
-            if (open) body.removeAttribute('hidden');
-            else body.setAttribute('hidden', 'hidden');
-          }
-        }
-        return;
-      }
       const memoOpen = t.closest ? t.closest('[data-sp-open-memo]') : null;
       if (memoOpen) {
         e.preventDefault();
@@ -6500,7 +6593,7 @@ function renderCalendar_(root, boot) {
       } else if (id === 'sp-quick-course') {
         plannerQuickCurriculumRefreshCascade_(slot, st, 'course');
       } else if (id === 'sp-quick-lec-from' || id === 'sp-quick-lec-to') {
-        /* 회차만 변경 */
+        plannerControlFitSyncWidth_(t);
       }
     });
     slot.addEventListener('contextmenu', function (e) {

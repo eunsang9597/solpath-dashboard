@@ -4195,7 +4195,7 @@ button.sp-stu-remark__item--open:hover {
   background: #fef2f2;
 }
 
-#solpath-plan-root.is-plan-admin .sp-plan-dayCellSum__sub[data-sp-task-id],
+#solpath-plan-root.is-plan-admin .sp-plan-dayCellSum .sp-plan-curBadge[data-sp-task-id],
 #solpath-plan-root.is-plan-admin .sp-plan-day__fixedLine[data-sp-task-id] {
   cursor: context-menu;
 }
@@ -4209,44 +4209,7 @@ button.sp-stu-remark__item--open:hover {
   gap: 1px;
 }
 
-#solpath-plan-root .sp-plan-dayCellGroup__head {
-  display: block;
-  width: 100%;
-  margin: 0;
-  padding: 1px 3px;
-  border: 0;
-  border-radius: 4px;
-  background: rgba(148, 163, 184, 0.2);
-  color: #334155;
-  font-size: calc(0.52rem + var(--sp-text-bump));
-  font-weight: 800;
-  line-height: 1.25;
-  text-align: center;
-  cursor: pointer;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  box-sizing: border-box;
-}
-
-#solpath-plan-root .sp-plan-dayCellGroup__head:hover {
-  background: rgba(148, 163, 184, 0.32);
-}
-
-#solpath-plan-root .sp-plan-dayCellGroup__body {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 1px;
-  width: 100%;
-  min-width: 0;
-}
-
-#solpath-plan-root .sp-plan-dayCellGroup__body[hidden] {
-  display: none;
-}
-
-#solpath-plan-root .sp-plan-dayCellGroup--solo .sp-plan-dayCellSum__sub {
+#solpath-plan-root .sp-plan-dayCellGroup--solo .sp-plan-curBadge {
   margin-top: 0;
 }
 
@@ -4264,9 +4227,10 @@ button.sp-stu-remark__item--open:hover {
   line-height: 1.25;
   text-align: center;
   cursor: pointer;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow: visible;
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: anywhere;
   box-sizing: border-box;
 }
 
@@ -4309,8 +4273,8 @@ button.sp-stu-remark__item--open:hover {
   margin-bottom: 0.35rem;
 }
 
-#solpath-plan-root .sp-plan-manual__input,
-#solpath-plan-root .sp-plan-manual__select,
+#solpath-plan-root .sp-plan-manual__input:not(.sp-plan-manual__control--fit),
+#solpath-plan-root .sp-plan-manual__select:not(.sp-plan-manual__control--fit),
 #solpath-plan-root .sp-plan-manual__textarea {
   width: 100%;
   box-sizing: border-box;
@@ -4319,6 +4283,32 @@ button.sp-stu-remark__item--open:hover {
   border-radius: 8px;
   font-size: calc(0.8rem + var(--sp-text-bump));
   font-family: inherit;
+}
+
+#solpath-plan-root .sp-plan-manual__control--fit {
+  width: auto;
+  min-width: var(--sp-plan-control-fit-min, 7rem);
+  max-width: 100%;
+  box-sizing: border-box;
+  padding: 0.4rem 0.45rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: calc(0.8rem + var(--sp-text-bump));
+  font-family: inherit;
+}
+
+#solpath-plan-root .sp-plan-manual__lbl:has(.sp-plan-manual__control--fit) {
+  width: max-content;
+  max-width: 100%;
+}
+
+#solpath-plan-root .sp-plan-manual__grid--curr,
+#solpath-plan-root .sp-plan-manual__grid--quick {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.35rem 0.65rem;
+  width: 100%;
 }
 
 #solpath-plan-root .sp-plan-manual__textarea {
@@ -4497,7 +4487,7 @@ button.sp-stu-remark__item--open:hover {
   grid-template-columns: var(--sp-plan-month-lead) repeat(7, minmax(var(--sp-plan-day-col-min), 1fr));
   gap: 0.3rem;
   min-height: 5.8rem;
-  align-items: stretch;
+  align-items: start;
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
@@ -4647,26 +4637,43 @@ button.sp-stu-remark__item--open:hover {
 }
 
 #solpath-plan-root .sp-plan-cur__a {
-  display: inline-block;
-  width: 1.6rem;
-  height: 1.6rem;
-  border-radius: 8px;
-  border: 1px dashed #cbd5e1;
-  background: transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.18rem 0.45rem;
+  border-radius: 6px;
+  border: 1px solid #93c5fd;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-size: calc(0.62rem + var(--sp-text-bump));
+  font-weight: 750;
+  line-height: 1.2;
+  text-decoration: none;
+  cursor: pointer;
   box-sizing: border-box;
-  pointer-events: none;
+  white-space: nowrap;
+}
+
+#solpath-plan-root .sp-plan-cur__a:hover {
+  background: #dbeafe;
+  border-color: #60a5fa;
+  color: #1e40af;
+}
+
+#solpath-plan-root .sp-plan-cur__a:focus-visible {
+  outline: 2px solid #38bdf8;
+  outline-offset: 1px;
 }
 
 #solpath-plan-root .sp-plan-curBadge {
   display: inline-block;
   max-width: 100%;
-  padding: 1px 3px;
-  border-radius: 4px;
+  padding: 2px 4px;
+  border-radius: 6px;
   font-size: calc(0.58rem + var(--sp-text-bump));
   font-weight: 800;
-  line-height: 1.18;
+  line-height: 1.25;
   letter-spacing: -0.02em;
-  white-space: nowrap;
   box-sizing: border-box;
   border: 1px solid rgba(15, 23, 42, 0.12);
 }
@@ -4731,8 +4738,10 @@ button.sp-stu-remark__item--open:hover {
   width: 100%;
   max-width: 100%;
   position: relative;
-  overflow: hidden;
+  overflow: visible;
   align-items: stretch;
+  height: 100%;
+  min-height: 5.8rem;
 }
 
 #solpath-plan-root .sp-plan-day:hover {
@@ -4809,43 +4818,27 @@ button.sp-stu-remark__item--open:hover {
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 1px;
+  gap: 2px;
   width: 100%;
   min-width: 0;
   max-width: 100%;
-  flex: 0 1 auto;
+  flex: 1 0 auto;
   box-sizing: border-box;
+  overflow: visible;
 }
 
-#solpath-plan-root .sp-plan-month .sp-plan-day > .sp-plan-dayCellSum > .sp-plan-curBadge,
+#solpath-plan-root .sp-plan-month .sp-plan-dayCellSum .sp-plan-curBadge,
 #solpath-plan-root .sp-plan-month .sp-plan-day > .sp-plan-curBadge {
   display: block;
   width: 100%;
   min-width: 0;
   max-width: 100%;
   box-sizing: border-box;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow: visible;
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: anywhere;
   text-align: center;
-}
-
-#solpath-plan-root .sp-plan-dayCellSum__sub {
-  display: block;
-  width: 100%;
-  min-width: 0;
-  max-width: 100%;
-  padding: 0 2px;
-  font-size: calc(0.52rem + var(--sp-text-bump));
-  font-weight: 700;
-  line-height: 1.2;
-  letter-spacing: -0.02em;
-  color: #475569;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  text-align: center;
-  box-sizing: border-box;
 }
 
 #solpath-plan-root .sp-plan-month .sp-plan-day__fixedFoot {
@@ -4860,9 +4853,10 @@ button.sp-stu-remark__item--open:hover {
 }
 
 #solpath-plan-root .sp-plan-month .sp-plan-day__fixedLine {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow: visible;
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 #solpath-plan-root .sp-plan-day__dot {
