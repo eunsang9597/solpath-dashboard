@@ -4213,29 +4213,29 @@ button.sp-stu-remark__item--open:hover {
   margin-top: 0;
 }
 
-#solpath-plan-root .sp-plan-dayCellMemo {
-  display: block;
-  width: 100%;
-  margin: 0 0 2px;
-  padding: 1px 3px;
+#solpath-plan-root .sp-plan-day__memoIcon {
+  position: absolute;
+  left: 1.55rem;
+  top: 0;
+  margin: 0;
+  padding: 0 0.1rem;
   border: 0;
   border-radius: 4px;
-  background: rgba(254, 243, 199, 0.65);
-  color: #92400e;
-  font-size: calc(0.5rem + var(--sp-text-bump));
-  font-weight: 750;
-  line-height: 1.25;
-  text-align: center;
+  background: transparent;
+  font-size: calc(0.72rem + var(--sp-text-bump));
+  line-height: 1.2;
   cursor: pointer;
-  overflow: visible;
-  white-space: normal;
-  word-break: break-word;
-  overflow-wrap: anywhere;
   box-sizing: border-box;
+  opacity: 0.92;
 }
 
-#solpath-plan-root .sp-plan-dayCellMemo:hover {
-  background: rgba(253, 230, 138, 0.85);
+#solpath-plan-root .sp-plan-day__memoIcon:hover {
+  opacity: 1;
+  background: rgba(254, 243, 199, 0.55);
+}
+
+#solpath-plan-root .sp-plan-day.has-memo .sp-plan-day__num {
+  padding-right: 0.15rem;
 }
 
 #solpath-plan-root .sp-plan-todoReg.is-collapsed .sp-plan-todoReg__outerHead.sp-plan-quick__head {
@@ -4619,6 +4619,7 @@ button.sp-stu-remark__item--open:hover {
 }
 
 #solpath-plan-root .sp-plan-cur__goal {
+  text-align: left;
   word-break: keep-all;
   overflow-wrap: anywhere;
   min-width: 0;
@@ -4679,33 +4680,33 @@ button.sp-stu-remark__item--open:hover {
 }
 
 #solpath-plan-root .sp-plan-curBadge--grammar {
-  background: #c7d2fe;
-  color: #312e81;
-  border-color: rgba(49, 46, 129, 0.22);
+  background: #ede9fe;
+  color: #5b21b6;
+  border-color: #a78bfa;
 }
 
 #solpath-plan-root .sp-plan-curBadge--logic {
-  background: #99f6e4;
-  color: #134e4a;
-  border-color: rgba(19, 78, 74, 0.2);
+  background: #dcfce7;
+  color: #166534;
+  border-color: #4ade80;
 }
 
 #solpath-plan-root .sp-plan-curBadge--read {
-  background: #bfdbfe;
-  color: #1e3a8a;
-  border-color: rgba(30, 58, 138, 0.2);
+  background: #ffe4e6;
+  color: #9f1239;
+  border-color: #fb7185;
 }
 
 #solpath-plan-root .sp-plan-curBadge--vocab {
-  background: #fde68a;
-  color: #713f12;
-  border-color: rgba(113, 63, 18, 0.22);
+  background: #ffedd5;
+  color: #9a3412;
+  border-color: #fb923c;
 }
 
 #solpath-plan-root .sp-plan-curBadge--misc {
-  background: #e2e8f0;
-  color: #334155;
-  border-color: rgba(51, 65, 85, 0.18);
+  background: #f5f5f4;
+  color: #44403c;
+  border-color: #a8a29e;
 }
 
 #solpath-plan-root .sp-plan-month__weekMeta-range {
@@ -4838,7 +4839,7 @@ button.sp-stu-remark__item--open:hover {
   white-space: normal;
   word-break: break-word;
   overflow-wrap: anywhere;
-  text-align: center;
+  text-align: left;
 }
 
 #solpath-plan-root .sp-plan-month .sp-plan-day__fixedFoot {
@@ -5321,19 +5322,19 @@ button.sp-stu-remark__item--open:hover {
 
 /* 할 일 표 — 과목·루틴 기준 왼쪽 색 띠 (타임라인 `sp-plan-slotcell--cat--*` 와 동일 의미) */
 #solpath-plan-root .sp-plan-todoSideTable tbody tr.sp-plan-todoCat--grammar > *:first-child {
-  box-shadow: inset 4px 0 0 #4338ca;
+  box-shadow: inset 4px 0 0 #7c3aed;
 }
 #solpath-plan-root .sp-plan-todoSideTable tbody tr.sp-plan-todoCat--logic > *:first-child {
-  box-shadow: inset 4px 0 0 #0f766e;
+  box-shadow: inset 4px 0 0 #16a34a;
 }
 #solpath-plan-root .sp-plan-todoSideTable tbody tr.sp-plan-todoCat--read > *:first-child {
-  box-shadow: inset 4px 0 0 #1d4ed8;
+  box-shadow: inset 4px 0 0 #e11d48;
 }
 #solpath-plan-root .sp-plan-todoSideTable tbody tr.sp-plan-todoCat--vocab > *:first-child {
-  box-shadow: inset 4px 0 0 #b45309;
+  box-shadow: inset 4px 0 0 #ea580c;
 }
 #solpath-plan-root .sp-plan-todoSideTable tbody tr.sp-plan-todoCat--misc > *:first-child {
-  box-shadow: inset 4px 0 0 #475569;
+  box-shadow: inset 4px 0 0 #78716c;
 }
 #solpath-plan-root .sp-plan-todoSideTable tbody tr.sp-plan-todoCat--fixed > *:first-child {
   box-shadow: inset 4px 0 0 #64748b;
@@ -5808,29 +5809,29 @@ button.sp-stu-remark__item--open:hover {
 }
 
 #solpath-plan-root .sp-plan-hourTodoPill--cat-grammar {
-  background: #c7d2fe;
-  color: #312e81;
-  border-color: #6366f1;
+  background: #ede9fe;
+  color: #5b21b6;
+  border-color: #a78bfa;
 }
 #solpath-plan-root .sp-plan-hourTodoPill--cat-logic {
-  background: #99f6e4;
-  color: #134e4a;
-  border-color: #14b8a6;
+  background: #dcfce7;
+  color: #166534;
+  border-color: #4ade80;
 }
 #solpath-plan-root .sp-plan-hourTodoPill--cat-read {
-  background: #bfdbfe;
-  color: #1e3a8a;
-  border-color: #3b82f6;
+  background: #ffe4e6;
+  color: #9f1239;
+  border-color: #fb7185;
 }
 #solpath-plan-root .sp-plan-hourTodoPill--cat-vocab {
-  background: #fde68a;
-  color: #713f12;
-  border-color: #eab308;
+  background: #ffedd5;
+  color: #9a3412;
+  border-color: #fb923c;
 }
 #solpath-plan-root .sp-plan-hourTodoPill--cat-misc {
-  background: #e2e8f0;
-  color: #334155;
-  border-color: #94a3b8;
+  background: #f5f5f4;
+  color: #44403c;
+  border-color: #a8a29e;
 }
 #solpath-plan-root .sp-plan-hourTodoPill--cat-fixed {
   background: #f1f5f9;
@@ -5929,53 +5930,26 @@ button.sp-stu-remark__item--open:hover {
   box-shadow: inset 0 0 0 1px rgba(99, 102, 241, 0.2);
 }
 
-#solpath-plan-root .sp-plan-slotcell--todo--c0.is-on {
-  border-color: #4f46e5;
-  background: linear-gradient(180deg, #eef2ff 0%, #c7d2fe 100%);
-}
-#solpath-plan-root .sp-plan-slotcell--todo--c1.is-on {
-  border-color: #0d9488;
-  background: linear-gradient(180deg, #ecfdf5 0%, #99f6e4 100%);
-}
-#solpath-plan-root .sp-plan-slotcell--todo--c2.is-on {
-  border-color: #0284c7;
-  background: linear-gradient(180deg, #e0f2fe 0%, #7dd3fc 100%);
-}
-#solpath-plan-root .sp-plan-slotcell--todo--c3.is-on {
-  border-color: #ca8a04;
-  background: linear-gradient(180deg, #fffbeb 0%, #fde68a 100%);
-}
-#solpath-plan-root .sp-plan-slotcell--todo--c4.is-on {
-  border-color: #64748b;
-  background: linear-gradient(180deg, #f8fafc 0%, #e2e8f0 100%);
-}
-#solpath-plan-root .sp-plan-slotcell--todo--c5.is-on {
-  border-color: #e11d48;
-  background: linear-gradient(180deg, #fff1f2 0%, #fecdd3 100%);
-}
-#solpath-plan-root .sp-plan-slotcell--todo--c6.is-on {
+/* 타임라인 칠함 — 과목(카테고리)별 고정 색 (비슷한 파랑·청록 계열 분리) */
+#solpath-plan-root .sp-plan-slotcell--todo--grammar.is-on {
   border-color: #7c3aed;
   background: linear-gradient(180deg, #f5f3ff 0%, #ddd6fe 100%);
 }
-#solpath-plan-root .sp-plan-slotcell--todo--c7.is-on {
-  border-color: #059669;
-  background: linear-gradient(180deg, #ecfdf5 0%, #6ee7b7 100%);
+#solpath-plan-root .sp-plan-slotcell--todo--logic.is-on {
+  border-color: #16a34a;
+  background: linear-gradient(180deg, #f0fdf4 0%, #86efac 100%);
 }
-#solpath-plan-root .sp-plan-slotcell--todo--c8.is-on {
+#solpath-plan-root .sp-plan-slotcell--todo--read.is-on {
+  border-color: #e11d48;
+  background: linear-gradient(180deg, #fff1f2 0%, #fda4af 100%);
+}
+#solpath-plan-root .sp-plan-slotcell--todo--vocab.is-on {
   border-color: #ea580c;
   background: linear-gradient(180deg, #fff7ed 0%, #fdba74 100%);
 }
-#solpath-plan-root .sp-plan-slotcell--todo--c9.is-on {
-  border-color: #0891b2;
-  background: linear-gradient(180deg, #ecfeff 0%, #a5f3fc 100%);
-}
-#solpath-plan-root .sp-plan-slotcell--todo--c10.is-on {
-  border-color: #c026d3;
-  background: linear-gradient(180deg, #fdf4ff 0%, #f5d0fe 100%);
-}
-#solpath-plan-root .sp-plan-slotcell--todo--c11.is-on {
-  border-color: #65a30d;
-  background: linear-gradient(180deg, #f7fee7 0%, #d9f99d 100%);
+#solpath-plan-root .sp-plan-slotcell--todo--misc.is-on {
+  border-color: #78716c;
+  background: linear-gradient(180deg, #fafaf9 0%, #d6d3d1 100%);
 }
 
 /* 타임라인 — 같은 할 일 연속 칠함 → 막대(칸 사이 간격·모서리 제거) */
