@@ -4214,22 +4214,33 @@ button.sp-stu-remark__item--open:hover {
 }
 
 #solpath-plan-root .sp-plan-day__memoIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   margin: 0;
-  padding: 0 0.1rem;
+  padding: 0 0.08rem;
   border: 0;
   border-radius: 4px;
   background: transparent;
   font-size: calc(0.72rem + var(--sp-text-bump));
-  line-height: 1.2;
+  line-height: 1;
   cursor: pointer;
   box-sizing: border-box;
   opacity: 0.92;
-  flex-shrink: 0;
+  flex: 0 0 auto;
+  width: auto !important;
+  max-width: none !important;
+  vertical-align: middle;
 }
 
 #solpath-plan-root .sp-plan-day__memoIcon:hover {
   opacity: 1;
   background: rgba(254, 243, 199, 0.55);
+}
+
+#solpath-plan-root .sp-plan-day__memoIcon:focus-visible {
+  outline: 2px solid #6366f1;
+  outline-offset: 1px;
 }
 
 #solpath-plan-root .sp-plan-todoReg.is-collapsed .sp-plan-todoReg__outerHead.sp-plan-quick__head {
@@ -4759,7 +4770,7 @@ button.sp-stu-remark__item--open:hover {
 
 #solpath-plan-root .sp-plan-day__top {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 0.35rem;
   min-height: 1.25rem;
@@ -4768,12 +4779,14 @@ button.sp-stu-remark__item--open:hover {
   flex-shrink: 0;
 }
 
-#solpath-plan-root .sp-plan-day__topLead {
+/* 일자+메모(✏️) — 칸 너비만큼 늘리지 않음(임웹 button{width:100%}·중첩 button DOM 깨짐 방지) */
+#solpath-plan-root .sp-plan-day__dateHead {
   display: inline-flex;
   align-items: center;
-  gap: 0.12rem;
+  flex: 0 0 auto;
+  gap: 0.22rem;
   min-width: 0;
-  flex: 1 1 auto;
+  max-width: 100%;
 }
 
 #solpath-plan-root .sp-plan-day__num {
@@ -4816,7 +4829,7 @@ button.sp-stu-remark__item--open:hover {
   flex-shrink: 0;
 }
 
-/* 일자 칸 todo 요약: 과목 블록 + 아랫줄(개별 등록) */
+/* 일자 칸 todo 요약: 과목 블록 + 아랫줄(개별 등록) — 상단 일자·메모와 겹치지 않게 아래 flex */
 #solpath-plan-root .sp-plan-month .sp-plan-day > .sp-plan-dayCellSum {
   display: flex;
   flex-direction: column;
@@ -4828,6 +4841,7 @@ button.sp-stu-remark__item--open:hover {
   flex: 1 1 auto;
   box-sizing: border-box;
   overflow: hidden;
+  margin-top: 0.06rem;
 }
 
 #solpath-plan-root .sp-plan-month .sp-plan-dayCellSum .sp-plan-curBadge,

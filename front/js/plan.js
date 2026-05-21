@@ -4315,9 +4315,9 @@ function plannerDayMemoIconHtml_(st, ymd) {
   const text = plannerDayMemoText_(st, ymd);
   if (!text) return '';
   return (
-    '<button type="button" class="sp-plan-day__memoIcon" data-sp-open-memo="1" data-sp-ymd-parent="1" title="' +
+    '<span role="button" tabindex="0" class="sp-plan-day__memoIcon" data-sp-open-memo="1" data-sp-ymd-parent="1" title="' +
     esc(text) +
-    '" aria-label="메모 있음">✏️</button>'
+    '" aria-label="메모 있음">✏️</span>'
   );
 }
 
@@ -5979,9 +5979,8 @@ function renderCalendar_(root, boot) {
         html += `
         <button type="button" class="sp-plan-day${wkCls}${inMonth ? '' : ' is-out'}${memoIcon ? ' has-memo' : ''}" data-ymd="${key}" ${inMonth ? '' : 'disabled'}>
           <div class="sp-plan-day__top">
-            <span class="sp-plan-day__topLead">
-              <span class="sp-plan-day__num">${d.getDate()}</span>
-              ${memoIcon}
+            <span class="sp-plan-day__dateHead">
+              <span class="sp-plan-day__num">${d.getDate()}</span>${memoIcon}
             </span>
             ${badge ? `<span class="sp-plan-day__badge" aria-label="요약 ${badge}건">${badge}</span>` : ''}
           </div>
