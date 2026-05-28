@@ -85,6 +85,44 @@ function plannerApplyAdminVisibility_(root) {
       reg.setAttribute('aria-hidden', 'true');
     }
   }
+  const saveRow = root.querySelector('#sp-plan-student-save-row');
+  if (saveRow) {
+    if (plannerStudentProfileCanEdit_(root)) {
+      saveRow.removeAttribute('hidden');
+    } else {
+      saveRow.setAttribute('hidden', 'hidden');
+    }
+  }
+}
+
+/**
+ * 월 이동 시 bootstrap 재조회 로딩 표시.
+ * @param {HTMLElement} root
+ * @param {boolean} on
+ */
+function plannerSetMonthFetchLoading_(root, on) {
+  const wrap = root.querySelector('#sp-plan-month-wrap');
+  if (!wrap) return;
+  let el = wrap.querySelector('#sp-plan-month-loading');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'sp-plan-month-loading';
+    el.className = 'sp-plan-month__loading';
+    el.setAttribute('role', 'status');
+    el.setAttribute('aria-live', 'polite');
+    el.innerHTML =
+      '<div class="sp-plan-month__loadingBox" aria-hidden="true"><span class="sp-plan-month__loadingSpinner"></span></div>' +
+      '<span class="sp-plan-month__loadingText">일정 불러오는 중…</span>';
+    wrap.appendChild(el);
+  }
+  wrap.classList.toggle('is-month-fetching', Boolean(on));
+  if (on) {
+    el.removeAttribute('hidden');
+    wrap.setAttribute('aria-busy', 'true');
+  } else {
+    el.setAttribute('hidden', 'hidden');
+    wrap.removeAttribute('aria-busy');
+  }
 }
 
 /**
@@ -537,26 +575,33 @@ function plannerRefetchBootstrapForViewMonth_(root) {
   }
   const view = st.viewMonth instanceof Date && !isNaN(st.viewMonth.getTime()) ? st.viewMonth : new Date();
   const rid = (root.__spPlannerMonthFetchId = (root.__spPlannerMonthFetchId || 0) + 1);
+  plannerSetMonthFetchLoading_(root, true);
   return plannerGasCall_({
     action: 'plannerBootstrap',
     phoneSegments: segs,
     name: ctx.name != null ? ctx.name : '',
     memberCode: ctx.memberCode != null ? ctx.memberCode : '',
     year_month: plannerYearMonthFromDate_(view)
-  }).then(function (boot) {
-    if (root.__spPlannerMonthFetchId !== rid) return;
-    if (!boot || !boot.ok) return;
-    const d = /** @type {{ role?: string, common?: object[], personal?: object[] | null, student_profile?: Record<string, unknown>, curriculum?: unknown }} */ (
-      boot.data || {}
-    );
-    plannerMergeBootstrapMonthData_(root, {
-      role: d.role || 'guest',
-      common: d.common || [],
-      personal: d.personal != null ? d.personal : null,
-      student_profile: d.student_profile,
-      curriculum: d.curriculum
+  })
+    .then(function (boot) {
+      if (root.__spPlannerMonthFetchId !== rid) return;
+      if (!boot || !boot.ok) return;
+      const d = /** @type {{ role?: string, common?: object[], personal?: object[] | null, student_profile?: Record<string, unknown>, curriculum?: unknown }} */ (
+        boot.data || {}
+      );
+      plannerMergeBootstrapMonthData_(root, {
+        role: d.role || 'guest',
+        common: d.common || [],
+        personal: d.personal != null ? d.personal : null,
+        student_profile: d.student_profile,
+        curriculum: d.curriculum
+      });
+    })
+    .finally(function () {
+      if (root.__spPlannerMonthFetchId === rid) {
+        plannerSetMonthFetchLoading_(root, false);
+      }
     });
-  });
 }
 
 /**
@@ -1674,26 +1719,31 @@ function renderPlannerStudentProfile_(root, profile) {
   }
 
   function tdInp(key) {
+    const v = p && p[key] != null ? String(p[key]) : '';
     return (
       '<td><input type="text" class="sp-plan-student__input" data-sp-plan-student-input="' +
       escAttr(key) +
-      '" value="" maxlength="2000" autocomplete="off" spellcheck="true" /></td>'
+      '" value="' +
+      escAttr(v) +
+      '" maxlength="2000" autocomplete="off" spellcheck="true" /></td>'
     );
   }
 
   function tdTxtArea(key) {
+    const v = p && p[key] != null ? String(p[key]) : '';
     return (
       '<td colspan="3" class="sp-plan-student__td--text"><textarea class="sp-plan-student__input sp-plan-student__textarea" rows="3" data-sp-plan-student-input="' +
       escAttr(key) +
-      '" maxlength="3000" spellcheck="true"></textarea></td>'
+      '" maxlength="3000" spellcheck="true">' +
+      esc(v) +
+      '</textarea></td>'
     );
   }
 
   const hintEl = root.querySelector('.sp-plan-student__hint');
   if (hintEl) {
     if (canEdit) {
-      hintEl.textContent =
-        '비어 있는 항목만 입력할 수 있습니다. 저장한 내용은 이 화면에서 다시 수정할 수 없습니다.';
+      hintEl.textContent = '관리자 모드에서 학생 정보를 수정할 수 있습니다.';
     } else if (plannerStudentProfileIsMemberView_(root)) {
       hintEl.textContent = '학생 정보는 조회만 가능합니다. 항목 입력은 관리자 모드에서만 할 수 있습니다.';
     } else {
@@ -1703,7 +1753,7 @@ function renderPlannerStudentProfile_(root, profile) {
 
   /** @param {string} key */
   const ed = function (key) {
-    return canEdit && plannerStudentFieldIsEmpty_(p[key]);
+    return canEdit;
   };
 
   let h = '';
@@ -2476,6 +2526,7 @@ function plannerFixedRoutineTodoRows_(dateYmd) {
  */
 function plannerShouldIncludeRowInMonthApply_(row) {
   if (!row || typeof row !== 'object') return false;
+  if (row._deleted) return false;
   const cat = String(row.category != null ? row.category : '').trim();
   const tid = String(row.task_id != null ? row.task_id : '').trim();
   if (cat !== PLAN_CATEGORY_ROUTINE && !plannerIsRoutineTaskId_(tid)) return true;
@@ -3015,6 +3066,7 @@ function plannerMonthTodosForDay_(st, dateYmd) {
   const rows = [];
   st.monthTodos.forEach(function (t) {
     if (!t || typeof t !== 'object') return;
+    if (t._deleted) return;
     if (String(t.date || '') === day) {
       rows.push(t);
       return;
@@ -4973,6 +5025,40 @@ function plannerRemoveMonthTodo_(st, ymd, taskId) {
 }
 
 /**
+ * 서버(기존 저장) 행 삭제 예약 — `_deleted=true`로 숨김. (저장 전 새로고침하면 복원됨)
+ * @param {object} st
+ * @param {string} ymd
+ * @param {string} taskId
+ * @returns {boolean}
+ */
+function plannerMarkMonthTodoDeleted_(st, ymd, taskId) {
+  plannerEnsureMonthTodos_(st);
+  const day = String(ymd || '').trim();
+  const tid = String(taskId || '').trim();
+  if (!day || !tid) return false;
+  /** @type {object|null} */
+  let removed = null;
+  let ri;
+  for (ri = 0; ri < st.monthTodos.length; ri++) {
+    const r = st.monthTodos[ri];
+    if (r && String(r.date || '').trim() === day && String(r.task_id || '').trim() === tid) {
+      removed = r;
+      break;
+    }
+  }
+  if (!removed) return false;
+  if (String(removed.category || '').trim() === 'memo') return false;
+  removed._deleted = true;
+  plannerScrubTimelineMapForTask_(st, day, tid);
+  const cat = String(removed.category || '').trim();
+  if (cat === PLAN_CATEGORY_FIXED && st.viewMonth) {
+    plannerRebuildFixedBlockSlotsForMonth_(st, st.viewMonth);
+  }
+  plannerRebuildQuickPostPayload_(st);
+  return true;
+}
+
+/**
  * @param {object} st
  * @param {Date} viewMonth
  * @param {number[]} weekdays
@@ -5789,7 +5875,7 @@ function plannerResolveTodoIdsFromContextTarget_(el) {
 }
 
 /**
- * 달력 할 일 우클릭 삭제 — `monthTodos` 제거 후, 서버 행이었으면 `plannerPersonalTodosApply`로 월 덮어쓰기.
+ * 달력 할 일 우클릭 삭제 — 로컬에선 제거, 서버 행은 삭제 예약(저장 시 반영).
  * @param {HTMLElement} root
  * @param {string} ymd
  * @param {string[]} taskIds
@@ -5800,13 +5886,15 @@ async function plannerDeleteTodosFromCalendar_(root, ymd, taskIds) {
   const slot = root.querySelector('#sp-plan-calendar-slot');
   if (!st || !taskIds.length) return;
   const day = String(ymd || '').trim();
-  let hadServer = false;
   taskIds.forEach(function (tid) {
     const row = st.monthTodos.find(function (r) {
       return r && String(r.date || '').trim() === day && String(r.task_id || '').trim() === tid;
     });
-    if (row && row._fromServer) hadServer = true;
-    plannerRemoveMonthTodo_(st, day, tid);
+    if (row && row._fromServer) {
+      plannerMarkMonthTodoDeleted_(st, day, tid);
+    } else {
+      plannerRemoveMonthTodo_(st, day, tid);
+    }
   });
   plannerRefreshPostPreview_(root);
   if (typeof root.__spPlanRerenderMonth === 'function') {
@@ -5824,10 +5912,6 @@ async function plannerDeleteTodosFromCalendar_(root, ymd, taskIds) {
     if (typeof root.__spPlanRefreshOpenDayModal === 'function') {
       root.__spPlanRefreshOpenDayModal();
     }
-  }
-  const memberUi = st.role === 'member' || st.planGuestUnlockMock;
-  if (hadServer && memberUi) {
-    await plannerPersonalTodosApplyClick_(root);
   }
   if (slot) plannerHideTodoContextMenu_(slot);
 }
@@ -6379,6 +6463,9 @@ function renderCalendar_(root, boot) {
     '<div class="sp-plan-month__dowCell is-sat">SAT</div>' +
     '</div>' +
     '<div class="sp-plan-month__grid" role="grid" aria-label="월간 달력"></div>' +
+    '<div class="sp-plan-month__loading" id="sp-plan-month-loading" hidden role="status" aria-live="polite">' +
+    '<div class="sp-plan-month__loadingBox" aria-hidden="true"><span class="sp-plan-month__loadingSpinner"></span></div>' +
+    '<span class="sp-plan-month__loadingText">일정 불러오는 중…</span></div>' +
     '</div></div>';
 
   renderMonth_();

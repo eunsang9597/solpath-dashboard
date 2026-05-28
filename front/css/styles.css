@@ -3062,6 +3062,11 @@ button.sp-stu-remark__item--open:hover {
   background: #f8fafc;
 }
 
+#solpath-plan-root .sp-plan-student__saveRow[hidden],
+#solpath-plan-root:not(.is-plan-admin) #sp-plan-student-save-row {
+  display: none !important;
+}
+
 #solpath-plan-root .sp-plan-student__saveMsg {
   font-size: calc(0.78rem + var(--sp-text-bump));
   color: #334155;
@@ -4402,6 +4407,7 @@ button.sp-stu-remark__item--open:hover {
   /* 첫 열(커리큘럼) 폭을 모든 주차 행·요일 행에서 동일하게 — 행마다 max-content 그리드 쓰면 정렬 깨짐 */
   --sp-plan-month-lead: clamp(12.75rem, 22vw, 18.5rem);
   --sp-plan-day-col-min: 4.5rem;
+  position: relative;
   width: 100%;
   max-width: 100%;
   min-width: calc(var(--sp-plan-month-lead) + 7 * var(--sp-plan-day-col-min) + 2rem);
@@ -4414,6 +4420,56 @@ button.sp-stu-remark__item--open:hover {
   box-sizing: border-box;
   overflow-x: visible;
   overflow-y: visible;
+}
+
+#solpath-plan-root .sp-plan-month__loading {
+  position: absolute;
+  inset: 0;
+  z-index: 12;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 1rem;
+  box-sizing: border-box;
+  background: rgba(248, 250, 252, 0.82);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+  pointer-events: all;
+  cursor: wait;
+}
+
+#solpath-plan-root .sp-plan-month__loading[hidden] {
+  display: none !important;
+}
+
+#solpath-plan-root .sp-plan-month.is-month-fetching .sp-plan-month__nav {
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+#solpath-plan-root .sp-plan-month__loadingBox {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#solpath-plan-root .sp-plan-month__loadingSpinner {
+  display: block;
+  width: calc(2.2rem + 4pt);
+  height: calc(2.2rem + 4pt);
+  border: 3px solid rgba(11, 92, 173, 0.2);
+  border-top-color: #0b5cad;
+  border-radius: 50%;
+  animation: sp-pm-spin 0.65s linear infinite;
+}
+
+#solpath-plan-root .sp-plan-month__loadingText {
+  font-size: calc(0.92rem + var(--sp-text-bump));
+  font-weight: 650;
+  color: #0b5cad;
+  letter-spacing: -0.02em;
 }
 
 #solpath-plan-root .sp-plan-month__head {
