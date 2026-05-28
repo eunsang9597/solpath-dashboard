@@ -3298,12 +3298,17 @@ function plannerCurriculumHasCatalog_(st) {
 }
 
 /**
- * todo `title` — 강좌명 · N강 (`lecture_name` 미사용).
+ * todo `title` — 커리큘럼 `lecture_name` 우선, 없으면 강좌명 · N강.
  * @param {string} courseName
  * @param {number} lectureNo
+ * @param {string} [lectureName]
  * @returns {string}
  */
-function plannerCurriculumTodoTitle_(courseName, lectureNo) {
+function plannerCurriculumTodoTitle_(courseName, lectureNo, lectureName) {
+  const lecName = String(lectureName != null ? lectureName : '').trim();
+  if (lecName.length) {
+    return lecName;
+  }
   const name = String(courseName != null ? courseName : '').trim();
   const no = Number(lectureNo);
   if (!name.length) return isFinite(no) && no > 0 ? String(no) + '강' : '';
@@ -3557,7 +3562,7 @@ function plannerCurriculumUpdateTitlePreview_(slot, st, lecEl, titleEl) {
       return c && String(c.course_id) === String(lec && lec.course_id);
     });
     if (lec && courseRow) {
-      preview = plannerCurriculumTodoTitle_(courseRow.course_name, lec.lecture_no);
+      preview = plannerCurriculumTodoTitle_(courseRow.course_name, lec.lecture_no, lec.lecture_name);
     }
   }
   if (titleEl && 'value' in titleEl) {
@@ -3623,7 +3628,7 @@ function plannerAppendCurriculumTodoFromForm_(slot, st) {
   const category = plannerSubjectCodeFromCatalogCourse_(courseRow);
   if (!category) return '이 강좌의 과목(문법·논리·독해·어휘)을 확인할 수 없습니다. 마스터 시트 subject를 맞춰 주세요.';
 
-  const title = plannerCurriculumTodoTitle_(courseRow.course_name, lec.lecture_no);
+  const title = plannerCurriculumTodoTitle_(courseRow.course_name, lec.lecture_no, lec.lecture_name);
   if (!title.length) return '제목을 만들 수 없습니다. 강좌명·회차를 확인해 주세요.';
 
   const task_id = 'lec_' + lecId + '_' + due;
@@ -3963,7 +3968,7 @@ function plannerApplyQuickCurriculumToMonthTodos_(st, viewMonth, weekdays, cours
       const L = inRange[lecIx];
       lecIx++;
       const lecId = L.lecture_id != null ? String(L.lecture_id) : '';
-      const title = plannerCurriculumTodoTitle_(cname, L.lecture_no);
+      const title = plannerCurriculumTodoTitle_(cname, L.lecture_no, L.lecture_name);
       const task_id = 'lec_' + lecId + '_' + ymd;
       plannerPushMonthTodo_(
         st,
