@@ -3298,22 +3298,44 @@ function plannerCurriculumHasCatalog_(st) {
 }
 
 /**
- * todo `title` — 커리큘럼 `lecture_name` 우선, 없으면 강좌명 · N강.
- * @param {string} courseName
+ * 커리큘럼 회차 select 라벨 — `lecture_name (N강)` (없으면 `N강`).
+ * @param {string} lectureName
  * @param {number} lectureNo
- * @param {string} [lectureName]
  * @returns {string}
  */
-function plannerCurriculumTodoTitle_(courseName, lectureNo, lectureName) {
-  const lecName = String(lectureName != null ? lectureName : '').trim();
-  if (lecName.length) {
-    return lecName;
-  }
-  const name = String(courseName != null ? courseName : '').trim();
+function plannerCurriculumLectureOptionLabel_(lectureName, lectureNo) {
+  const name = String(lectureName != null ? lectureName : '').trim();
   const no = Number(lectureNo);
-  if (!name.length) return isFinite(no) && no > 0 ? String(no) + '강' : '';
-  if (!isFinite(no) || no <= 0) return name;
-  return name + ' · ' + String(no) + '강';
+  const noTxt = isFinite(no) && no > 0 ? String(no) + '강' : '';
+  if (!name.length) return noTxt;
+  if (!noTxt.length) return name;
+  return name + ' (' + noTxt + ')';
+}
+
+/**
+ * 달력 표시/저장 todo title — lecture_name 기반.
+ * - 강사=솔루션편입 → `lecture_name`
+ * - 그 외 → `[N강] lecture_name`
+ * lecture_name 없으면 기존 폴백(강좌명 · N강).
+ * @param {string} instructor
+ * @param {string} courseName
+ * @param {number} lectureNo
+ * @param {string} lectureName
+ * @returns {string}
+ */
+function plannerCurriculumTodoTitleForCalendar_(instructor, courseName, lectureNo, lectureName) {
+  const inst = String(instructor != null ? instructor : '').trim();
+  const lecName = String(lectureName != null ? lectureName : '').trim();
+  const no = Number(lectureNo);
+  const noTxt = isFinite(no) && no > 0 ? String(no) + '강' : '';
+  if (lecName.length) {
+    if (inst === '솔루션편입') return lecName;
+    return (noTxt.length ? '[' + noTxt + '] ' : '') + lecName;
+  }
+  const cname = String(courseName != null ? courseName : '').trim();
+  if (!cname.length) return noTxt;
+  if (!noTxt.length) return cname;
+  return cname + ' · ' + noTxt;
 }
 
 /** @type {HTMLSpanElement|null} */
@@ -3562,7 +3584,12 @@ function plannerCurriculumUpdateTitlePreview_(slot, st, lecEl, titleEl) {
       return c && String(c.course_id) === String(lec && lec.course_id);
     });
     if (lec && courseRow) {
-      preview = plannerCurriculumTodoTitle_(courseRow.course_name, lec.lecture_no, lec.lecture_name);
+      preview = plannerCurriculumTodoTitleForCalendar_(
+        courseRow.instructor,
+        courseRow.course_name,
+        lec.lecture_no,
+        lec.lecture_name
+      );
     }
   }
   if (titleEl && 'value' in titleEl) {
@@ -3628,7 +3655,12 @@ function plannerAppendCurriculumTodoFromForm_(slot, st) {
   const category = plannerSubjectCodeFromCatalogCourse_(courseRow);
   if (!category) return '이 강좌의 과목(문법·논리·독해·어휘)을 확인할 수 없습니다. 마스터 시트 subject를 맞춰 주세요.';
 
-  const title = plannerCurriculumTodoTitle_(courseRow.course_name, lec.lecture_no, lec.lecture_name);
+  const title = plannerCurriculumTodoTitleForCalendar_(
+    courseRow.instructor,
+    courseRow.course_name,
+    lec.lecture_no,
+    lec.lecture_name
+  );
   if (!title.length) return '제목을 만들 수 없습니다. 강좌명·회차를 확인해 주세요.';
 
   const task_id = 'lec_' + lecId + '_' + due;
@@ -3916,7 +3948,16 @@ function plannerAssignedMinutesForDay_(st, ymd) {
  * @param {Record<number, string>} countByDow 요일별 강 수(빈 문자열이면 n빵)
  * @returns {string} 에러 문구 또는 ''
  */
-function plannerApplyQuickCurriculumToMonthTodos_(st, viewMonth, weekdays, courseId, fromNo, toNo, countByDow) {
+function plannerApplyQuickCurriculumToMonthTodos_(
+  st,
+  viewMonth,
+  weekdays,
+  courseId,
+  fromNo,
+  toNo,
+  countByDow,
+  startDateOpt
+) {
   const cat = plannerCurriculumCatalog_(st);
   const courseRow = cat.courses.find(function (c) {
     return c && String(c.course_id) === String(courseId);
@@ -3942,10 +3983,22 @@ function plannerApplyQuickCurriculumToMonthTodos_(st, viewMonth, weekdays, cours
   const y = viewMonth.getFullYear();
   const m0 = viewMonth.getMonth();
   const last = new Date(y, m0 + 1, 0).getDate();
+  const startDateStr = String(startDateOpt != null ? startDateOpt : '').trim();
+  let startDay = 1;
+  if (startDateStr.length) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(startDateStr)) return '시작일 형식이 올바르지 않습니다.';
+    const parts = startDateStr.split('-').map(function (s) {
+      return Number(s);
+    });
+    const sd = new Date(parts[0], parts[1] - 1, parts[2]);
+    if (isNaN(sd.getTime())) return '시작일이 올바르지 않습니다.';
+    if (sd.getFullYear() !== y || sd.getMonth() !== m0) return '시작일은 현재 보고 있는 달 안에서만 선택할 수 있습니다.';
+    startDay = sd.getDate();
+  }
   /** @type {{ ymd: string, dow: number }[]} */
   const dateSlots = [];
   let day;
-  for (day = 1; day <= last; day++) {
+  for (day = startDay; day <= last; day++) {
     const dd = new Date(y, m0, day);
     if (weekdays.indexOf(dd.getDay()) >= 0) {
       dateSlots.push({ ymd: plannerYmdFromParts_(y, m0, day), dow: dd.getDay() });
@@ -3968,7 +4021,12 @@ function plannerApplyQuickCurriculumToMonthTodos_(st, viewMonth, weekdays, cours
       const L = inRange[lecIx];
       lecIx++;
       const lecId = L.lecture_id != null ? String(L.lecture_id) : '';
-      const title = plannerCurriculumTodoTitle_(cname, L.lecture_no, L.lecture_name);
+      const title = plannerCurriculumTodoTitleForCalendar_(
+        courseRow.instructor,
+        cname,
+        L.lecture_no,
+        L.lecture_name
+      );
       const task_id = 'lec_' + lecId + '_' + ymd;
       plannerPushMonthTodo_(
         st,
@@ -4104,7 +4162,7 @@ function plannerQuickCurriculumRefreshCascade_(slot, st, fromLevel) {
       const no = Number(L.lecture_no);
       return {
         value: String(isFinite(no) ? no : ''),
-        label: plannerCurriculumTodoTitle_(cname, no)
+        label: plannerCurriculumLectureOptionLabel_(L.lecture_name, no)
       };
     });
     plannerSelectFillOptions_(fromEl, lecItems, '시작 회차');
@@ -6206,6 +6264,9 @@ function renderCalendar_(root, boot) {
     '<label class="sp-plan-manual__lbl">과목<select id="sp-quick-subj" class="sp-plan-manual__select sp-plan-manual__control--fit" data-sp-fit-ph="과목 선택"></select></label>' +
     '<label class="sp-plan-manual__lbl">선생님<select id="sp-quick-instructor" class="sp-plan-manual__select sp-plan-manual__control--fit" data-sp-fit-ph="선생님 선택"></select></label>' +
     '<label class="sp-plan-manual__lbl">강좌명<select id="sp-quick-course" class="sp-plan-manual__select sp-plan-manual__control--fit" data-sp-fit-ph="강좌명 선택"></select></label>' +
+    '<label class="sp-plan-manual__lbl">시작일<input type="date" id="sp-quick-start-date" class="sp-plan-manual__input" value="' +
+    esc(defManDue) +
+    '"/></label>' +
     '<label class="sp-plan-manual__lbl">시작<select id="sp-quick-lec-from" class="sp-plan-manual__select sp-plan-manual__control--fit" data-sp-fit-ph="시작 회차"></select></label>' +
     '<label class="sp-plan-manual__lbl">끝<select id="sp-quick-lec-to" class="sp-plan-manual__select sp-plan-manual__control--fit" data-sp-fit-ph="끝 회차"></select></label>' +
     '</div>' +
@@ -6390,11 +6451,14 @@ function renderCalendar_(root, boot) {
           const courseEl = slot.querySelector('#sp-quick-course');
           const fromEl = slot.querySelector('#sp-quick-lec-from');
           const toEl = slot.querySelector('#sp-quick-lec-to');
+          const startEl = slot.querySelector('#sp-quick-start-date');
           const courseId =
             courseEl && 'value' in courseEl ? String(/** @type {HTMLSelectElement} */ (courseEl).value).trim() : '';
           const fromL = fromEl && 'value' in fromEl ? Number(/** @type {HTMLSelectElement} */ (fromEl).value) : 1;
           const toL = toEl && 'value' in toEl ? Number(/** @type {HTMLSelectElement} */ (toEl).value) : 1;
           const countByDow = plannerQuickReadCountByDow_(slot);
+          const startDate =
+            startEl && 'value' in startEl ? String(/** @type {HTMLInputElement} */ (startEl).value).trim() : '';
           const msg = plannerApplyQuickCurriculumToMonthTodos_(
             st,
             st.viewMonth,
@@ -6402,7 +6466,8 @@ function renderCalendar_(root, boot) {
             courseId,
             fromL,
             toL,
-            countByDow
+            countByDow,
+            startDate
           );
           if (msg) {
             if (errEl) {
