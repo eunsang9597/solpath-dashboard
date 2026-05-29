@@ -3206,12 +3206,18 @@ function plannerPersistTimelineSlotMapToMonthTodos_(st, ymd) {
   st.monthTodos.forEach(function (row) {
     if (!row || String(row.date || '').trim() !== ymd) return;
     if (plannerIsTraceGhostDisplay_(row)) return;
+    const cat = String(row.category != null ? row.category : '').trim();
+    if (cat === PLAN_CATEGORY_FIXED || cat === 'memo') return;
+    if (plannerIsRoutineExcludedFromStudyTotals_(row.task_id, cat)) return;
     const tid = String(row.task_id != null ? row.task_id : '').trim();
     const keys = byTask[tid] ? byTask[tid].slice().sort() : [];
     row.timeline_slots = JSON.stringify(keys);
     if (!row._fromServer) row.updated_date = today;
   });
   plannerUpsertRoutineMonthTodosFromDayMap_(st, ymd, byTask);
+  if (st.viewMonth instanceof Date && !isNaN(st.viewMonth.getTime())) {
+    plannerRebuildFixedBlockSlotsForMonth_(st, st.viewMonth);
+  }
   plannerRebuildQuickPostPayload_(st);
 }
 
@@ -6560,6 +6566,9 @@ function renderCalendar_(root, boot) {
       }
     }
     plannerInvalidateDayTimelineCache_(st, st.selectedDate);
+    if (st.viewMonth instanceof Date && !isNaN(st.viewMonth.getTime())) {
+      plannerRebuildFixedBlockSlotsForMonth_(st, st.viewMonth);
+    }
     const title = m.querySelector('#sp-plan-day-modal-title');
     if (title) title.textContent = st.selectedDate ? st.selectedDate + ' · 일일 플래너' : '일일 플래너';
     const todoSide = m.querySelector('#sp-plan-day-todo-side');
