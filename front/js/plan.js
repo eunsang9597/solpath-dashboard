@@ -963,6 +963,7 @@ function plannerCollectStudentProfilePayloadForSave_(root) {
   /** @type {Record<string, string>} */
   const out = {};
   PLANNER_STUDENT_PROFILE_KEYS_FOR_SAVE.forEach(function (k) {
+    if (k === 'prev_major_gpa') return;
     if (!tbody) {
       out[k] = initial[k] != null ? String(initial[k]) : '';
       return;
@@ -978,6 +979,30 @@ function plannerCollectStudentProfilePayloadForSave_(root) {
       out[k] = initial[k] != null ? String(initial[k]) : '';
     }
   });
+  if (tbody) {
+    const majorInp = tbody.querySelector('[data-sp-plan-student-input="prev_major"]');
+    const gpaInp = tbody.querySelector('[data-sp-plan-student-input="prev_major_gpa_only"]');
+    if (majorInp || gpaInp) {
+      const major =
+        majorInp && 'value' in majorInp
+          ? String(/** @type {HTMLInputElement} */ (majorInp).value).trim()
+          : '';
+      const gpa =
+        gpaInp && 'value' in gpaInp
+          ? String(/** @type {HTMLInputElement} */ (gpaInp).value).trim()
+          : '';
+      out.prev_major_gpa = plannerComposePrevMajorGpa_(major, gpa);
+    } else {
+      const legacy = tbody.querySelector('[data-sp-plan-student-input="prev_major_gpa"]');
+      if (legacy && 'value' in legacy) {
+        out.prev_major_gpa = String(/** @type {HTMLInputElement} */ (legacy).value).trim();
+      } else {
+        out.prev_major_gpa = initial.prev_major_gpa != null ? String(initial.prev_major_gpa) : '';
+      }
+    }
+  } else {
+    out.prev_major_gpa = initial.prev_major_gpa != null ? String(initial.prev_major_gpa) : '';
+  }
   return out;
 }
 
@@ -1697,7 +1722,31 @@ function plannerPrevMajorGpaParts_(raw) {
 }
 
 /**
- * 학생 정보 표 — bootstrap `student_profile`. 회원·관리자 모드에서만 **비어 있는 칸** 입력(저장 후 이 화면에서 수정 UI 없음).
+ * 학과·평점 입력 → registry `prev_major_gpa` 한 칸.
+ * @param {string} major
+ * @param {string} gpa
+ * @returns {string}
+ */
+function plannerComposePrevMajorGpa_(major, gpa) {
+  const m = String(major != null ? major : '').trim();
+  const g = String(gpa != null ? gpa : '').trim();
+  if (!m && !g) return '';
+  if (m && g) return m + ' · 평점 ' + g;
+  if (g) return '평점 ' + g;
+  return m;
+}
+
+/**
+ * @param {string} display major|gpa with — placeholder
+ * @returns {string}
+ */
+function plannerPrevMajorGpaInputVal_(display) {
+  const s = String(display != null ? display : '').trim();
+  return s === '—' ? '' : s;
+}
+
+/**
+ * 학생 정보 표 — bootstrap `student_profile`. 관리자 모드에서 입력·수정(학과/평점은 각각 입력 후 `prev_major_gpa`로 합쳐 저장).
  * @param {HTMLElement} root
  * @param {Record<string, unknown>|null|undefined} profile
  */
@@ -1774,26 +1823,36 @@ function renderPlannerStudentProfile_(root, profile) {
   h += ed('admission_type') ? tdInp('admission_type') : tdReadCell('admission_type');
   h += '</tr>';
 
+  const pmAll = plannerPrevMajorGpaParts_(p.prev_major_gpa);
+  const majorInpVal = plannerPrevMajorGpaInputVal_(pmAll.major);
+  const gpaInpVal = plannerPrevMajorGpaInputVal_(pmAll.gpa);
+
   h += '<tr>';
   h += '<th scope="row">전적대</th>';
   h += ed('prev_university') ? tdInp('prev_university') : tdReadCell('prev_university');
-  if (ed('prev_major_gpa')) {
-    h += '<th scope="row">학과·평점</th>';
-    h += tdInp('prev_major_gpa');
-  } else {
-    const pm = plannerPrevMajorGpaParts_(p.prev_major_gpa);
+  if (canEdit) {
     h += '<th scope="row">학과</th>';
-    h += '<td data-sp-plan-student="prev_major">' + esc(pm.major) + '</td>';
+    h +=
+      '<td><input type="text" class="sp-plan-student__input" data-sp-plan-student-input="prev_major" value="' +
+      escAttr(majorInpVal) +
+      '" maxlength="500" autocomplete="off" spellcheck="true" placeholder="예: 국어국문학과"/></td>';
+  } else {
+    h += '<th scope="row">학과</th>';
+    h += '<td data-sp-plan-student="prev_major">' + esc(pmAll.major) + '</td>';
   }
   h += '</tr>';
 
-  if (!ed('prev_major_gpa')) {
-    const pmB = plannerPrevMajorGpaParts_(p.prev_major_gpa);
-    h += '<tr>';
-    h += '<th scope="row">평점</th>';
-    h += '<td colspan="3" data-sp-plan-student="prev_major_gpa">' + esc(pmB.gpa) + '</td>';
-    h += '</tr>';
+  h += '<tr>';
+  h += '<th scope="row">평점</th>';
+  if (canEdit) {
+    h +=
+      '<td colspan="3"><input type="text" class="sp-plan-student__input" data-sp-plan-student-input="prev_major_gpa_only" value="' +
+      escAttr(gpaInpVal) +
+      '" maxlength="200" autocomplete="off" spellcheck="true" placeholder="예: 3.82 / 4.5"/></td>';
+  } else {
+    h += '<td colspan="3" data-sp-plan-student="prev_major_gpa">' + esc(pmAll.gpa) + '</td>';
   }
+  h += '</tr>';
 
   h += '<tr>';
   h += '<th scope="row">목표대학</th>';
