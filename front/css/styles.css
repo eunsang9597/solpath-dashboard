@@ -4800,6 +4800,34 @@ button.sp-stu-remark__item--open:hover {
   background: #ef4444;
 }
 
+#solpath-plan-root .sp-plan-curBadge--trace {
+  opacity: 0.72;
+  background: #f1f5f9 !important;
+  color: #64748b !important;
+  border-color: #cbd5e1 !important;
+  border-style: dashed;
+}
+
+#solpath-plan-root .sp-plan-curBadge--trace .sp-plan-curBadge__text {
+  text-decoration: line-through;
+  text-decoration-color: #94a3b8;
+}
+
+#solpath-plan-root.is-plan-admin .sp-plan-curBadge[data-sp-draggable-todo="1"] {
+  cursor: grab;
+}
+
+#solpath-plan-root.is-plan-admin .sp-plan-curBadge[data-sp-draggable-todo="1"].is-dragging {
+  cursor: grabbing;
+  opacity: 0.55;
+}
+
+#solpath-plan-root .sp-plan-day.is-drag-over {
+  outline: 2px dashed rgba(11, 92, 173, 0.55);
+  outline-offset: -2px;
+  background: rgba(219, 234, 254, 0.35);
+}
+
 #solpath-plan-root .sp-plan-curBadge--grammar {
   background: #ede9fe;
   color: #5b21b6;
