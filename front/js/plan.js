@@ -4409,21 +4409,16 @@ function plannerQuickReadCountByDow_(slot) {
  * @returns {string}
  */
 /**
- * 달성도 신호등(월간 칩 오른쪽 동그라미). `none`이면 빈 문자열.
+ * 달성도 신호등 — 칩 오른쪽 15% 그라데이션용 클래스. `none`이면 빈 문자열.
  * @param {'none'|'circle'|'triangle'|'x'} mark
  * @returns {string}
  */
-function plannerTodoMarkDotHtml_(mark) {
+function plannerTodoMarkChipClass_(mark) {
   const v = String(mark != null ? mark : 'none').trim();
-  if (v !== 'circle' && v !== 'triangle' && v !== 'x') return '';
-  const labels = { circle: '달성도 양호', triangle: '달성도 보통', x: '달성도 미달' };
-  return (
-    '<span class="sp-plan-curBadge__mark sp-plan-curBadge__mark--' +
-    esc(v) +
-    '" role="img" aria-label="' +
-    esc(labels[v] || '달성도') +
-    '"></span>'
-  );
+  if (v === 'circle') return ' has-mark is-mark-circle';
+  if (v === 'triangle') return ' has-mark is-mark-triangle';
+  if (v === 'x') return ' has-mark is-mark-x';
+  return '';
 }
 
 /**
@@ -4482,7 +4477,7 @@ function plannerCurBadgeSpan_(mod, label, attrs) {
     tid.length > 0
       ? ' data-sp-task-id="' + esc(tid) + '" data-sp-ymd-parent="1"'
       : '';
-  const dot = plannerTodoMarkDotHtml_(/** @type {'none'|'circle'|'triangle'|'x'} */ (mark));
+  const markCls = plannerTodoMarkChipClass_(/** @type {'none'|'circle'|'triangle'|'x'} */ (mark));
   const titleExtra =
     mark === 'circle'
       ? ' · 달성도 양호'
@@ -4494,18 +4489,17 @@ function plannerCurBadgeSpan_(mod, label, attrs) {
   return (
     '<span class="sp-plan-curBadge sp-plan-curBadge--' +
     esc(m) +
-    (dot ? ' has-mark' : '') +
+    markCls +
     '"' +
     data +
     ' data-sp-draggable-todo="1"' +
+    (mark !== 'none' ? ' data-sp-mark="' + esc(mark) + '"' : '') +
     ' title="' +
     esc(body + titleExtra) +
     '">' +
     '<span class="sp-plan-curBadge__text">' +
     esc(body) +
-    '</span>' +
-    dot +
-    '</span>'
+    '</span></span>'
   );
 }
 
@@ -5408,7 +5402,15 @@ function plannerFixedScheduleFooterHtml_(st, key) {
     '<div class="sp-plan-day__fixedFoot" aria-label="고정 일정">' +
     lines
       .map(function (item) {
-        return plannerCurBadgeSpan_('fixed', item.title, { taskId: item.task_id });
+        return (
+          '<span class="sp-plan-day__fixedTxt" data-sp-task-id="' +
+          esc(item.task_id) +
+          '" data-sp-ymd-parent="1" title="' +
+          esc(item.title) +
+          '">' +
+          esc(item.title) +
+          '</span>'
+        );
       })
       .join('') +
     '</div>'

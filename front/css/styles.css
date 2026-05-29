@@ -4231,7 +4231,7 @@ button.sp-stu-remark__item--open:hover {
 }
 
 #solpath-plan-root.is-plan-admin .sp-plan-dayCellSum .sp-plan-curBadge[data-sp-task-id],
-#solpath-plan-root.is-plan-admin .sp-plan-day__fixedFoot .sp-plan-curBadge[data-sp-task-id] {
+#solpath-plan-root.is-plan-admin .sp-plan-day__fixedFoot .sp-plan-day__fixedTxt[data-sp-task-id] {
   cursor: context-menu;
 }
 
@@ -4758,12 +4758,13 @@ button.sp-stu-remark__item--open:hover {
 }
 
 #solpath-plan-root .sp-plan-curBadge {
+  position: relative;
   display: inline-flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.2rem;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 0;
   max-width: 100%;
-  padding: 2px 4px;
+  padding: 0;
   border-radius: 6px;
   font-size: calc(0.58rem + var(--sp-text-bump));
   font-weight: 800;
@@ -4771,33 +4772,50 @@ button.sp-stu-remark__item--open:hover {
   letter-spacing: -0.02em;
   box-sizing: border-box;
   border: 1px solid rgba(15, 23, 42, 0.12);
+  overflow: hidden;
 }
 
 #solpath-plan-root .sp-plan-curBadge__text {
   flex: 1 1 auto;
   min-width: 0;
+  max-width: 100%;
+  padding: 2px 4px;
   overflow: hidden;
   text-overflow: ellipsis;
+  position: relative;
+  z-index: 1;
+  align-self: center;
 }
 
-#solpath-plan-root .sp-plan-curBadge__mark {
-  flex: 0 0 auto;
-  width: 0.42rem;
-  height: 0.42rem;
-  border-radius: 50%;
-  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.14);
+#solpath-plan-root .sp-plan-curBadge.has-mark .sp-plan-curBadge__text {
+  flex: 0 1 85%;
+  max-width: 85%;
+  box-sizing: border-box;
 }
 
-#solpath-plan-root .sp-plan-curBadge__mark--circle {
-  background: #22c55e;
+#solpath-plan-root .sp-plan-curBadge.has-mark::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 15%;
+  min-width: 0.42rem;
+  height: 100%;
+  z-index: 0;
+  pointer-events: none;
+  border-radius: 0 5px 5px 0;
 }
 
-#solpath-plan-root .sp-plan-curBadge__mark--triangle {
-  background: #eab308;
+#solpath-plan-root .sp-plan-curBadge.is-mark-circle::after {
+  background: linear-gradient(90deg, rgba(34, 197, 94, 0.12) 0%, rgba(34, 197, 94, 0.55) 42%, #22c55e 100%);
 }
 
-#solpath-plan-root .sp-plan-curBadge__mark--x {
-  background: #ef4444;
+#solpath-plan-root .sp-plan-curBadge.is-mark-triangle::after {
+  background: linear-gradient(90deg, rgba(234, 179, 8, 0.14) 0%, rgba(234, 179, 8, 0.58) 42%, #eab308 100%);
+}
+
+#solpath-plan-root .sp-plan-curBadge.is-mark-x::after {
+  background: linear-gradient(90deg, rgba(239, 68, 68, 0.12) 0%, rgba(239, 68, 68, 0.55) 42%, #ef4444 100%);
 }
 
 #solpath-plan-root .sp-plan-curBadge--trace {
@@ -5023,10 +5041,24 @@ button.sp-stu-remark__item--open:hover {
   flex-shrink: 0;
 }
 
-#solpath-plan-root .sp-plan-month .sp-plan-day__fixedFoot .sp-plan-curBadge {
+#solpath-plan-root .sp-plan-month .sp-plan-day__fixedFoot .sp-plan-day__fixedTxt {
   display: block;
   width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 0;
+  margin: 0;
+  border: none;
+  background: none;
   text-align: left;
+  font-size: calc(0.58rem + var(--sp-text-bump));
+  font-weight: 750;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+  color: #b91c1c;
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 #solpath-plan-root .sp-plan-day__dot {
