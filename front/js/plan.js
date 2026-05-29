@@ -3588,22 +3588,24 @@ function plannerCurriculumLectureOptionLabel_(lectureName, lectureNo) {
 
 /**
  * 달력 표시/저장 todo title — lecture_name 기반.
- * - 강사=솔루션편입 → `lecture_name`
+ * - 강사=솔루션편입 또는 과목=어휘(`vocab`) → `lecture_name`
  * - 그 외 → `[N강] lecture_name`
  * lecture_name 없으면 기존 폴백(강좌명 · N강).
  * @param {string} instructor
  * @param {string} courseName
  * @param {number} lectureNo
  * @param {string} lectureName
+ * @param {string} [subjectCode] grammar|logic|read|vocab|misc
  * @returns {string}
  */
-function plannerCurriculumTodoTitleForCalendar_(instructor, courseName, lectureNo, lectureName) {
+function plannerCurriculumTodoTitleForCalendar_(instructor, courseName, lectureNo, lectureName, subjectCode) {
   const inst = String(instructor != null ? instructor : '').trim();
+  const subj = String(subjectCode != null ? subjectCode : '').trim();
   const lecName = String(lectureName != null ? lectureName : '').trim();
   const no = Number(lectureNo);
   const noTxt = isFinite(no) && no > 0 ? String(no) + '강' : '';
   if (lecName.length) {
-    if (inst === '솔루션편입') return lecName;
+    if (inst === '솔루션편입' || subj === 'vocab') return lecName;
     return (noTxt.length ? '[' + noTxt + '] ' : '') + lecName;
   }
   const cname = String(courseName != null ? courseName : '').trim();
@@ -3862,7 +3864,8 @@ function plannerCurriculumUpdateTitlePreview_(slot, st, lecEl, titleEl) {
         courseRow.instructor,
         courseRow.course_name,
         lec.lecture_no,
-        lec.lecture_name
+        lec.lecture_name,
+        plannerSubjectCodeFromCatalogCourse_(courseRow)
       );
     }
   }
@@ -3933,7 +3936,8 @@ function plannerAppendCurriculumTodoFromForm_(slot, st) {
     courseRow.instructor,
     courseRow.course_name,
     lec.lecture_no,
-    lec.lecture_name
+    lec.lecture_name,
+    category
   );
   if (!title.length) return '제목을 만들 수 없습니다. 강좌명·회차를 확인해 주세요.';
 
@@ -4301,7 +4305,8 @@ function plannerApplyQuickCurriculumToMonthTodos_(
         courseRow.instructor,
         cname,
         L.lecture_no,
-        L.lecture_name
+        L.lecture_name,
+        category
       );
       const task_id = 'lec_' + lecId + '_' + ymd;
       plannerPushMonthTodo_(
