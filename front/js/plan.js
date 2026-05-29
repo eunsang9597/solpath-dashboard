@@ -3887,6 +3887,8 @@ function plannerDayTodosFromPayloadHtml_(dateYmd, st) {
       }
       const isTrace = plannerIsTraceGhostDisplay_(r);
       const isFixedSched = String(r.category || '').trim() === PLAN_CATEGORY_FIXED;
+      const isRoutine = plannerIsRoutineExcludedFromStudyTotals_(id, r.category);
+      const markEligible = plannerTodoMarkEligible_(r);
       const isB = !isTrace && !isFixedSched && Boolean(brush && brush === id);
       const comp = plannerTodoCompletionGet_(st, dateYmd, id);
       const selNone = comp === 'none' ? ' selected' : '';
@@ -3928,7 +3930,7 @@ function plannerDayTodosFromPayloadHtml_(dateYmd, st) {
           '</button>';
       }
       body += '</td><td class="sp-plan-todoSide__tdMark">';
-      if (isTrace) {
+      if (isTrace || isFixedSched || isRoutine || !markEligible) {
         body += '<span class="sp-plan-todoSide__traceMark" aria-hidden="true">—</span>';
       } else {
         body +=
@@ -4250,9 +4252,41 @@ function plannerQuickReadCountByDow_(slot) {
  * @returns {string}
  */
 /**
+ * 달성도 신호등(월간 칩 오른쪽 동그라미). `none`이면 빈 문자열.
+ * @param {'none'|'circle'|'triangle'|'x'} mark
+ * @returns {string}
+ */
+function plannerTodoMarkDotHtml_(mark) {
+  const v = String(mark != null ? mark : 'none').trim();
+  if (v !== 'circle' && v !== 'triangle' && v !== 'x') return '';
+  const labels = { circle: '달성도 양호', triangle: '달성도 보통', x: '달성도 미달' };
+  return (
+    '<span class="sp-plan-curBadge__mark sp-plan-curBadge__mark--' +
+    esc(v) +
+    '" role="img" aria-label="' +
+    esc(labels[v] || '달성도') +
+    '"></span>'
+  );
+}
+
+/**
+ * @param {object|null} row
+ * @returns {boolean}
+ */
+function plannerTodoMarkEligible_(row) {
+  if (!row || typeof row !== 'object') return false;
+  if (plannerIsTraceGhostDisplay_(row)) return false;
+  const cat = String(row.category != null ? row.category : '').trim();
+  if (cat === PLAN_CATEGORY_FIXED || cat === 'memo') return false;
+  const tid = String(row.task_id != null ? row.task_id : '').trim();
+  if (plannerIsRoutineExcludedFromStudyTotals_(tid, cat)) return false;
+  return true;
+}
+
+/**
  * @param {string} mod
  * @param {string} label
- * @param {{ taskId?: string }} [attrs]
+ * @param {{ taskId?: string, mark?: string }} [attrs]
  * @returns {string}
  */
 function plannerCurBadgeSpan_(mod, label, attrs) {
@@ -4261,19 +4295,35 @@ function plannerCurBadgeSpan_(mod, label, attrs) {
   const modStr = String(mod != null ? mod : '').trim();
   const m = /^(grammar|logic|read|vocab|misc|fixed)$/.test(modStr) ? modStr : 'misc';
   const tid = attrs && attrs.taskId ? String(attrs.taskId).trim() : '';
+  const markRaw = attrs && attrs.mark != null ? String(attrs.mark).trim() : 'none';
+  const mark =
+    markRaw === 'circle' || markRaw === 'triangle' || markRaw === 'x' ? markRaw : 'none';
   const data =
     tid.length > 0
       ? ' data-sp-task-id="' + esc(tid) + '" data-sp-ymd-parent="1"'
       : '';
+  const dot = plannerTodoMarkDotHtml_(/** @type {'none'|'circle'|'triangle'|'x'} */ (mark));
+  const titleExtra =
+    mark === 'circle'
+      ? ' · 달성도 양호'
+      : mark === 'triangle'
+        ? ' · 달성도 보통'
+        : mark === 'x'
+          ? ' · 달성도 미달'
+          : '';
   return (
     '<span class="sp-plan-curBadge sp-plan-curBadge--' +
     esc(m) +
+    (dot ? ' has-mark' : '') +
     '"' +
     data +
     ' title="' +
-    esc(body) +
+    esc(body + titleExtra) +
     '">' +
+    '<span class="sp-plan-curBadge__text">' +
     esc(body) +
+    '</span>' +
+    dot +
     '</span>'
   );
 }
@@ -4340,7 +4390,7 @@ function plannerLessonsToOutline_(nums) {
 
 /**
  * 달력 칸 todo 칩 1개 (과목색 `sp-plan-curBadge`).
- * @param {{ title: string, task_id: string }} item
+ * @param {{ title: string, task_id: string, mark?: string }} item
  * @param {string} [mod] grammar|logic|read|vocab|misc
  * @returns {string}
  */
@@ -4352,7 +4402,8 @@ function plannerDayCellTodoChipHtml_(item, mod) {
     mod && /^(grammar|logic|read|vocab|misc)$/.test(mod)
       ? mod
       : plannerTodoCategoryToken_(tid);
-  return plannerCurBadgeSpan_(m, t, { taskId: tid });
+  const mark = item && item.mark != null ? String(item.mark) : 'none';
+  return plannerCurBadgeSpan_(m, t, { taskId: tid, mark: mark });
 }
 
 /**
@@ -4428,7 +4479,7 @@ function plannerDayMemoIconHtml_(st, ymd) {
 function plannerQuickPlanCellSummaryHtml_(st, key) {
   const subjName = { vocab: '어휘', grammar: '문법', logic: '논리', read: '독해', misc: '기타' };
   const order = PLANNER_STUDY_CATEGORY_ORDER.slice();
-  /** @type {Record<string, { title: string, task_id: string }[]>} */
+  /** @type {Record<string, { title: string, task_id: string, mark: string }[]>} */
   const byCat = {};
   const rows = plannerMonthTodosForDay_(st, key);
   rows.forEach(function (t) {
@@ -4440,8 +4491,9 @@ function plannerQuickPlanCellSummaryHtml_(st, key) {
     if (cat === PLAN_CATEGORY_FIXED || cat === 'memo') return;
     const title = String(t.title != null ? t.title : '').trim();
     if (!title) return;
+    const mark = plannerTodoMarkEligible_(t) ? plannerTodoCompletionGet_(st, key, tid) : 'none';
     if (!byCat[cat]) byCat[cat] = [];
-    byCat[cat].push({ title: title, task_id: tid });
+    byCat[cat].push({ title: title, task_id: tid, mark: mark });
   });
 
   const blocks = [];
@@ -5693,6 +5745,9 @@ function wirePlannerDayModalUiOnce_(modalEl, root) {
       plannerTodoCompletionSet_(st, ymd, taskId, /** @type {'circle'|'triangle'|'x'} */ (v));
     } else {
       plannerTodoCompletionSet_(st, ymd, taskId, 'none');
+    }
+    if (typeof root.__spPlanRerenderMonth === 'function') {
+      root.__spPlanRerenderMonth();
     }
   });
 
