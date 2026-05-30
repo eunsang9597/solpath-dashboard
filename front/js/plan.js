@@ -2949,22 +2949,293 @@ function plannerDeleteTraceFromCalendar_(root, taskId, traceYmd) {
 
 /**
  * @param {HTMLElement} slot
- * @param {{ isTrace?: boolean }} pending
+ * @param {{ isTrace?: boolean, taskIds?: string[], mode?: string }} pending
  */
 function plannerUpdateCalendarCtxMenuLabels_(slot, pending) {
   const menu = slot.querySelector('#sp-plan-calendar-ctx-menu');
   if (!menu) return;
+  const btnReg = menu.querySelector('[data-sp-ctx-action="register"]');
   const btnTodo = menu.querySelector('[data-sp-ctx-action="delete"]');
   const btnTrace = menu.querySelector('[data-sp-ctx-action="delete-trace"]');
   const trace = Boolean(pending && pending.isTrace);
+  const hasTasks = Boolean(pending && pending.taskIds && pending.taskIds.length);
+  if (btnReg instanceof HTMLElement) {
+    btnReg.removeAttribute('hidden');
+  }
   if (btnTodo instanceof HTMLElement) {
-    if (trace) btnTodo.setAttribute('hidden', 'hidden');
+    if (trace || !hasTasks) btnTodo.setAttribute('hidden', 'hidden');
     else btnTodo.removeAttribute('hidden');
   }
   if (btnTrace instanceof HTMLElement) {
     if (trace) btnTrace.removeAttribute('hidden');
     else btnTrace.setAttribute('hidden', 'hidden');
   }
+}
+
+/**
+ * LEGACY CODE: 상단 「개별 등록」 패널 HTML — 달력 우클릭 「일정 등록」 모달로 대체. **렌더하지 않음.** append·cascade 로직은 재사용.
+ * @param {string} defManDue
+ * @returns {string}
+ */
+function plannerLegacyManualRegPanelHtml_(defManDue) {
+  return (
+    '<div class="sp-plan-todoReg__panel sp-plan-todoReg__panel--manual" id="sp-plan-manual-reg" aria-label="개별 등록">' +
+    '<div class="sp-plan-todoReg__panelHead">' +
+    '<span class="sp-plan-todoReg__panelBadge sp-plan-todoReg__panelBadge--manual" aria-hidden="true">개별</span>' +
+    '<div class="sp-plan-todoReg__panelHeadText">' +
+    '<h3 class="sp-plan-todoReg__panelTitle">개별 등록</h3>' +
+    '<p class="sp-plan-todoReg__panelSub">제목을 직접 쓰거나, 등록된 강좌·회차를 골라 한 건씩 추가합니다.</p>' +
+    '</div></div>' +
+    '<p class="sp-plan-manual__err" id="sp-plan-manual-err" hidden></p>' +
+    '<p class="sp-plan-manual__err sp-plan-manual__err--curr" id="sp-plan-curr-err" hidden></p>' +
+    '<p class="sp-plan-curr__hint" id="sp-curr-catalog-hint" hidden></p>' +
+    '<div class="sp-plan-manual__mode" role="group" aria-label="개별 등록 방식">' +
+    '<button type="button" class="btn btn--ghost sp-plan-manual__modeBtn is-active" id="sp-manual-mode-direct" aria-pressed="true">직접 입력</button>' +
+    '<button type="button" class="btn btn--ghost sp-plan-manual__modeBtn" id="sp-manual-mode-curriculum" aria-pressed="false">커리큘럼</button>' +
+    '</div>' +
+    '<div id="sp-plan-manual-direct" class="sp-plan-manual__block">' +
+    '<div class="sp-plan-manual__grid">' +
+    '<label class="sp-plan-manual__lbl">제목<input type="text" id="sp-manual-title" class="sp-plan-manual__input" maxlength="200" placeholder="예: 모의고사 오답" autocomplete="off"/></label>' +
+    '<label class="sp-plan-manual__lbl">날짜<input type="date" id="sp-manual-due" class="sp-plan-manual__input" value="' +
+    esc(defManDue) +
+    '"/></label>' +
+    '<label class="sp-plan-manual__lbl">과목<select id="sp-manual-cat" class="sp-plan-manual__select">' +
+    '<option value="vocab">어휘</option><option value="grammar">문법</option><option value="logic">논리</option><option value="read">독해</option><option value="misc" selected>기타</option><option value="fixed">고정</option></select></label>' +
+    '</div>' +
+    '<button type="button" class="btn btn--primary sp-plan-manual__add" id="sp-manual-add">할 일 추가</button>' +
+    '</div>' +
+    '<div id="sp-plan-manual-curriculum" class="sp-plan-manual__block" hidden>' +
+    '<div class="sp-plan-manual__grid sp-plan-manual__grid--curr">' +
+    '<label class="sp-plan-manual__lbl">과목<select id="sp-curr-subj" class="sp-plan-manual__select sp-plan-manual__control--fit" data-sp-fit-ph="과목 선택"></select></label>' +
+    '<label class="sp-plan-manual__lbl">선생님<select id="sp-curr-instructor" class="sp-plan-manual__select sp-plan-manual__control--fit" data-sp-fit-ph="선생님 선택"></select></label>' +
+    '<label class="sp-plan-manual__lbl">강좌명<select id="sp-curr-course" class="sp-plan-manual__select sp-plan-manual__control--fit" data-sp-fit-ph="강좌명 선택"></select></label>' +
+    '<label class="sp-plan-manual__lbl">회차<select id="sp-curr-lecture" class="sp-plan-manual__select sp-plan-manual__control--fit" data-sp-fit-ph="회차 선택"></select></label>' +
+    '<label class="sp-plan-manual__lbl">날짜<input type="date" id="sp-curr-due" class="sp-plan-manual__input" value="' +
+    esc(defManDue) +
+    '"/></label>' +
+    '<label class="sp-plan-manual__lbl sp-plan-manual__lbl--preview">제목<input type="text" id="sp-curr-title-preview" class="sp-plan-manual__input sp-plan-manual__control--fit" readonly tabindex="-1" aria-readonly="true" data-sp-fit-ph="회차를 선택하면 자동 입력" placeholder="회차를 선택하면 자동 입력"/></label>' +
+    '</div>' +
+    '<button type="button" class="btn btn--primary sp-plan-manual__add" id="sp-curr-add">할 일 추가</button>' +
+    '</div></div>'
+  );
+}
+
+/**
+ * 달력 우클릭 「일정 등록」 모달 본문(개별 등록과 동일 필드, 날짜 입력 없음).
+ * @param {string} fixedTimeOptsStart
+ * @param {string} fixedTimeOptsEnd
+ * @returns {string}
+ */
+function plannerCalRegModalBodyHtml_(fixedTimeOptsStart, fixedTimeOptsEnd) {
+  return (
+    '<p class="sp-plan-manual__err" id="sp-calreg-manual-err" hidden></p>' +
+    '<p class="sp-plan-manual__err sp-plan-manual__err--curr" id="sp-calreg-curr-err" hidden></p>' +
+    '<p class="sp-plan-curr__hint" id="sp-calreg-curr-catalog-hint" hidden></p>' +
+    '<div class="sp-plan-manual__mode" role="group" aria-label="등록 방식">' +
+    '<button type="button" class="btn btn--ghost sp-plan-manual__modeBtn is-active" id="sp-calreg-mode-direct" aria-pressed="true">직접 입력</button>' +
+    '<button type="button" class="btn btn--ghost sp-plan-manual__modeBtn" id="sp-calreg-mode-curriculum" aria-pressed="false">커리큘럼</button>' +
+    '</div>' +
+    '<div id="sp-calreg-manual-direct" class="sp-plan-manual__block">' +
+    '<div class="sp-plan-manual__grid">' +
+    '<label class="sp-plan-manual__lbl">제목<input type="text" id="sp-calreg-manual-title" class="sp-plan-manual__input" maxlength="200" placeholder="예: 모의고사 오답" autocomplete="off"/></label>' +
+    '<label class="sp-plan-manual__lbl">과목<select id="sp-calreg-manual-cat" class="sp-plan-manual__select">' +
+    '<option value="vocab">어휘</option><option value="grammar">문법</option><option value="logic">논리</option><option value="read">독해</option><option value="misc" selected>기타</option>' +
+    '<option value="fixed">고정</option></select></label>' +
+    '</div>' +
+    '<div id="sp-calreg-manual-fixed-time" class="sp-plan-calReg__fixedTime" hidden>' +
+    '<div class="sp-plan-quick__row sp-plan-quick__row--horiz">' +
+    '<span class="sp-plan-quick__lbl">시간</span>' +
+    '<div class="sp-plan-fixed__timeSelects">' +
+    '<label class="sp-plan-fixed__timeLbl">시작<select id="sp-calreg-fixed-start" class="sp-plan-manual__select">' +
+    fixedTimeOptsStart +
+    '</select></label>' +
+    '<label class="sp-plan-fixed__timeLbl">끝<select id="sp-calreg-fixed-end" class="sp-plan-manual__select">' +
+    fixedTimeOptsEnd +
+    '</select></label>' +
+    '</div></div></div>' +
+    '<button type="button" class="btn btn--primary sp-plan-manual__add" id="sp-calreg-manual-add">할 일 추가</button>' +
+    '</div>' +
+    '<div id="sp-calreg-manual-curriculum" class="sp-plan-manual__block" hidden>' +
+    '<div class="sp-plan-manual__grid sp-plan-manual__grid--curr">' +
+    '<label class="sp-plan-manual__lbl">과목<select id="sp-calreg-curr-subj" class="sp-plan-manual__select sp-plan-manual__control--fit" data-sp-fit-ph="과목 선택"></select></label>' +
+    '<label class="sp-plan-manual__lbl">선생님<select id="sp-calreg-curr-instructor" class="sp-plan-manual__select sp-plan-manual__control--fit" data-sp-fit-ph="선생님 선택"></select></label>' +
+    '<label class="sp-plan-manual__lbl">강좌명<select id="sp-calreg-curr-course" class="sp-plan-manual__select sp-plan-manual__control--fit" data-sp-fit-ph="강좌명 선택"></select></label>' +
+    '<label class="sp-plan-manual__lbl">회차<select id="sp-calreg-curr-lecture" class="sp-plan-manual__select sp-plan-manual__control--fit" data-sp-fit-ph="회차 선택"></select></label>' +
+    '<label class="sp-plan-manual__lbl sp-plan-manual__lbl--preview">제목<input type="text" id="sp-calreg-curr-title-preview" class="sp-plan-manual__input sp-plan-manual__control--fit" readonly tabindex="-1" aria-readonly="true" data-sp-fit-ph="회차를 선택하면 자동 입력" placeholder="회차를 선택하면 자동 입력"/></label>' +
+    '</div>' +
+    '<button type="button" class="btn btn--primary sp-plan-manual__add" id="sp-calreg-curr-add">할 일 추가</button>' +
+    '</div>'
+  );
+}
+
+/**
+ * @param {HTMLElement} root
+ * @param {string} fixedTimeOptsStart
+ * @param {string} fixedTimeOptsEnd
+ */
+function plannerEnsureCalRegModal_(root, fixedTimeOptsStart, fixedTimeOptsEnd) {
+  let el = root.querySelector('#sp-plan-cal-reg-modal');
+  if (el) return;
+  el = document.createElement('div');
+  el.id = 'sp-plan-cal-reg-modal';
+  el.className = 'sp-plan-modal sp-plan-calReg-modal';
+  el.setAttribute('hidden', 'hidden');
+  el.innerHTML =
+    '<div class="sp-plan-modal__backdrop" data-sp-plan-close="1" aria-hidden="true"></div>' +
+    '<div class="sp-plan-modal__panel" role="dialog" aria-modal="true" aria-labelledby="sp-plan-cal-reg-title">' +
+    '<header class="sp-plan-modal__head">' +
+    '<h2 class="sp-plan-modal__title" id="sp-plan-cal-reg-title">일정 등록</h2>' +
+    '<button type="button" class="btn btn--ghost sp-plan-modal__close" data-sp-plan-close="1">닫기</button>' +
+    '</header>' +
+    '<div class="sp-plan-modal__body sp-plan-calReg__body">' +
+    plannerCalRegModalBodyHtml_(fixedTimeOptsStart, fixedTimeOptsEnd) +
+    '</div></div>';
+  root.appendChild(el);
+  const fss = el.querySelector('#sp-calreg-fixed-start');
+  const fse = el.querySelector('#sp-calreg-fixed-end');
+  if (fss instanceof HTMLSelectElement) fss.selectedIndex = 0;
+  if (fse instanceof HTMLSelectElement) {
+    const o6 = fse.querySelector('option[value="6"]');
+    if (o6 instanceof HTMLOptionElement) fse.value = '6';
+    else if (fse.options.length) fse.selectedIndex = Math.min(2, fse.options.length - 1);
+  }
+  plannerWireCalRegModalOnce_(root);
+}
+
+/**
+ * @param {HTMLElement} root
+ * @param {string} ymd
+ */
+function plannerOpenCalRegModal_(root, ymd) {
+  const st = root.__spPlanState;
+  if (!st) return;
+  const modal = root.querySelector('#sp-plan-cal-reg-modal');
+  if (!modal) return;
+  const day = String(ymd || '').trim();
+  if (!day) return;
+  st.calRegDueYmd = day;
+  const titleEl = modal.querySelector('#sp-plan-cal-reg-title');
+  if (titleEl) titleEl.textContent = day + ' · 일정 등록';
+  plannerSetManualRegMode_(modal, st, st.manualRegMode === 'curriculum' ? 'curriculum' : 'direct', 'calreg');
+  plannerCurriculumRefreshCascade_(modal, st, 'all', 'calreg');
+  plannerSyncManualFixedTimeVisibility_(modal, 'calreg');
+  plannerControlFitSyncWidthsIn_(modal);
+  modal.removeAttribute('hidden');
+}
+
+/**
+ * @param {HTMLElement} root
+ */
+function plannerCloseCalRegModal_(root) {
+  const modal = root.querySelector('#sp-plan-cal-reg-modal');
+  if (!modal) return;
+  modal.setAttribute('hidden', 'hidden');
+  const st = root.__spPlanState;
+  if (st) st.calRegDueYmd = '';
+}
+
+/**
+ * @param {HTMLElement} root
+ */
+function plannerWireCalRegModalOnce_(root) {
+  const modal = root.querySelector('#sp-plan-cal-reg-modal');
+  if (!modal || modal.__spPlanCalRegWired) return;
+  modal.__spPlanCalRegWired = true;
+  modal.addEventListener('click', function (e) {
+    const t = e.target instanceof HTMLElement ? e.target : null;
+    if (!t) return;
+    if (t.getAttribute && t.getAttribute('data-sp-plan-close') === '1') {
+      plannerCloseCalRegModal_(root);
+      return;
+    }
+    const st = root.__spPlanState;
+    if (!st || !st.calRegDueYmd) return;
+    const due = String(st.calRegDueYmd);
+    const formOpts = { dueYmd: due, formKind: /** @type {'calreg'} */ ('calreg') };
+    const modeDirect =
+      t.id === 'sp-calreg-mode-direct' ? t : t.closest ? t.closest('#sp-calreg-mode-direct') : null;
+    const modeCurr =
+      t.id === 'sp-calreg-mode-curriculum' ? t : t.closest ? t.closest('#sp-calreg-mode-curriculum') : null;
+    if (modeDirect) {
+      plannerSetManualRegMode_(modal, st, 'direct', 'calreg');
+      return;
+    }
+    if (modeCurr) {
+      plannerSetManualRegMode_(modal, st, 'curriculum', 'calreg');
+      return;
+    }
+    const manualAdd = t.id === 'sp-calreg-manual-add' ? t : t.closest ? t.closest('#sp-calreg-manual-add') : null;
+    if (manualAdd) {
+      const errM = modal.querySelector('#sp-calreg-manual-err');
+      const msg = plannerAppendManualTodoFromForm_(modal, st, formOpts);
+      if (errM) {
+        if (msg) {
+          errM.textContent = msg;
+          errM.removeAttribute('hidden');
+        } else {
+          errM.textContent = '';
+          errM.setAttribute('hidden', 'hidden');
+        }
+      }
+      if (!msg) {
+        plannerRefreshPostPreview_(root);
+        if (typeof root.__spPlanRerenderMonth === 'function') root.__spPlanRerenderMonth();
+        const dayModal = root.querySelector('#sp-plan-day-modal');
+        if (dayModal && st.selectedDate === due && !dayModal.hasAttribute('hidden')) {
+          if (typeof root.__spPlanRefreshOpenDayModal === 'function') root.__spPlanRefreshOpenDayModal();
+        }
+      }
+      return;
+    }
+    const currAdd = t.id === 'sp-calreg-curr-add' ? t : t.closest ? t.closest('#sp-calreg-curr-add') : null;
+    if (currAdd) {
+      const errC = modal.querySelector('#sp-calreg-curr-err');
+      const msgC = plannerAppendCurriculumTodoFromForm_(modal, st, formOpts);
+      if (errC) {
+        if (msgC) {
+          errC.textContent = msgC;
+          errC.removeAttribute('hidden');
+        } else {
+          errC.textContent = '';
+          errC.setAttribute('hidden', 'hidden');
+        }
+      }
+      if (!msgC) {
+        plannerRefreshPostPreview_(root);
+        if (typeof root.__spPlanRerenderMonth === 'function') root.__spPlanRerenderMonth();
+        const dayModal = root.querySelector('#sp-plan-day-modal');
+        if (dayModal && st.selectedDate === due && !dayModal.hasAttribute('hidden')) {
+          if (typeof root.__spPlanRefreshOpenDayModal === 'function') root.__spPlanRefreshOpenDayModal();
+        }
+      }
+      return;
+    }
+  });
+  modal.addEventListener('change', function (e) {
+    const t = e.target;
+    if (!(t instanceof HTMLSelectElement)) return;
+    const st = root.__spPlanState;
+    if (!st) return;
+    const id = t.id || '';
+    if (id === 'sp-calreg-manual-cat') {
+      plannerSyncManualFixedTimeVisibility_(modal, 'calreg');
+      return;
+    }
+    if (id === 'sp-calreg-curr-subj') {
+      plannerCurriculumRefreshCascade_(modal, st, 'subject', 'calreg');
+    } else if (id === 'sp-calreg-curr-instructor') {
+      plannerCurriculumRefreshCascade_(modal, st, 'instructor', 'calreg');
+    } else if (id === 'sp-calreg-curr-course') {
+      plannerCurriculumRefreshCascade_(modal, st, 'course', 'calreg');
+    } else if (id === 'sp-calreg-curr-lecture') {
+      plannerCurriculumRefreshCascade_(modal, st, 'preview', 'calreg');
+    }
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape') return;
+    const m = root.querySelector('#sp-plan-cal-reg-modal');
+    if (m && !m.hasAttribute('hidden')) plannerCloseCalRegModal_(root);
+  });
 }
 
 /**
@@ -3732,17 +4003,67 @@ function plannerCurriculumCoursesForSubject_(courses, subjectCode) {
 }
 
 /**
+ * 개별 등록 폼 id — `panel`(LEGACY 상단 패널) · `calreg`(달력 우클릭 모달).
+ * @param {'panel'|'calreg'} kind
+ * @returns {Record<string, string>}
+ */
+function plannerManualFormIds_(kind) {
+  const cal = kind === 'calreg';
+  const curr = cal ? 'sp-calreg-curr' : 'sp-curr';
+  return {
+    manualTitle: cal ? 'sp-calreg-manual-title' : 'sp-manual-title',
+    manualDue: cal ? '' : 'sp-manual-due',
+    manualCat: cal ? 'sp-calreg-manual-cat' : 'sp-manual-cat',
+    manualFixedTime: cal ? 'sp-calreg-manual-fixed-time' : 'sp-manual-fixed-time',
+    fixedStart: cal ? 'sp-calreg-fixed-start' : 'sp-manual-fixed-start',
+    fixedEnd: cal ? 'sp-calreg-fixed-end' : 'sp-manual-fixed-end',
+    manualAdd: cal ? 'sp-calreg-manual-add' : 'sp-manual-add',
+    currAdd: cal ? 'sp-calreg-curr-add' : 'sp-curr-add',
+    currDue: cal ? '' : 'sp-curr-due',
+    currSubj: curr + '-subj',
+    currInstructor: curr + '-instructor',
+    currCourse: curr + '-course',
+    currLecture: curr + '-lecture',
+    currTitlePreview: curr + '-title-preview',
+    currHint: cal ? 'sp-calreg-curr-catalog-hint' : 'sp-curr-catalog-hint',
+    directBlock: cal ? 'sp-calreg-manual-direct' : 'sp-plan-manual-direct',
+    currBlock: cal ? 'sp-calreg-manual-curriculum' : 'sp-plan-manual-curriculum',
+    modeDirect: cal ? 'sp-calreg-mode-direct' : 'sp-manual-mode-direct',
+    modeCurr: cal ? 'sp-calreg-mode-curriculum' : 'sp-manual-mode-curriculum',
+    manualErr: cal ? 'sp-calreg-manual-err' : 'sp-plan-manual-err',
+    currErr: cal ? 'sp-calreg-curr-err' : 'sp-plan-curr-err'
+  };
+}
+
+/**
+ * @param {HTMLElement} root
+ * @param {'panel'|'calreg'} kind
+ */
+function plannerSyncManualFixedTimeVisibility_(root, kind) {
+  const ids = plannerManualFormIds_(kind);
+  const catEl = root.querySelector('#' + ids.manualCat);
+  const wrap = root.querySelector('#' + ids.manualFixedTime);
+  if (!(catEl instanceof HTMLSelectElement) || !(wrap instanceof HTMLElement)) return;
+  const on = String(catEl.value || '').trim() === PLAN_CATEGORY_FIXED;
+  if (on) wrap.removeAttribute('hidden');
+  else wrap.setAttribute('hidden', 'hidden');
+}
+
+/**
  * @param {HTMLElement} slot
  * @param {object} st
  * @param {'all'|'subject'|'instructor'|'course'|'preview'} fromLevel
+ * @param {'panel'|'calreg'} [formKind]
  */
-function plannerCurriculumRefreshCascade_(slot, st, fromLevel) {
-  const subjEl = slot.querySelector('#sp-curr-subj');
-  const instEl = slot.querySelector('#sp-curr-instructor');
-  const courseEl = slot.querySelector('#sp-curr-course');
-  const lecEl = slot.querySelector('#sp-curr-lecture');
-  const titleEl = slot.querySelector('#sp-curr-title-preview');
-  const hintEl = slot.querySelector('#sp-curr-catalog-hint');
+function plannerCurriculumRefreshCascade_(slot, st, fromLevel, formKind) {
+  const kind = formKind === 'calreg' ? 'calreg' : 'panel';
+  const ids = plannerManualFormIds_(kind);
+  const subjEl = slot.querySelector('#' + ids.currSubj);
+  const instEl = slot.querySelector('#' + ids.currInstructor);
+  const courseEl = slot.querySelector('#' + ids.currCourse);
+  const lecEl = slot.querySelector('#' + ids.currLecture);
+  const titleEl = slot.querySelector('#' + ids.currTitlePreview);
+  const hintEl = slot.querySelector('#' + ids.currHint);
   if (
     !(subjEl instanceof HTMLSelectElement) ||
     !(instEl instanceof HTMLSelectElement) ||
@@ -3881,12 +4202,16 @@ function plannerCurriculumUpdateTitlePreview_(slot, st, lecEl, titleEl) {
 /**
  * @param {HTMLElement} slot
  * @param {object} st
+ * @param {'direct'|'curriculum'} mode
+ * @param {'panel'|'calreg'} [formKind]
  */
-function plannerSetManualRegMode_(slot, st, mode) {
-  const direct = slot.querySelector('#sp-plan-manual-direct');
-  const curr = slot.querySelector('#sp-plan-manual-curriculum');
-  const btnD = slot.querySelector('#sp-manual-mode-direct');
-  const btnC = slot.querySelector('#sp-manual-mode-curriculum');
+function plannerSetManualRegMode_(slot, st, mode, formKind) {
+  const kind = formKind === 'calreg' ? 'calreg' : 'panel';
+  const ids = plannerManualFormIds_(kind);
+  const direct = slot.querySelector('#' + ids.directBlock);
+  const curr = slot.querySelector('#' + ids.currBlock);
+  const btnD = slot.querySelector('#' + ids.modeDirect);
+  const btnC = slot.querySelector('#' + ids.modeCurr);
   const next = mode === 'curriculum' ? 'curriculum' : 'direct';
   if (st && typeof st === 'object') st.manualRegMode = next;
   if (direct) direct.toggleAttribute('hidden', next !== 'direct');
@@ -3899,22 +4224,28 @@ function plannerSetManualRegMode_(slot, st, mode) {
     btnC.setAttribute('aria-pressed', next === 'curriculum' ? 'true' : 'false');
     btnC.classList.toggle('is-active', next === 'curriculum');
   }
-  if (next === 'curriculum') plannerCurriculumRefreshCascade_(slot, st, 'all');
+  if (next === 'curriculum') plannerCurriculumRefreshCascade_(slot, st, 'all', kind);
 }
 
 /**
  * 커리큘럼 개별 등록 → `monthTodos` append.
  * @param {HTMLElement} slot
  * @param {object} st
+ * @param {{ dueYmd?: string, formKind?: 'panel'|'calreg' }} [opts]
  * @returns {string}
  */
-function plannerAppendCurriculumTodoFromForm_(slot, st) {
+function plannerAppendCurriculumTodoFromForm_(slot, st, opts) {
   if (!plannerCurriculumHasCatalog_(st)) {
     return '커리큘럼 마스터가 없어 등록할 수 없습니다.';
   }
-  const dueEl = slot.querySelector('#sp-curr-due');
-  const lecEl = slot.querySelector('#sp-curr-lecture');
-  const due = dueEl && 'value' in dueEl ? String(/** @type {HTMLInputElement} */ (dueEl).value).trim() : '';
+  const kind = opts && opts.formKind === 'calreg' ? 'calreg' : 'panel';
+  const ids = plannerManualFormIds_(kind);
+  const dueOverride = opts && opts.dueYmd ? String(opts.dueYmd).trim() : '';
+  const dueEl = ids.currDue ? slot.querySelector('#' + ids.currDue) : null;
+  const lecEl = slot.querySelector('#' + ids.currLecture);
+  const due =
+    dueOverride ||
+    (dueEl && 'value' in dueEl ? String(/** @type {HTMLInputElement} */ (dueEl).value).trim() : '');
   const lecId = lecEl && 'value' in lecEl ? String(/** @type {HTMLSelectElement} */ (lecEl).value).trim() : '';
   if (!/^\d{4}-\d{2}-\d{2}$/.test(due)) return '날짜를 선택해 주세요.';
   if (!lecId.length) return '회차(강의)를 선택해 주세요.';
@@ -3966,26 +4297,124 @@ function plannerAppendCurriculumTodoFromForm_(slot, st) {
     })
   );
   if (lecEl instanceof HTMLSelectElement) lecEl.value = '';
-  plannerCurriculumRefreshCascade_(slot, st, 'course');
+  plannerCurriculumRefreshCascade_(slot, st, 'course', kind);
+  return '';
+}
+
+/**
+ * 고정 일정 — 하루·시간 구간(개별 등록·달력 모달).
+ * @param {object} st
+ * @param {string} ymd
+ * @param {string} title
+ * @param {number} startIx
+ * @param {number} endIx
+ * @returns {string}
+ */
+function plannerAppendFixedTodoForOneDay_(st, ymd, title, startIx, endIx) {
+  const name = String(title != null ? title : '').trim();
+  if (!name.length) return '일정 이름을 입력해 주세요.';
+  const day = String(ymd || '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return '날짜가 올바르지 않습니다.';
+  const s0 = Number(startIx);
+  const s1 = Number(endIx);
+  if (!isFinite(s0) || !isFinite(s1)) return '시간을 선택해 주세요.';
+  if (s1 <= s0) return '끝 시간은 시작 시간보다 뒤여야 합니다.';
+  const maxIx = PLAN_TIMELINE_HOURS_ORDERED.length * PLAN_TIMELINE_CELLS_PER_HOUR;
+  if (!plannerFixedTimelineOrderIndexIsHalfHour_(s0)) return '시작 시각은 30분 단위만 선택할 수 있습니다.';
+  if (s1 !== maxIx && !plannerFixedTimelineOrderIndexIsHalfHour_(s1)) {
+    return '끝 시각은 30분 단위 또는 「타임라인 끝」만 선택할 수 있습니다.';
+  }
+  if (s0 < 0 || s0 >= maxIx) return '시간 범위가 올바르지 않습니다.';
+  if (s1 <= 0 || s1 > maxIx) return '시간 범위가 올바르지 않습니다.';
+  plannerEnsureMonthTodos_(st);
+  if (!st.dayFixedBlockSlotsByDate) st.dayFixedBlockSlotsByDate = {};
+  /** @type {string[]} */
+  const slotKeysForRows = [];
+  let ix;
+  for (ix = s0; ix < s1; ix++) {
+    const ks = plannerOrderIndexToSlotKey_(ix);
+    if (ks) slotKeysForRows.push(ks);
+  }
+  const timeline_slots = JSON.stringify(slotKeysForRows);
+  const ruleId = 'fxd_' + String(Date.now()) + '_' + String(Math.floor(Math.random() * 1e6));
+  const task_id = '__sp_fix_' + ruleId + '_' + day;
+  const todayFx = plannerTodayYmdSeoul_();
+  plannerPushMonthTodo_(
+    st,
+    plannerTodoRowLocal_({
+      task_id: task_id,
+      title: name,
+      date: day,
+      category: PLAN_CATEGORY_FIXED,
+      lecture_id: '',
+      timeline_slots: timeline_slots,
+      sort_key: -600,
+      mark: 'none',
+      trace_dates: '[]',
+      created_date: todayFx,
+      updated_date: todayFx
+    }),
+    true
+  );
+  if (!st.dayFixedBlockSlotsByDate[day]) st.dayFixedBlockSlotsByDate[day] = {};
+  const slots = plannerEnsureTimelineTodoSlots_(st, day);
+  let skdx;
+  for (skdx = s0; skdx < s1; skdx++) {
+    const k = plannerOrderIndexToSlotKey_(skdx);
+    if (!k) continue;
+    st.dayFixedBlockSlotsByDate[day][k] = true;
+    try {
+      delete slots[k];
+    } catch (_e) {
+      slots[k] = '';
+    }
+  }
+  plannerStripStudyTimelineSlotsOnDay_(st, day, slotKeysForRows);
+  if (st.dayTimelineTodoByDate && st.dayTimelineTodoByDate[day]) {
+    try {
+      delete st.dayTimelineTodoByDate[day];
+    } catch (_e2) {
+      st.dayTimelineTodoByDate[day] = {};
+    }
+  }
+  if (st.viewMonth instanceof Date && !isNaN(st.viewMonth.getTime())) {
+    plannerRebuildFixedBlockSlotsForMonth_(st, st.viewMonth);
+  }
+  plannerRebuildQuickPostPayload_(st);
   return '';
 }
 
 /**
  * 일반 등록 폼 → `monthTodos`에 append 후 페이로드 재생성.
- * @param {HTMLElement} slot `#sp-plan-calendar-slot`
+ * @param {HTMLElement} slot
  * @param {object} st
+ * @param {{ dueYmd?: string, formKind?: 'panel'|'calreg' }} [opts]
  * @returns {string} 빈 문자열 = 성공, 아니면 에러 메시지
  */
-function plannerAppendManualTodoFromForm_(slot, st) {
+function plannerAppendManualTodoFromForm_(slot, st, opts) {
   plannerEnsureMonthTodos_(st);
-  const titleEl = slot.querySelector('#sp-manual-title');
-  const dueEl = slot.querySelector('#sp-manual-due');
-  const catEl = slot.querySelector('#sp-manual-cat');
+  const kind = opts && opts.formKind === 'calreg' ? 'calreg' : 'panel';
+  const ids = plannerManualFormIds_(kind);
+  const dueOverride = opts && opts.dueYmd ? String(opts.dueYmd).trim() : '';
+  const titleEl = slot.querySelector('#' + ids.manualTitle);
+  const dueEl = ids.manualDue ? slot.querySelector('#' + ids.manualDue) : null;
+  const catEl = slot.querySelector('#' + ids.manualCat);
   const title = titleEl && 'value' in titleEl ? String(/** @type {HTMLInputElement} */ (titleEl).value).trim() : '';
-  const due = dueEl && 'value' in dueEl ? String(/** @type {HTMLInputElement} */ (dueEl).value).trim() : '';
+  const due =
+    dueOverride ||
+    (dueEl && 'value' in dueEl ? String(/** @type {HTMLInputElement} */ (dueEl).value).trim() : '');
   const category = catEl && 'value' in catEl ? String(/** @type {HTMLSelectElement} */ (catEl).value).trim() : 'misc';
   if (!title.length) return '할 일 제목을 입력해 주세요.';
   if (!/^\d{4}-\d{2}-\d{2}$/.test(due)) return '날짜를 선택해 주세요.';
+  if (category === PLAN_CATEGORY_FIXED) {
+    const startEl = slot.querySelector('#' + ids.fixedStart);
+    const endEl = slot.querySelector('#' + ids.fixedEnd);
+    const s0 = startEl && 'value' in startEl ? Number(/** @type {HTMLSelectElement} */ (startEl).value) : NaN;
+    const s1 = endEl && 'value' in endEl ? Number(/** @type {HTMLSelectElement} */ (endEl).value) : NaN;
+    const msgFx = plannerAppendFixedTodoForOneDay_(st, due, title, s0, s1);
+    if (!msgFx.length && titleEl) /** @type {HTMLInputElement} */ (titleEl).value = '';
+    return msgFx;
+  }
   const allowedC = { grammar: true, logic: true, read: true, vocab: true, misc: true };
   const c = allowedC[category] ? category : 'misc';
   let task_id = '';
@@ -6643,7 +7072,7 @@ function renderCalendar_(root, boot) {
     '</button>' +
     '<div class="sp-plan-todoReg__headMain">' +
     '<span class="sp-plan-todoReg__outerTitle">할 일 등록</span>' +
-    '<span class="sp-plan-todoReg__outerSub">한 달 일정을 빠르게 채우거나 날짜별로 추가합니다.</span>' +
+    '<span class="sp-plan-todoReg__outerSub">한 달 일정을 빠르게 채우거나, 달력 날짜에서 우클릭해 한 건씩 추가합니다.</span>' +
     '</div></div></header>' +
     '<div id="sp-plan-todo-reg-body" class="sp-plan-quick__body sp-plan-todoReg__scroll">' +
     '<div class="sp-plan-todoReg__panel sp-plan-todoReg__panel--quick">' +
@@ -6716,44 +7145,6 @@ function renderCalendar_(root, boot) {
     '<div class="sp-plan-fixed__applyRow">' +
     '<button type="button" class="btn btn--primary" id="sp-fixed-apply">이 달에 반영</button>' +
     '</div></div>' +
-    '<div class="sp-plan-todoReg__panel sp-plan-todoReg__panel--manual" id="sp-plan-manual-reg" aria-label="개별 등록">' +
-    '<div class="sp-plan-todoReg__panelHead">' +
-    '<span class="sp-plan-todoReg__panelBadge sp-plan-todoReg__panelBadge--manual" aria-hidden="true">개별</span>' +
-    '<div class="sp-plan-todoReg__panelHeadText">' +
-    '<h3 class="sp-plan-todoReg__panelTitle">개별 등록</h3>' +
-    '<p class="sp-plan-todoReg__panelSub">제목을 직접 쓰거나, 등록된 강좌·회차를 골라 한 건씩 추가합니다.</p>' +
-    '</div></div>' +
-    '<p class="sp-plan-manual__err" id="sp-plan-manual-err" hidden></p>' +
-    '<p class="sp-plan-manual__err sp-plan-manual__err--curr" id="sp-plan-curr-err" hidden></p>' +
-    '<p class="sp-plan-curr__hint" id="sp-curr-catalog-hint" hidden></p>' +
-    '<div class="sp-plan-manual__mode" role="group" aria-label="개별 등록 방식">' +
-    '<button type="button" class="btn btn--ghost sp-plan-manual__modeBtn is-active" id="sp-manual-mode-direct" aria-pressed="true">직접 입력</button>' +
-    '<button type="button" class="btn btn--ghost sp-plan-manual__modeBtn" id="sp-manual-mode-curriculum" aria-pressed="false">커리큘럼</button>' +
-    '</div>' +
-    '<div id="sp-plan-manual-direct" class="sp-plan-manual__block">' +
-    '<div class="sp-plan-manual__grid">' +
-    '<label class="sp-plan-manual__lbl">제목<input type="text" id="sp-manual-title" class="sp-plan-manual__input" maxlength="200" placeholder="예: 모의고사 오답" autocomplete="off"/></label>' +
-    '<label class="sp-plan-manual__lbl">날짜<input type="date" id="sp-manual-due" class="sp-plan-manual__input" value="' +
-    esc(defManDue) +
-    '"/></label>' +
-    '<label class="sp-plan-manual__lbl">과목<select id="sp-manual-cat" class="sp-plan-manual__select">' +
-    '<option value="vocab">어휘</option><option value="grammar">문법</option><option value="logic">논리</option><option value="read">독해</option><option value="misc" selected>기타</option></select></label>' +
-    '</div>' +
-    '<button type="button" class="btn btn--primary sp-plan-manual__add" id="sp-manual-add">할 일 추가</button>' +
-    '</div>' +
-    '<div id="sp-plan-manual-curriculum" class="sp-plan-manual__block" hidden>' +
-    '<div class="sp-plan-manual__grid sp-plan-manual__grid--curr">' +
-    '<label class="sp-plan-manual__lbl">과목<select id="sp-curr-subj" class="sp-plan-manual__select sp-plan-manual__control--fit" data-sp-fit-ph="과목 선택"></select></label>' +
-    '<label class="sp-plan-manual__lbl">선생님<select id="sp-curr-instructor" class="sp-plan-manual__select sp-plan-manual__control--fit" data-sp-fit-ph="선생님 선택"></select></label>' +
-    '<label class="sp-plan-manual__lbl">강좌명<select id="sp-curr-course" class="sp-plan-manual__select sp-plan-manual__control--fit" data-sp-fit-ph="강좌명 선택"></select></label>' +
-    '<label class="sp-plan-manual__lbl">회차<select id="sp-curr-lecture" class="sp-plan-manual__select sp-plan-manual__control--fit" data-sp-fit-ph="회차 선택"></select></label>' +
-    '<label class="sp-plan-manual__lbl">날짜<input type="date" id="sp-curr-due" class="sp-plan-manual__input" value="' +
-    esc(defManDue) +
-    '"/></label>' +
-    '<label class="sp-plan-manual__lbl sp-plan-manual__lbl--preview">제목<input type="text" id="sp-curr-title-preview" class="sp-plan-manual__input sp-plan-manual__control--fit" readonly tabindex="-1" aria-readonly="true" data-sp-fit-ph="회차를 선택하면 자동 입력" placeholder="회차를 선택하면 자동 입력"/></label>' +
-    '</div>' +
-    '<button type="button" class="btn btn--primary sp-plan-manual__add" id="sp-curr-add">할 일 추가</button>' +
-    '</div></div>' +
     '<div class="sp-plan-quick__postPreview sp-plan-todoReg__postPreview">' +
     '<div class="sp-plan-quick__postActions">' +
     '<button type="button" class="btn btn--primary" id="sp-plan-todos-apply">일정 저장하기</button>' +
@@ -6788,8 +7179,9 @@ function renderCalendar_(root, boot) {
     '<div class="sp-plan-month__loading" id="sp-plan-month-loading" hidden role="status" aria-live="polite">' +
     '<div class="sp-plan-month__loadingBox" aria-hidden="true"><span class="sp-plan-month__loadingSpinner"></span></div>' +
     '<span class="sp-plan-month__loadingText">일정 불러오는 중…</span></div>' +
-    '<nav id="sp-plan-calendar-ctx-menu" class="sp-plan-todoCtx sp-plan-calendarCtx" hidden role="menu" aria-label="할 일 메뉴">' +
-    '<button type="button" class="sp-plan-todoCtx__btn" data-sp-ctx-action="delete" role="menuitem">삭제</button>' +
+    '<nav id="sp-plan-calendar-ctx-menu" class="sp-plan-todoCtx sp-plan-calendarCtx" hidden role="menu" aria-label="달력 메뉴">' +
+    '<button type="button" class="sp-plan-todoCtx__btn" data-sp-ctx-action="register" role="menuitem">일정 등록</button>' +
+    '<button type="button" class="sp-plan-todoCtx__btn" data-sp-ctx-action="delete" role="menuitem" hidden>삭제</button>' +
     '<button type="button" class="sp-plan-todoCtx__btn" data-sp-ctx-action="delete-trace" role="menuitem" hidden>흔적 삭제</button>' +
     '</nav>' +
     '</div></div>';
@@ -6805,7 +7197,7 @@ function renderCalendar_(root, boot) {
     else if (fse0.options.length) fse0.selectedIndex = Math.min(2, fse0.options.length - 1);
   }
 
-  plannerSetManualRegMode_(slot, st, st.manualRegMode === 'curriculum' ? 'curriculum' : 'direct');
+  plannerEnsureCalRegModal_(root, fixedTimeOptsStart, fixedTimeOptsEnd);
   plannerQuickCurriculumRefreshCascade_(slot, st, 'all');
   plannerControlFitSyncWidthsIn_(slot);
   plannerQuickSyncDowCountInputs_(slot);
@@ -6815,6 +7207,14 @@ function renderCalendar_(root, boot) {
     slot.addEventListener('click', function (e) {
       const t = /** @type {HTMLElement|null} */ (e.target instanceof HTMLElement ? e.target : null);
       if (!t) return;
+      const ctxReg = t.closest ? t.closest('[data-sp-ctx-action="register"]') : null;
+      if (ctxReg && slot.__spPlanCtxMenu && slot.__spPlanCtxMenu.ymd) {
+        e.preventDefault();
+        e.stopPropagation();
+        plannerOpenCalRegModal_(root, slot.__spPlanCtxMenu.ymd);
+        plannerHideTodoContextMenu_(slot);
+        return;
+      }
       const ctxDel = t.closest ? t.closest('[data-sp-ctx-action="delete"]') : null;
       const ctxTraceDel = t.closest ? t.closest('[data-sp-ctx-action="delete-trace"]') : null;
       if ((ctxDel || ctxTraceDel) && slot.__spPlanCtxMenu) {
@@ -6823,7 +7223,7 @@ function renderCalendar_(root, boot) {
         const pending = slot.__spPlanCtxMenu;
         if (pending.isTrace && pending.taskIds.length) {
           plannerDeleteTraceFromCalendar_(root, pending.taskIds[0], pending.traceYmd || pending.ymd);
-        } else {
+        } else if (pending.taskIds && pending.taskIds.length) {
           void plannerDeleteTodosFromCalendar_(root, pending.ymd, pending.taskIds.slice());
         }
         return;
@@ -7093,21 +7493,27 @@ function renderCalendar_(root, boot) {
       if (!root.__spPlanAdminMode) return;
       const t = e.target instanceof HTMLElement ? e.target : null;
       if (!t) return;
-      const hit = t.closest('[data-sp-task-id]') || t.closest('[data-sp-task-ids]');
-      if (!hit || !(hit instanceof HTMLElement)) return;
       const dayBtn = t.closest('.sp-plan-day');
       if (!dayBtn || dayBtn.hasAttribute('disabled')) return;
       const ymdKey = dayBtn.getAttribute('data-ymd') || '';
-      const ids = plannerResolveTodoIdsFromContextTarget_(hit);
-      if (!ymdKey || !ids.length) return;
-      const isTrace = hit.getAttribute('data-sp-trace') === '1';
-      e.preventDefault();
-      if (isTrace) {
-        const traceYmd = hit.getAttribute('data-sp-trace-ymd') || ymdKey;
-        slot.__spPlanCtxMenu = { ymd: ymdKey, taskIds: ids, isTrace: true, traceYmd: traceYmd };
-      } else {
-        slot.__spPlanCtxMenu = { ymd: ymdKey, taskIds: ids, isTrace: false };
+      if (!ymdKey) return;
+      const hit = t.closest('[data-sp-task-id]') || t.closest('[data-sp-task-ids]');
+      /** @type {string[]} */
+      let ids = [];
+      let isTrace = false;
+      let traceYmd = ymdKey;
+      if (hit && hit instanceof HTMLElement) {
+        ids = plannerResolveTodoIdsFromContextTarget_(hit);
+        isTrace = hit.getAttribute('data-sp-trace') === '1';
+        traceYmd = hit.getAttribute('data-sp-trace-ymd') || ymdKey;
       }
+      e.preventDefault();
+      slot.__spPlanCtxMenu = {
+        ymd: ymdKey,
+        taskIds: ids,
+        isTrace: isTrace,
+        traceYmd: traceYmd
+      };
       plannerUpdateCalendarCtxMenuLabels_(slot, slot.__spPlanCtxMenu);
       const menu = slot.querySelector('#sp-plan-calendar-ctx-menu');
       if (!(menu instanceof HTMLElement)) return;
