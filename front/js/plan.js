@@ -7162,7 +7162,7 @@ function renderCalendar_(root, boot) {
     '</div>' +
     '<div class="sp-plan-month__actions" role="group" aria-label="월간 일정 저장·삭제">' +
     '<button type="button" class="btn btn--primary" id="sp-plan-month-save">일정 저장하기</button>' +
-    '<button type="button" class="btn btn--ghost" id="sp-plan-month-clear">일정 삭제하기</button>' +
+    '<button type="button" class="btn btn--ghost" id="sp-plan-month-clear">일정 전체 삭제하기</button>' +
     '<span class="sp-plan-month__applyMsg" id="sp-plan-month-apply-msg" hidden></span>' +
     '</div>' +
     '<div class="sp-plan-month__dow" role="row" aria-label="요일">' +

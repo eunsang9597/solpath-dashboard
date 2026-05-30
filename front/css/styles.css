@@ -4232,6 +4232,14 @@ button.sp-stu-remark__item--open:hover {
   background: #fef2f2;
 }
 
+#solpath-plan-root .sp-plan-todoCtx__btn[data-sp-ctx-action="register"] {
+  color: #6d28d9;
+}
+
+#solpath-plan-root .sp-plan-todoCtx__btn[data-sp-ctx-action="register"]:hover {
+  background: #f5f3ff;
+}
+
 #solpath-plan-root.is-plan-admin .sp-plan-dayCellSum .sp-plan-curBadge[data-sp-task-id],
 #solpath-plan-root.is-plan-admin .sp-plan-day__fixedFoot .sp-plan-day__fixedTxt[data-sp-task-id] {
   cursor: context-menu;
