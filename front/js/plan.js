@@ -2650,6 +2650,16 @@ function plannerStudyCategoryRank_(cat) {
 }
 
 /**
+ * 한글 제목·라벨 정렬 — 숫자는 크기 순(예: p.2, p.7, p.12), 문자는 가나다순.
+ * @param {string} a
+ * @param {string} b
+ * @returns {number}
+ */
+function plannerLocaleCompareKo_(a, b) {
+  return String(a != null ? a : '').localeCompare(String(b != null ? b : ''), 'ko', { numeric: true });
+}
+
+/**
  * @param {object} a
  * @param {object} b
  * @returns {number}
@@ -2661,13 +2671,13 @@ function plannerCompareMonthTodoDisplay_(a, b) {
   const ra = plannerStudyCategoryRank_(String(a.category != null ? a.category : ''));
   const rb = plannerStudyCategoryRank_(String(b.category != null ? b.category : ''));
   if (ra !== rb) return ra - rb;
-  const tc = String(a.title != null ? a.title : '').localeCompare(String(b.title != null ? b.title : ''), 'ko');
+  const tc = plannerLocaleCompareKo_(String(a.title != null ? a.title : ''), String(b.title != null ? b.title : ''));
   if (tc !== 0) return tc;
-  return String(a.task_id != null ? a.task_id : '').localeCompare(String(b.task_id != null ? b.task_id : ''), 'ko');
+  return plannerLocaleCompareKo_(String(a.task_id != null ? a.task_id : ''), String(b.task_id != null ? b.task_id : ''));
 }
 
 /**
- * 보는 달 각 날짜별 `sort_key` — 과목(어휘→…→기타), 같은 과목 안 제목 가나다순.
+ * 보는 달 각 날짜별 `sort_key` — 과목(어휘→…→기타), 같은 과목 안 제목 가나다+숫자순.
  * @param {object} st
  */
 function plannerAssignCategorySortKeysForViewMonth_(st) {
