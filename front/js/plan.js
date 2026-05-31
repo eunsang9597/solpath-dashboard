@@ -2650,101 +2650,24 @@ function plannerStudyCategoryRank_(cat) {
 }
 
 /**
- * 커리큘럼 행(`lecture_id` 또는 `lec_*` task_id).
- * @param {object|null|undefined} row
- * @returns {boolean}
- */
-function plannerTodoIsCurriculumRow_(row) {
-  if (!row || typeof row !== 'object') return false;
-  const lecId = String(row.lecture_id != null ? row.lecture_id : '').trim();
-  if (lecId.length) return true;
-  const tid = String(row.task_id != null ? row.task_id : '').trim();
-  return tid.indexOf('lec_') === 0;
-}
-
-/**
- * 정렬용 — `lecture_id` → `course_id`·`lecture_no` (카탈로그 없으면 lecture_id만).
- * @param {object} st
- * @param {object} row
- * @returns {{ courseSort: number, lectureNo: number, lectureId: string }}
- */
-function plannerTodoCurriculumSortKeys_(st, row) {
-  let lecId = String(row.lecture_id != null ? row.lecture_id : '').trim();
-  if (!lecId.length) {
-    const tid = String(row.task_id != null ? row.task_id : '').trim();
-    const m = /^lec_([^_]+)_/.exec(tid);
-    if (m && m[1]) lecId = String(m[1]).trim();
-  }
-  let courseRaw = '';
-  let lectureNo = 0;
-  if (lecId.length && st) {
-    const catalog = plannerCurriculumCatalog_(st);
-    const lec = catalog.lectures.find(function (L) {
-      return L && String(L.lecture_id) === lecId;
-    });
-    if (lec) {
-      courseRaw = String(lec.course_id != null ? lec.course_id : '').trim();
-      lectureNo = Number(lec.lecture_no);
-      if (!isFinite(lectureNo)) lectureNo = 0;
-    }
-  }
-  const courseNum = courseRaw.length && /^\d+$/.test(courseRaw) ? Number(courseRaw) : courseRaw.length ? 1e14 : 1e15;
-  return { courseSort: courseNum, lectureNo: lectureNo, lectureId: lecId };
-}
-
-/**
- * 같은 날·같은 과목 안: 커리큘럼 → `course_id`·`lecture_no` 순, 개별(직접) 등록은 맨 아래.
  * @param {object} a
  * @param {object} b
- * @param {object} [st] `plannerCurriculum` 조회용
  * @returns {number}
  */
-function plannerCompareMonthTodoDisplay_(a, b, st) {
+function plannerCompareMonthTodoDisplay_(a, b) {
   const ga = plannerIsTraceGhostDisplay_(a) ? 1 : 0;
   const gb = plannerIsTraceGhostDisplay_(b) ? 1 : 0;
   if (ga !== gb) return ga - gb;
   const ra = plannerStudyCategoryRank_(String(a.category != null ? a.category : ''));
   const rb = plannerStudyCategoryRank_(String(b.category != null ? b.category : ''));
   if (ra !== rb) return ra - rb;
-
-  const catA = String(a.category != null ? a.category : '').trim();
-  const catB = String(b.category != null ? b.category : '').trim();
-  const studyA =
-    catA !== PLAN_CATEGORY_FIXED &&
-    catA !== 'memo' &&
-    catA !== PLAN_CATEGORY_ROUTINE &&
-    !plannerIsRoutineTaskId_(String(a.task_id || ''));
-  const studyB =
-    catB !== PLAN_CATEGORY_FIXED &&
-    catB !== 'memo' &&
-    catB !== PLAN_CATEGORY_ROUTINE &&
-    !plannerIsRoutineTaskId_(String(b.task_id || ''));
-
-  if (studyA && studyB) {
-    const currA = plannerTodoIsCurriculumRow_(a) ? 0 : 1;
-    const currB = plannerTodoIsCurriculumRow_(b) ? 0 : 1;
-    if (currA !== currB) return currA - currB;
-    if (currA === 0 && st) {
-      const ka = plannerTodoCurriculumSortKeys_(st, a);
-      const kb = plannerTodoCurriculumSortKeys_(st, b);
-      if (ka.courseSort !== kb.courseSort) return ka.courseSort - kb.courseSort;
-      if (ka.lectureNo !== kb.lectureNo) return ka.lectureNo - kb.lectureNo;
-      return String(ka.lectureId).localeCompare(String(kb.lectureId), 'ko');
-    }
-    const da = String(a.created_date != null ? a.created_date : '').trim();
-    const db = String(b.created_date != null ? b.created_date : '').trim();
-    if (da !== db) return da.localeCompare(db);
-    const ta = String(a.task_id != null ? a.task_id : '').trim();
-    const tb = String(b.task_id != null ? b.task_id : '').trim();
-    if (ta !== tb) return ta.localeCompare(tb, 'ko');
-    return String(a.title != null ? a.title : '').localeCompare(String(b.title != null ? b.title : ''), 'ko');
-  }
-
-  return (Number(a.sort_key) || 0) - (Number(b.sort_key) || 0);
+  const tc = String(a.title != null ? a.title : '').localeCompare(String(b.title != null ? b.title : ''), 'ko');
+  if (tc !== 0) return tc;
+  return String(a.task_id != null ? a.task_id : '').localeCompare(String(b.task_id != null ? b.task_id : ''), 'ko');
 }
 
 /**
- * 보는 달 각 날짜별 `sort_key` — 과목(어휘→…→기타), 같은 과목 안 커리큘럼 `course_id`·개별은 아래.
+ * 보는 달 각 날짜별 `sort_key` — 과목(어휘→…→기타), 같은 과목 안 제목 가나다순.
  * @param {object} st
  */
 function plannerAssignCategorySortKeysForViewMonth_(st) {
@@ -2761,9 +2684,7 @@ function plannerAssignCategorySortKeysForViewMonth_(st) {
     byDay[d].push(r);
   });
   Object.keys(byDay).forEach(function (ymd) {
-    const rows = byDay[ymd].slice().sort(function (a, b) {
-      return plannerCompareMonthTodoDisplay_(a, b, st);
-    });
+    const rows = byDay[ymd].slice().sort(plannerCompareMonthTodoDisplay_);
     rows.forEach(function (row, ix) {
       row.sort_key = ix;
     });
@@ -3649,9 +3570,7 @@ function plannerMonthTodosForDay_(st, dateYmd) {
       rows.push(Object.assign({}, t, { _spTraceGhost: true, _spTraceOnDate: day }));
     }
   });
-  rows.sort(function (a, b) {
-    return plannerCompareMonthTodoDisplay_(a, b, st);
-  });
+  rows.sort(plannerCompareMonthTodoDisplay_);
   return rows;
 }
 
@@ -4542,9 +4461,7 @@ function plannerOrderedDayTodos_(st, dateYmd) {
       return r && String(r.category || '').trim() !== 'memo';
     })
     .slice();
-  rows.sort(function (a, b) {
-    return plannerCompareMonthTodoDisplay_(a, b, st);
-  });
+  rows.sort(plannerCompareMonthTodoDisplay_);
   return plannerWithFixedRoutineTodosFirst_(day, rows);
 }
 
