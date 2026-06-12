@@ -4535,6 +4535,22 @@ button.sp-stu-remark__item--open:hover {
   background: #f5f3ff;
 }
 
+#solpath-plan-root .sp-plan-todoCtx__btn[data-sp-ctx-action="event-register"] {
+  color: #4d6b3a;
+}
+
+#solpath-plan-root .sp-plan-todoCtx__btn[data-sp-ctx-action="event-register"]:hover {
+  background: #f4f7f0;
+}
+
+#solpath-plan-root .sp-plan-todoCtx__btn[data-sp-ctx-action="event-delete"] {
+  color: #b91c1c;
+}
+
+#solpath-plan-root .sp-plan-todoCtx__btn[data-sp-ctx-action="event-delete"]:hover {
+  background: #fef2f2;
+}
+
 #solpath-plan-root.is-plan-admin .sp-plan-dayCellSum .sp-plan-curBadge[data-sp-task-id],
 #solpath-plan-root.is-plan-admin .sp-plan-day__fixedFoot .sp-plan-day__fixedTxt[data-sp-task-id] {
   cursor: context-menu;
@@ -5294,6 +5310,41 @@ button.sp-stu-remark__item--open:hover {
 
 #solpath-plan-root .sp-plan-day.is-sat .sp-plan-day__num {
   color: #2563eb;
+}
+
+#solpath-plan-root .sp-plan-day__eventStar {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.55rem;
+  height: 1.55rem;
+  flex-shrink: 0;
+}
+
+#solpath-plan-root .sp-plan-day__eventStarSvg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  color: #a3b18a;
+}
+
+#solpath-plan-root .sp-plan-day__num--inStar {
+  position: relative;
+  z-index: 1;
+  font-size: calc(0.72rem + var(--sp-text-bump));
+  font-weight: 850;
+  color: #3d5a3a;
+  line-height: 1;
+}
+
+#solpath-plan-root .sp-plan-day.is-sun .sp-plan-day__num--inStar {
+  color: #9f1239;
+}
+
+#solpath-plan-root .sp-plan-day.is-sat .sp-plan-day__num--inStar {
+  color: #1d4ed8;
 }
 
 #solpath-plan-root .sp-plan-day__dots {
@@ -6102,6 +6153,105 @@ button.sp-stu-remark__item--open:hover {
   background: #fef2f2;
   border-color: #f87171;
   color: #991b1b;
+}
+
+#solpath-plan-root .sp-plan-day__eventStrip {
+  margin-top: 0.45rem;
+}
+
+#solpath-plan-root .sp-plan-day__eventStrip[hidden] {
+  display: none !important;
+}
+
+#solpath-plan-root .sp-plan-day__eventStripInner {
+  padding: 0.5rem 0.65rem;
+  border-radius: 10px;
+  border: 1px solid #d8e2d0;
+  background: linear-gradient(135deg, #f6f8f3 0%, #eef4e8 100%);
+}
+
+#solpath-plan-root .sp-plan-day__eventStripHead {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-bottom: 0.3rem;
+}
+
+#solpath-plan-root .sp-plan-day__eventStripIcon {
+  display: inline-flex;
+  width: 0.95rem;
+  height: 0.95rem;
+  color: #7c9a6e;
+  flex-shrink: 0;
+}
+
+#solpath-plan-root .sp-plan-day__eventStripIcon svg {
+  width: 100%;
+  height: 100%;
+}
+
+#solpath-plan-root .sp-plan-day__eventStripTitle {
+  font-size: calc(0.72rem + var(--sp-text-bump));
+  font-weight: 800;
+  color: #4d6b3a;
+}
+
+#solpath-plan-root .sp-plan-day__eventList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+#solpath-plan-root .sp-plan-day__eventItem {
+  font-size: calc(0.74rem + var(--sp-text-bump));
+  font-weight: 700;
+  color: #334155;
+  line-height: 1.35;
+  word-break: break-word;
+}
+
+#solpath-plan-root .sp-plan-eventReg__body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+#solpath-plan-root .sp-plan-eventReg__hint {
+  margin: 0;
+  font-size: calc(0.72rem + var(--sp-text-bump));
+  color: #64748b;
+  line-height: 1.4;
+}
+
+#solpath-plan-root .sp-plan-eventReg__err {
+  margin: 0;
+  font-size: calc(0.72rem + var(--sp-text-bump));
+  color: #b91c1c;
+}
+
+#solpath-plan-root .sp-plan-eventReg__lbl {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: calc(0.72rem + var(--sp-text-bump));
+  font-weight: 700;
+  color: #334155;
+}
+
+#solpath-plan-root .sp-plan-eventReg__input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.45rem 0.55rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: calc(0.78rem + var(--sp-text-bump));
+}
+
+#solpath-plan-root .sp-plan-eventReg__add {
+  align-self: flex-start;
 }
 
 #solpath-plan-root .sp-plan-day__studyFooter {

@@ -2518,7 +2518,7 @@ function plannerCurriculumWeekPayloadFromMonthTodos_(st, weekIndex, weekDateKeys
     plannerMonthTodosForDay_(st, key).forEach(function (t) {
       if (!t || plannerIsTraceGhostDisplay_(t)) return;
       const cat = String(t.category != null ? t.category : '').trim();
-      if (!cat || cat === PLAN_CATEGORY_FIXED || cat === 'memo' || cat === PLAN_CATEGORY_ROUTINE) return;
+      if (!cat || cat === PLAN_CATEGORY_FIXED || cat === PLAN_CATEGORY_EVENT || cat === 'memo' || cat === PLAN_CATEGORY_ROUTINE) return;
       if (plannerIsRoutineExcludedFromStudyTotals_(t.task_id, cat)) return;
       const subj = /^(grammar|logic|read|vocab|misc)$/.test(cat) ? cat : 'misc';
       if (!bySubj[subj]) bySubj[subj] = { titles: [], lectureIds: [] };
@@ -3008,6 +3008,8 @@ const PLAN_FIXED_SLEEP_TODO_ID = '__sp_routine_sleep';
 const PLAN_FIXED_MEAL_TODO_ID = '__sp_routine_meal';
 /** DB `category` — 고정 일정(합산·배지 제외) */
 const PLAN_CATEGORY_FIXED = 'fixed';
+/** DB `category` — 달력 별·일일 배너만 표시(할 일·합산·타임라인 제외) */
+const PLAN_CATEGORY_EVENT = 'event';
 /** DB `category` — 일일 모달 루틴(취침·식사). `timeline_slots` 칠한 뒤에만 POST */
 const PLAN_CATEGORY_ROUTINE = 'routine';
 
@@ -3031,8 +3033,103 @@ function plannerIsTraceGhostDisplay_(row) {
 function plannerIsExcludedFromStudyTotals_(taskId, category) {
   if (plannerIsRoutineExcludedFromStudyTotals_(taskId)) return true;
   const c = String(category != null ? category : '').trim();
-  if (c === PLAN_CATEGORY_FIXED || c === 'memo') return true;
+  if (c === PLAN_CATEGORY_FIXED || c === PLAN_CATEGORY_EVENT || c === 'memo') return true;
   return false;
+}
+
+/**
+ * @param {object} st
+ * @param {string} ymd
+ * @returns {object[]}
+ */
+function plannerEventsForDay_(st, ymd) {
+  const day = String(ymd || '').trim();
+  return plannerMonthTodosForDay_(st, day).filter(function (r) {
+    return r && String(r.category || '').trim() === PLAN_CATEGORY_EVENT;
+  });
+}
+
+/**
+ * @param {object[]} events
+ * @returns {string}
+ */
+function plannerDayEventHoverTitle_(events) {
+  return events
+    .map(function (r) {
+      return String(r.title != null ? r.title : '').trim();
+    })
+    .filter(Boolean)
+    .join('\n');
+}
+
+/**
+ * @param {number|string} dayNum
+ * @returns {string}
+ */
+function plannerDayEventStarNumHtml_(dayNum) {
+  const n = esc(String(dayNum));
+  return (
+    '<span class="sp-plan-day__eventStar" aria-hidden="true">' +
+    '<svg class="sp-plan-day__eventStarSvg" viewBox="0 0 24 24" focusable="false" aria-hidden="true">' +
+    '<path fill="currentColor" d="M12 2.5l2.86 5.79 6.39.93-4.62 4.51 1.09 6.36L12 17.77l-5.72 3.01 1.09-6.36-4.62-4.51 6.39-.93L12 2.5z"/>' +
+    '</svg>' +
+    '<span class="sp-plan-day__num sp-plan-day__num--inStar">' +
+    n +
+    '</span></span>'
+  );
+}
+
+/**
+ * @param {object} st
+ * @param {string} dateYmd
+ * @returns {string}
+ */
+function plannerDayModalEventStripHtml_(st, dateYmd) {
+  const events = plannerEventsForDay_(st, dateYmd);
+  if (!events.length) return '';
+  const items = events
+    .map(function (r) {
+      const t = String(r.title != null ? r.title : '').trim();
+      if (!t) return '';
+      return '<li class="sp-plan-day__eventItem">' + esc(t) + '</li>';
+    })
+    .filter(Boolean)
+    .join('');
+  if (!items) return '';
+  return (
+    '<div class="sp-plan-day__eventStripInner" role="group" aria-label="이벤트">' +
+    '<div class="sp-plan-day__eventStripHead">' +
+    '<span class="sp-plan-day__eventStripIcon" aria-hidden="true">' +
+    '<svg viewBox="0 0 24 24" focusable="false"><path fill="currentColor" d="M12 2.5l2.86 5.79 6.39.93-4.62 4.51 1.09 6.36L12 17.77l-5.72 3.01 1.09-6.36-4.62-4.51 6.39-.93L12 2.5z"/></svg>' +
+    '</span>' +
+    '<span class="sp-plan-day__eventStripTitle">이벤트</span>' +
+    '</div>' +
+    '<ul class="sp-plan-day__eventList">' +
+    items +
+    '</ul></div>'
+  );
+}
+
+/**
+ * @param {HTMLElement} root
+ */
+function plannerRefreshDayModalEventStrip_(root) {
+  const el = root.querySelector('#sp-plan-day-event-strip');
+  if (!el) return;
+  const st = root.__spPlanState;
+  if (!st || !st.selectedDate) {
+    el.innerHTML = '';
+    el.setAttribute('hidden', 'hidden');
+    return;
+  }
+  const html = plannerDayModalEventStripHtml_(st, st.selectedDate);
+  if (!html) {
+    el.innerHTML = '';
+    el.setAttribute('hidden', 'hidden');
+    return;
+  }
+  el.innerHTML = html;
+  el.removeAttribute('hidden');
 }
 
 /**
@@ -3137,6 +3234,7 @@ function plannerCategoryLabelKo_(cat) {
     vocab: '어휘',
     misc: '기타',
     fixed: '고정일정',
+    event: '이벤트',
     routine: '루틴'
   };
   return m[c] != null ? m[c] : c;
@@ -3353,7 +3451,7 @@ function plannerTodoCanDrag_(row) {
   if (!row || typeof row !== 'object' || row._deleted) return false;
   if (plannerIsTraceGhostDisplay_(row)) return false;
   const cat = String(row.category != null ? row.category : '').trim();
-  if (cat === PLAN_CATEGORY_FIXED || cat === 'memo') return false;
+  if (cat === PLAN_CATEGORY_FIXED || cat === PLAN_CATEGORY_EVENT || cat === 'memo') return false;
   if (plannerIsRoutineExcludedFromStudyTotals_(row.task_id, cat)) return false;
   return true;
 }
@@ -3473,12 +3571,22 @@ function plannerUpdateCalendarCtxMenuLabels_(slot, pending) {
   const menu = slot.querySelector('#sp-plan-calendar-ctx-menu');
   if (!menu) return;
   const btnReg = menu.querySelector('[data-sp-ctx-action="register"]');
+  const btnEventReg = menu.querySelector('[data-sp-ctx-action="event-register"]');
+  const btnEventDel = menu.querySelector('[data-sp-ctx-action="event-delete"]');
   const btnTodo = menu.querySelector('[data-sp-ctx-action="delete"]');
   const btnTrace = menu.querySelector('[data-sp-ctx-action="delete-trace"]');
   const trace = Boolean(pending && pending.isTrace);
   const hasTasks = Boolean(pending && pending.taskIds && pending.taskIds.length);
+  const hasEvents = Boolean(pending && pending.hasEvents);
   if (btnReg instanceof HTMLElement) {
     btnReg.removeAttribute('hidden');
+  }
+  if (btnEventReg instanceof HTMLElement) {
+    btnEventReg.removeAttribute('hidden');
+  }
+  if (btnEventDel instanceof HTMLElement) {
+    if (hasEvents) btnEventDel.removeAttribute('hidden');
+    else btnEventDel.setAttribute('hidden', 'hidden');
   }
   if (btnTodo instanceof HTMLElement) {
     if (trace || !hasTasks) btnTodo.setAttribute('hidden', 'hidden');
@@ -3646,6 +3754,170 @@ function plannerCloseCalRegModal_(root) {
   modal.setAttribute('hidden', 'hidden');
   const st = root.__spPlanState;
   if (st) st.calRegDueYmd = '';
+}
+
+/**
+ * @param {HTMLElement} root
+ */
+function plannerEnsureEventRegModal_(root) {
+  let el = root.querySelector('#sp-plan-event-reg-modal');
+  if (el) return;
+  el = document.createElement('div');
+  el.id = 'sp-plan-event-reg-modal';
+  el.className = 'sp-plan-modal sp-plan-eventReg-modal';
+  el.setAttribute('hidden', 'hidden');
+  el.innerHTML =
+    '<div class="sp-plan-modal__backdrop" data-sp-plan-close="1" aria-hidden="true"></div>' +
+    '<div class="sp-plan-modal__panel" role="dialog" aria-modal="true" aria-labelledby="sp-plan-event-reg-title">' +
+    '<header class="sp-plan-modal__head">' +
+    '<h2 class="sp-plan-modal__title" id="sp-plan-event-reg-title">이벤트 등록</h2>' +
+    '<button type="button" class="btn btn--ghost sp-plan-modal__close" data-sp-plan-close="1">닫기</button>' +
+    '</header>' +
+    '<div class="sp-plan-modal__body sp-plan-eventReg__body">' +
+    '<p class="sp-plan-eventReg__hint">제목만 등록됩니다. 달력 날짜에 별로 표시됩니다.</p>' +
+    '<p class="sp-plan-eventReg__err" id="sp-plan-event-reg-err" hidden></p>' +
+    '<label class="sp-plan-eventReg__lbl">제목' +
+    '<input type="text" id="sp-plan-event-reg-title-input" class="sp-plan-eventReg__input" maxlength="200" placeholder="예: 모의고사" autocomplete="off"/>' +
+    '</label>' +
+    '<button type="button" class="btn btn--primary sp-plan-eventReg__add" id="sp-plan-event-reg-add">등록</button>' +
+    '</div></div>';
+  root.appendChild(el);
+  plannerWireEventRegModalOnce_(root);
+}
+
+/**
+ * @param {HTMLElement} root
+ * @param {string} ymd
+ */
+function plannerOpenEventRegModal_(root, ymd) {
+  const st = root.__spPlanState;
+  if (!st) return;
+  const modal = root.querySelector('#sp-plan-event-reg-modal');
+  if (!modal) return;
+  const day = String(ymd || '').trim();
+  if (!day) return;
+  st.eventRegDueYmd = day;
+  const titleEl = modal.querySelector('#sp-plan-event-reg-title');
+  if (titleEl) titleEl.textContent = day + ' · 이벤트 등록';
+  const input = modal.querySelector('#sp-plan-event-reg-title-input');
+  if (input instanceof HTMLInputElement) {
+    input.value = '';
+  }
+  const errEl = modal.querySelector('#sp-plan-event-reg-err');
+  if (errEl) {
+    errEl.textContent = '';
+    errEl.setAttribute('hidden', 'hidden');
+  }
+  modal.removeAttribute('hidden');
+  if (input instanceof HTMLInputElement) {
+    requestAnimationFrame(function () {
+      input.focus();
+    });
+  }
+}
+
+/**
+ * @param {HTMLElement} root
+ */
+function plannerCloseEventRegModal_(root) {
+  const modal = root.querySelector('#sp-plan-event-reg-modal');
+  if (!modal) return;
+  modal.setAttribute('hidden', 'hidden');
+  const st = root.__spPlanState;
+  if (st) st.eventRegDueYmd = '';
+}
+
+/**
+ * @param {object} st
+ * @param {string} ymd
+ * @param {string} title
+ * @returns {string}
+ */
+function plannerAppendEventTodo_(st, ymd, title) {
+  plannerEnsureMonthTodos_(st);
+  const day = String(ymd || '').trim();
+  const t = String(title != null ? title : '').trim();
+  if (!day) return '날짜를 확인해 주세요.';
+  if (!t) return '제목을 입력해 주세요.';
+  const today = plannerTodayYmdSeoul_();
+  const tid = 'evt_' + String(Date.now()) + '_' + Math.random().toString(36).slice(2, 8);
+  st.monthTodos.push({
+    task_id: tid,
+    title: t,
+    date: day,
+    category: PLAN_CATEGORY_EVENT,
+    lecture_id: '',
+    timeline_slots: '[]',
+    sort_key: 0,
+    mark: 'none',
+    trace_dates: '[]',
+    created_date: today,
+    updated_date: today
+  });
+  plannerRebuildQuickPostPayload_(st);
+  return '';
+}
+
+/**
+ * @param {HTMLElement} root
+ * @param {string} ymd
+ */
+async function plannerDeleteAllEventsForDay_(root, ymd) {
+  if (!root.__spPlanAdminMode) return;
+  const st = root.__spPlanState;
+  if (!st) return;
+  const day = String(ymd || '').trim();
+  const ids = plannerEventsForDay_(st, day)
+    .map(function (r) {
+      return String(r.task_id || '').trim();
+    })
+    .filter(Boolean);
+  if (!ids.length) return;
+  await plannerDeleteTodosFromCalendar_(root, day, ids);
+}
+
+/**
+ * @param {HTMLElement} root
+ */
+function plannerWireEventRegModalOnce_(root) {
+  const modal = root.querySelector('#sp-plan-event-reg-modal');
+  if (!modal || modal.__spPlanEventRegWired) return;
+  modal.__spPlanEventRegWired = true;
+  modal.addEventListener('click', function (e) {
+    const t = e.target instanceof HTMLElement ? e.target : null;
+    if (!t) return;
+    if (t.getAttribute && t.getAttribute('data-sp-plan-close') === '1') {
+      plannerCloseEventRegModal_(root);
+      return;
+    }
+    const addBtn =
+      t.id === 'sp-plan-event-reg-add' ? t : t.closest ? t.closest('#sp-plan-event-reg-add') : null;
+    if (!addBtn) return;
+    const st = root.__spPlanState;
+    if (!st || !st.eventRegDueYmd) return;
+    const due = String(st.eventRegDueYmd);
+    const input = modal.querySelector('#sp-plan-event-reg-title-input');
+    const title = input && 'value' in input ? String(/** @type {HTMLInputElement} */ (input).value) : '';
+    const errEl = modal.querySelector('#sp-plan-event-reg-err');
+    const msg = plannerAppendEventTodo_(st, due, title);
+    if (errEl) {
+      if (msg) {
+        errEl.textContent = msg;
+        errEl.removeAttribute('hidden');
+      } else {
+        errEl.textContent = '';
+        errEl.setAttribute('hidden', 'hidden');
+      }
+    }
+    if (msg) return;
+    plannerRefreshPostPreview_(root);
+    if (typeof root.__spPlanRerenderMonth === 'function') root.__spPlanRerenderMonth();
+    const dayModal = root.querySelector('#sp-plan-day-modal');
+    if (dayModal && st.selectedDate === due && !dayModal.hasAttribute('hidden')) {
+      if (typeof root.__spPlanRefreshOpenDayModal === 'function') root.__spPlanRefreshOpenDayModal();
+    }
+    plannerCloseEventRegModal_(root);
+  });
 }
 
 /**
@@ -3953,7 +4225,7 @@ function plannerBuildTimelineSlotMapForDayFromMonthTodos_(st, ymd) {
   rows.forEach(function (row) {
     if (!row || plannerIsTraceGhostDisplay_(row)) return;
     const cat = String(row.category != null ? row.category : '').trim();
-    if (cat === PLAN_CATEGORY_FIXED || cat === 'memo') return;
+    if (cat === PLAN_CATEGORY_FIXED || cat === PLAN_CATEGORY_EVENT || cat === 'memo') return;
     if (plannerIsRoutineExcludedFromStudyTotals_(row.task_id, cat)) return;
     const tid = String(row.task_id != null ? row.task_id : '').trim();
     if (!tid) return;
@@ -3992,7 +4264,7 @@ function plannerPersistTimelineSlotMapToMonthTodos_(st, ymd) {
     if (!row || String(row.date || '').trim() !== ymd) return;
     if (plannerIsTraceGhostDisplay_(row)) return;
     const cat = String(row.category != null ? row.category : '').trim();
-    if (cat === PLAN_CATEGORY_FIXED || cat === 'memo') return;
+    if (cat === PLAN_CATEGORY_FIXED || cat === PLAN_CATEGORY_EVENT || cat === 'memo') return;
     if (plannerIsRoutineExcludedFromStudyTotals_(row.task_id, cat)) return;
     const tid = String(row.task_id != null ? row.task_id : '').trim();
     const keys = byTask[tid] ? byTask[tid].slice().sort() : [];
@@ -4970,7 +5242,8 @@ function plannerOrderedDayTodos_(st, dateYmd) {
   const day = String(dateYmd || '').trim();
   const rows = plannerMonthTodosForDay_(st, day)
     .filter(function (r) {
-      return r && String(r.category || '').trim() !== 'memo';
+      const cat = r ? String(r.category || '').trim() : '';
+      return cat !== 'memo' && cat !== PLAN_CATEGORY_EVENT;
     })
     .slice();
   rows.sort(plannerCompareMonthTodoDisplay_);
@@ -5442,7 +5715,7 @@ function plannerTodoMarkEligible_(row) {
   if (!row || typeof row !== 'object') return false;
   if (plannerIsTraceGhostDisplay_(row)) return false;
   const cat = String(row.category != null ? row.category : '').trim();
-  if (cat === PLAN_CATEGORY_FIXED || cat === 'memo') return false;
+  if (cat === PLAN_CATEGORY_FIXED || cat === PLAN_CATEGORY_EVENT || cat === 'memo') return false;
   const tid = String(row.task_id != null ? row.task_id : '').trim();
   if (plannerIsRoutineExcludedFromStudyTotals_(tid, cat)) return false;
   return true;
@@ -5680,7 +5953,7 @@ function plannerQuickPlanCellSummaryHtml_(st, key) {
     if (!tid) return;
     if (plannerIsRoutineExcludedFromStudyTotals_(tid, t.category)) return;
     const cat = String(t.category != null ? t.category : 'misc').trim() || 'misc';
-    if (cat === PLAN_CATEGORY_FIXED || cat === 'memo') return;
+    if (cat === PLAN_CATEGORY_FIXED || cat === PLAN_CATEGORY_EVENT || cat === 'memo') return;
     const title = String(t.title != null ? t.title : '').trim();
     if (!title) return;
     if (!byCat[cat]) byCat[cat] = [];
@@ -7467,16 +7740,22 @@ function renderCalendar_(root, boot) {
         const badge = plannerCalendarUserTodoCountForBadge_(st, key);
         const asg = plannerAssignedMinutesForDay_(st, key) > 0 ? 1 : 0;
         const memoIcon = plannerDayMemoIconHtml_(st, key);
+        const dayEvents = plannerEventsForDay_(st, key);
+        const eventTip = dayEvents.length ? ' title="' + esc(plannerDayEventHoverTitle_(dayEvents)) + '"' : '';
+        const numInner = dayEvents.length
+          ? plannerDayEventStarNumHtml_(d.getDate())
+          : '<span class="sp-plan-day__num">' + d.getDate() + '</span>';
+        const hasEventCls = dayEvents.length ? ' has-event' : '';
         let dots = '';
         if (apiN) dots += '<span class="sp-plan-day__dot sp-plan-day__dot--api" title="일정"></span>';
         if (qn) dots += '<span class="sp-plan-day__dot sp-plan-day__dot--quick" title="빠른등록"></span>';
         if (mn) dots += '<span class="sp-plan-day__dot sp-plan-day__dot--manual" title="개별 등록"></span>';
         if (asg) dots += '<span class="sp-plan-day__dot sp-plan-day__dot--assign" title="시간표"></span>';
         html += `
-        <button type="button" class="sp-plan-day${wkCls}${inMonth ? '' : ' is-out'}${memoIcon ? ' has-memo' : ''}" data-ymd="${key}" ${inMonth ? '' : 'disabled'}>
+        <button type="button" class="sp-plan-day${wkCls}${inMonth ? '' : ' is-out'}${memoIcon ? ' has-memo' : ''}${hasEventCls}" data-ymd="${key}" ${inMonth ? '' : 'disabled'}>
           <div class="sp-plan-day__top">
-            <span class="sp-plan-day__dateHead">
-              <span class="sp-plan-day__num">${d.getDate()}</span>${memoIcon}
+            <span class="sp-plan-day__dateHead"${eventTip}>
+              ${numInner}${memoIcon}
             </span>
             ${badge ? `<span class="sp-plan-day__badge" aria-label="요약 ${badge}건">${badge}</span>` : ''}
           </div>
@@ -7491,6 +7770,16 @@ function renderCalendar_(root, boot) {
     plannerSyncCalendarChipDraggable_(root, grid);
     plannerRefreshPostPreview_(root);
     plannerRefreshMonthlyNotice_(root);
+  }
+
+  function plannerEnsureDayModalEventStrip_(modalEl) {
+    if (!modalEl || modalEl.querySelector('#sp-plan-day-event-strip')) return;
+    const footer = modalEl.querySelector('#sp-plan-day-study-footer');
+    if (!footer) return;
+    footer.insertAdjacentHTML(
+      'beforebegin',
+      '<div id="sp-plan-day-event-strip" class="sp-plan-day__eventStrip" hidden></div>'
+    );
   }
 
   function plannerEnsureDayModalSaveActions_(modalEl) {
@@ -7509,6 +7798,7 @@ function renderCalendar_(root, boot) {
   function ensureModal_() {
     const existingModal = root.querySelector('#sp-plan-day-modal');
     if (existingModal) {
+      plannerEnsureDayModalEventStrip_(existingModal);
       plannerEnsureDayModalSaveActions_(existingModal);
       return;
     }
@@ -7537,6 +7827,7 @@ function renderCalendar_(root, boot) {
                   <div class="sp-plan-day__timegrid sp-plan-day__timegrid--hourly" id="sp-plan-day-timegrid" role="group" aria-label="10분 단위 시간표"></div>
                 </div>
               </div>
+              <div id="sp-plan-day-event-strip" class="sp-plan-day__eventStrip" hidden></div>
               <div id="sp-plan-day-study-footer" class="sp-plan-day__studyFooter" aria-live="polite"></div>
               <div class="sp-plan-day__memo" aria-label="일일 메모">
                 <div class="sp-plan-day__memoHead">메모</div>
@@ -7612,6 +7903,7 @@ function renderCalendar_(root, boot) {
       if (
         brushRow &&
         (String(brushRow.category || '').trim() === PLAN_CATEGORY_FIXED ||
+          String(brushRow.category || '').trim() === PLAN_CATEGORY_EVENT ||
           String(brushRow.category || '').trim() === 'memo')
       ) {
         st.modalBrushTodoId = '';
@@ -7630,6 +7922,7 @@ function renderCalendar_(root, boot) {
       timegrid.innerHTML = plannerDayTimelineHtml_(st, st.selectedDate);
       plannerRovingTabindexSlotcells_(timegrid);
     }
+    plannerRefreshDayModalEventStrip_(root);
     plannerRefreshDayModalStudyFooter_(root);
     const memo = m.querySelector('#sp-plan-day-memo');
     if (memo instanceof HTMLTextAreaElement) {
@@ -7815,6 +8108,8 @@ function renderCalendar_(root, boot) {
     '<span class="sp-plan-month__loadingText">일정 불러오는 중…</span></div>' +
     '<nav id="sp-plan-calendar-ctx-menu" class="sp-plan-todoCtx sp-plan-calendarCtx" hidden role="menu" aria-label="달력 메뉴">' +
     '<button type="button" class="sp-plan-todoCtx__btn" data-sp-ctx-action="register" role="menuitem">일정 등록</button>' +
+    '<button type="button" class="sp-plan-todoCtx__btn" data-sp-ctx-action="event-register" role="menuitem">이벤트 등록</button>' +
+    '<button type="button" class="sp-plan-todoCtx__btn" data-sp-ctx-action="event-delete" role="menuitem" hidden>이벤트 삭제</button>' +
     '<button type="button" class="sp-plan-todoCtx__btn" data-sp-ctx-action="delete" role="menuitem" hidden>삭제</button>' +
     '<button type="button" class="sp-plan-todoCtx__btn" data-sp-ctx-action="delete-trace" role="menuitem" hidden>흔적 삭제</button>' +
     '</nav>' +
@@ -7828,6 +8123,7 @@ function renderCalendar_(root, boot) {
   );
 
   plannerEnsureCalRegModal_(root, fixedTimeOptsStart, fixedTimeOptsEnd);
+  plannerEnsureEventRegModal_(root);
   plannerQuickCurriculumRefreshCascade_(slot, st, 'all');
   plannerControlFitSyncWidthsIn_(slot);
   plannerQuickSyncDowCountInputs_(slot);
@@ -7843,6 +8139,21 @@ function renderCalendar_(root, boot) {
         e.stopPropagation();
         plannerOpenCalRegModal_(root, slot.__spPlanCtxMenu.ymd);
         plannerHideTodoContextMenu_(slot);
+        return;
+      }
+      const ctxEventReg = t.closest ? t.closest('[data-sp-ctx-action="event-register"]') : null;
+      if (ctxEventReg && slot.__spPlanCtxMenu && slot.__spPlanCtxMenu.ymd) {
+        e.preventDefault();
+        e.stopPropagation();
+        plannerOpenEventRegModal_(root, slot.__spPlanCtxMenu.ymd);
+        plannerHideTodoContextMenu_(slot);
+        return;
+      }
+      const ctxEventDel = t.closest ? t.closest('[data-sp-ctx-action="event-delete"]') : null;
+      if (ctxEventDel && slot.__spPlanCtxMenu && slot.__spPlanCtxMenu.hasEvents && slot.__spPlanCtxMenu.ymd) {
+        e.preventDefault();
+        e.stopPropagation();
+        void plannerDeleteAllEventsForDay_(root, slot.__spPlanCtxMenu.ymd);
         return;
       }
       const ctxDel = t.closest ? t.closest('[data-sp-ctx-action="delete"]') : null;
@@ -8158,11 +8469,13 @@ function renderCalendar_(root, boot) {
         traceYmd = hit.getAttribute('data-sp-trace-ymd') || ymdKey;
       }
       e.preventDefault();
+      const dayEvents = plannerEventsForDay_(st, ymdKey);
       slot.__spPlanCtxMenu = {
         ymd: ymdKey,
         taskIds: ids,
         isTrace: isTrace,
-        traceYmd: traceYmd
+        traceYmd: traceYmd,
+        hasEvents: dayEvents.length > 0
       };
       plannerUpdateCalendarCtxMenuLabels_(slot, slot.__spPlanCtxMenu);
       const menu = slot.querySelector('#sp-plan-calendar-ctx-menu');
