@@ -158,7 +158,7 @@ var DB_PLANNER_STUDENT_FILE_TITLE_PREFIX = '솔루션편입_플래너_학생_';
 var DB_PLANNER_ADMIN_UNLOCK_SECRET = 'admin_solpath';
 
 /**
- * 마스터 `planner_registry` 1행 헤더 (14열).
+ * 마스터 `planner_registry` 1행 헤더 (17열).
  * `imweb_uid`·`member_code` 등은 수기 행에서 빈 칸 허용. 전화·프로필 열은 텍스트(`@`) 권장.
  * 화면용 `phone_display`(010-1234-5678)는 시트에 두지 않음 — API/bootstrap 시 `phone_normalized` 포맷.
  * `planner_month_ranges_json`: 학생 파일 **월 탭**을 만들 구간 목록 — JSON 배열, 원소 `{ "start_month": "yyyy-MM", "end_month": "yyyy-MM" }`.
@@ -176,6 +176,9 @@ var DB_PLANNER_REGISTRY_HEADERS = [
   'goal_university',
   'goal_department',
   'study_status',
+  'plan_features',
+  'subject_guides_json',
+  'monthly_plan_notices_json',
   'first_solpass_order_id',
   'planner_month_ranges_json',
   'registry_updated_at'

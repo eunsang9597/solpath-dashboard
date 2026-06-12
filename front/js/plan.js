@@ -103,6 +103,26 @@ function plannerApplyAdminVisibility_(root) {
       manualReg.setAttribute('aria-hidden', 'true');
     }
   }
+  const coaching = root.querySelector('#sp-plan-coaching');
+  if (coaching) {
+    if (admin) {
+      coaching.removeAttribute('hidden');
+      coaching.removeAttribute('aria-hidden');
+    } else {
+      coaching.setAttribute('hidden', 'hidden');
+      coaching.setAttribute('aria-hidden', 'true');
+    }
+  }
+  const monthlyNotice = root.querySelector('#sp-plan-monthly-notice');
+  if (monthlyNotice) {
+    if (admin) {
+      monthlyNotice.removeAttribute('hidden');
+      monthlyNotice.removeAttribute('aria-hidden');
+    } else {
+      monthlyNotice.setAttribute('hidden', 'hidden');
+      monthlyNotice.setAttribute('aria-hidden', 'true');
+    }
+  }
 }
 
 /**
@@ -913,6 +933,19 @@ const PLANNER_STUDENT_PROFILE_KEYS_FOR_SAVE = [
   'study_status'
 ];
 
+/** 코칭·월별 안내 — registry JSON/텍스트 열 (관리자 전용 UI). */
+const PLANNER_COACHING_PROFILE_KEYS_FOR_SAVE = ['plan_features', 'subject_guides_json', 'monthly_plan_notices_json'];
+
+/** 전 학생 동일 — 학생 정보 탭 고정 안내 (DB 없음). */
+const PLANNER_STATIC_MAJOR_NOTICE_HTML =
+  '<div class="sp-plan-coaching__static">' +
+  '<p class="sp-plan-coaching__staticLead"><strong>🔶 주요 안내사항</strong></p>' +
+  '<ul class="sp-plan-coaching__staticList">' +
+  '<li>일일학습 인증·솔루틴 매일학습지·카카오 채널 발송 등 운영 안내는 담당 코칭을 통해 안내됩니다.</li>' +
+  '<li>학습 계획·과목별 상세·월별 안내는 아래 항목과 월간 플래너 상단에서 확인·관리합니다.</li>' +
+  '<li>문의는 카카오톡 채널·홈페이지 일일학습 코칭 게시판을 이용해 주세요.</li>' +
+  '</ul></div>';
+
 /**
  * @param {string} s
  * @returns {string}
@@ -933,12 +966,56 @@ function plannerStudentFieldIsEmpty_(v) {
  * @param {Record<string, unknown>|null|undefined} profile
  * @returns {Record<string, string>}
  */
+/**
+ * @param {unknown} raw
+ * @returns {Record<string, string>}
+ */
+function plannerParseProfileJsonObject_(raw) {
+  const s = String(raw != null ? raw : '').trim();
+  if (!s.length) return {};
+  try {
+    const o = JSON.parse(s);
+    if (!o || typeof o !== 'object' || Array.isArray(o)) return {};
+    /** @type {Record<string, string>} */
+    const out = {};
+    Object.keys(o).forEach(function (k) {
+      out[k] = o[k] != null ? String(o[k]) : '';
+    });
+    return out;
+  } catch (_e) {
+    return {};
+  }
+}
+
+/**
+ * @param {Record<string, string>} obj
+ * @returns {string}
+ */
+function plannerStringifyProfileJsonObject_(obj) {
+  const o = obj && typeof obj === 'object' ? obj : {};
+  /** @type {Record<string, string>} */
+  const clean = {};
+  Object.keys(o).forEach(function (k) {
+    const key = String(k != null ? k : '').trim();
+    if (!key.length) return;
+    clean[key] = String(o[k] != null ? o[k] : '');
+  });
+  return JSON.stringify(clean);
+}
+
 function plannerNormalizeStudentProfileFromApi_(profile) {
   const o = profile && typeof profile === 'object' ? /** @type {Record<string, unknown>} */ (profile) : {};
   /** @type {Record<string, string>} */
   const out = { phone_display: '' };
   PLANNER_STUDENT_PROFILE_KEYS_FOR_SAVE.forEach(function (k) {
     out[k] = o[k] != null ? String(o[k]).trim() : '';
+  });
+  PLANNER_COACHING_PROFILE_KEYS_FOR_SAVE.forEach(function (k) {
+    if (k === 'plan_features') {
+      out[k] = o[k] != null ? String(o[k]) : '';
+    } else {
+      out[k] = plannerStringifyProfileJsonObject_(plannerParseProfileJsonObject_(o[k]));
+    }
   });
   out.phone_display = o.phone_display != null ? String(o.phone_display).trim() : '';
   return out;
@@ -1025,7 +1102,239 @@ function plannerCollectStudentProfilePayloadForSave_(root) {
   } else {
     out.prev_major_gpa = initial.prev_major_gpa != null ? String(initial.prev_major_gpa) : '';
   }
+  const featEl = root.querySelector('#sp-plan-coaching-features');
+  out.plan_features =
+    featEl && 'value' in featEl
+      ? String(/** @type {HTMLTextAreaElement} */ (featEl).value)
+      : initial.plan_features != null
+        ? String(initial.plan_features)
+        : '';
+  /** @type {Record<string, string>} */
+  const subjects = {};
+  const subjBody = root.querySelector('#sp-plan-coaching-subjects-body');
+  if (subjBody) {
+    subjBody.querySelectorAll('[data-sp-plan-subject-row]').forEach(function (rowEl) {
+      if (!(rowEl instanceof HTMLElement)) return;
+      const subInp = rowEl.querySelector('[data-sp-plan-subject-key]');
+      const bodyInp = rowEl.querySelector('[data-sp-plan-subject-body]');
+      const sk =
+        subInp && 'value' in subInp ? String(/** @type {HTMLInputElement} */ (subInp).value).trim() : '';
+      if (!sk.length) return;
+      const bv =
+        bodyInp && 'value' in bodyInp ? String(/** @type {HTMLTextAreaElement} */ (bodyInp).value) : '';
+      subjects[sk] = bv;
+    });
+  } else {
+    Object.assign(subjects, plannerParseProfileJsonObject_(initial.subject_guides_json));
+  }
+  out.subject_guides_json = plannerStringifyProfileJsonObject_(subjects);
+  const monthlyInitial =
+    root.__spPlanMonthlyNoticesInitial && typeof root.__spPlanMonthlyNoticesInitial === 'object'
+      ? /** @type {Record<string, string>} */ ({ ...root.__spPlanMonthlyNoticesInitial })
+      : plannerParseProfileJsonObject_(initial.monthly_plan_notices_json);
+  const st = root.__spPlanState;
+  const vm =
+    st && st.viewMonth instanceof Date && !isNaN(st.viewMonth.getTime()) ? st.viewMonth : new Date();
+  const ymKey = plannerYearMonthFromDate_(vm);
+  const monEl = root.querySelector('#sp-plan-monthly-notice-body');
+  if (monEl && 'value' in monEl) {
+    monthlyInitial[ymKey] = String(/** @type {HTMLTextAreaElement} */ (monEl).value);
+  }
+  out.monthly_plan_notices_json = plannerStringifyProfileJsonObject_(monthlyInitial);
   return out;
+}
+
+/**
+ * @param {HTMLElement} root
+ * @param {Record<string, unknown>|null|undefined} profile
+ */
+function renderPlannerCoachingBlocks_(root, profile) {
+  const wrap = root.querySelector('#sp-plan-coaching');
+  if (!wrap) return;
+  const p = plannerNormalizeStudentProfileFromApi_(profile);
+  const staticEl = wrap.querySelector('#sp-plan-coaching-static');
+  if (staticEl) staticEl.innerHTML = PLANNER_STATIC_MAJOR_NOTICE_HTML;
+  const name = p.display_name && p.display_name.length ? p.display_name : '학생';
+  const featTitle = wrap.querySelector('#sp-plan-coaching-features-title');
+  if (featTitle) featTitle.textContent = name + '님 계획표 특징';
+  const featEl = wrap.querySelector('#sp-plan-coaching-features');
+  if (featEl && 'value' in featEl) {
+    /** @type {HTMLTextAreaElement} */ (featEl).value = p.plan_features || '';
+  }
+  root.__spPlanMonthlyNoticesInitial = plannerParseProfileJsonObject_(p.monthly_plan_notices_json);
+  const subjObj = plannerParseProfileJsonObject_(p.subject_guides_json);
+  const subjBody = wrap.querySelector('#sp-plan-coaching-subjects-body');
+  if (subjBody) {
+    const keys = Object.keys(subjObj);
+    let h = '';
+    if (!keys.length) {
+      h += plannerCoachingSubjectRowHtml_('', '');
+    } else {
+      keys.forEach(function (k) {
+        h += plannerCoachingSubjectRowHtml_(k, subjObj[k] || '');
+      });
+    }
+    subjBody.innerHTML = h;
+  }
+  plannerRefreshMonthlyNotice_(root);
+}
+
+/**
+ * @param {string} subject
+ * @param {string} body
+ * @returns {string}
+ */
+function plannerCoachingSubjectRowHtml_(subject, body) {
+  return (
+    '<tr data-sp-plan-subject-row>' +
+    '<td class="sp-plan-coaching__subjKey"><input type="text" class="sp-plan-coaching__input" data-sp-plan-subject-key value="' +
+    escAttr(subject) +
+    '" maxlength="200" placeholder="예: ✔️ [어휘]" autocomplete="off" spellcheck="true"/></td>' +
+    '<td class="sp-plan-coaching__subjBody"><textarea class="sp-plan-coaching__textarea" data-sp-plan-subject-body rows="4" maxlength="8000" spellcheck="true">' +
+    esc(body) +
+    '</textarea></td>' +
+    '<td class="sp-plan-coaching__subjAct"><button type="button" class="btn btn--ghost sp-plan-coaching__rowDel" data-sp-plan-subject-del title="행 삭제">삭제</button></td>' +
+    '</tr>'
+  );
+}
+
+/**
+ * 월별 안내 textarea → 메모리 드래프트 (`viewMonth` 기준).
+ * @param {HTMLElement} root
+ */
+function plannerFlushMonthlyNoticeDraft_(root) {
+  const st = root.__spPlanState;
+  if (!st || !(st.viewMonth instanceof Date) || isNaN(st.viewMonth.getTime())) return;
+  const ymKey = plannerYearMonthFromDate_(st.viewMonth);
+  const bodyEl = root.querySelector('#sp-plan-monthly-notice-body');
+  if (!bodyEl || !('value' in bodyEl)) return;
+  if (!root.__spPlanMonthlyNoticesInitial || typeof root.__spPlanMonthlyNoticesInitial !== 'object') {
+    root.__spPlanMonthlyNoticesInitial = {};
+  }
+  root.__spPlanMonthlyNoticesInitial[ymKey] = String(/** @type {HTMLTextAreaElement} */ (bodyEl).value);
+}
+
+/**
+ * 월간 플래너 상단 — `viewMonth`와 동기.
+ * @param {HTMLElement} root
+ */
+function plannerRefreshMonthlyNotice_(root) {
+  const block = root.querySelector('#sp-plan-monthly-notice');
+  if (!block) return;
+  const st = root.__spPlanState;
+  const vm =
+    st && st.viewMonth instanceof Date && !isNaN(st.viewMonth.getTime()) ? st.viewMonth : new Date();
+  const ymKey = plannerYearMonthFromDate_(vm);
+  const titleEl = block.querySelector('#sp-plan-monthly-notice-title');
+  if (titleEl) {
+    titleEl.textContent = String(vm.getMonth() + 1) + '월 학습계획표 주요 안내';
+  }
+  const monthly =
+    root.__spPlanMonthlyNoticesInitial && typeof root.__spPlanMonthlyNoticesInitial === 'object'
+      ? root.__spPlanMonthlyNoticesInitial
+      : {};
+  const bodyEl = block.querySelector('#sp-plan-monthly-notice-body');
+  if (bodyEl && 'value' in bodyEl) {
+    const cur = monthly[ymKey] != null ? String(monthly[ymKey]) : '';
+    /** @type {HTMLTextAreaElement} */ (bodyEl).value = cur;
+  }
+  const emptyEl = block.querySelector('#sp-plan-monthly-notice-empty');
+  if (emptyEl) {
+    const has = monthly[ymKey] != null && String(monthly[ymKey]).trim().length > 0;
+    if (plannerStudentProfileCanEdit_(root)) {
+      emptyEl.setAttribute('hidden', 'hidden');
+    } else if (!has) {
+      emptyEl.removeAttribute('hidden');
+    } else {
+      emptyEl.setAttribute('hidden', 'hidden');
+    }
+  }
+}
+
+/**
+ * @param {HTMLElement} root
+ */
+function wirePlannerMainTabsOnce_(root) {
+  if (root.__spPlanMainTabsWired) return;
+  root.__spPlanMainTabsWired = true;
+  const tabStudent = root.querySelector('#sp-plan-tab-btn-student');
+  const tabMonthly = root.querySelector('#sp-plan-tab-btn-monthly');
+  const panelStudent = root.querySelector('#sp-plan-tab-student');
+  const panelMonthly = root.querySelector('#sp-plan-tab-monthly');
+
+  /**
+   * @param {'student'|'monthly'} which
+   */
+  function showTab(which) {
+    root.__spPlanActiveTab = which;
+    if (tabStudent) {
+      const on = which === 'student';
+      tabStudent.classList.toggle('is-active', on);
+      tabStudent.setAttribute('aria-selected', on ? 'true' : 'false');
+    }
+    if (tabMonthly) {
+      const on = which === 'monthly';
+      tabMonthly.classList.toggle('is-active', on);
+      tabMonthly.setAttribute('aria-selected', on ? 'true' : 'false');
+    }
+    if (panelStudent) {
+      if (which === 'student') {
+        panelStudent.removeAttribute('hidden');
+        panelStudent.removeAttribute('aria-hidden');
+      } else {
+        panelStudent.setAttribute('hidden', 'hidden');
+        panelStudent.setAttribute('aria-hidden', 'true');
+      }
+    }
+    if (panelMonthly) {
+      if (which === 'monthly') {
+        panelMonthly.removeAttribute('hidden');
+        panelMonthly.removeAttribute('aria-hidden');
+      } else {
+        panelMonthly.setAttribute('hidden', 'hidden');
+        panelMonthly.setAttribute('aria-hidden', 'true');
+      }
+    }
+  }
+
+  root.__spPlanShowMainTab = showTab;
+  if (tabStudent) {
+    tabStudent.addEventListener('click', function () {
+      showTab('student');
+    });
+  }
+  if (tabMonthly) {
+    tabMonthly.addEventListener('click', function () {
+      showTab('monthly');
+    });
+  }
+  showTab(root.__spPlanActiveTab === 'monthly' ? 'monthly' : 'student');
+
+  root.addEventListener('click', function (e) {
+    const t = e.target instanceof HTMLElement ? e.target : null;
+    if (!t || !root.__spPlanAdminMode) return;
+    const addBtn = t.id === 'sp-plan-coaching-subject-add' ? t : t.closest ? t.closest('#sp-plan-coaching-subject-add') : null;
+    if (addBtn) {
+      e.preventDefault();
+      const tbody = root.querySelector('#sp-plan-coaching-subjects-body');
+      if (tbody) {
+        tbody.insertAdjacentHTML('beforeend', plannerCoachingSubjectRowHtml_('', ''));
+      }
+      return;
+    }
+    const delBtn = t.closest ? t.closest('[data-sp-plan-subject-del]') : null;
+    if (delBtn) {
+      e.preventDefault();
+      const row = delBtn.closest('[data-sp-plan-subject-row]');
+      const tbody = root.querySelector('#sp-plan-coaching-subjects-body');
+      if (row && tbody) {
+        row.remove();
+        if (!tbody.querySelector('[data-sp-plan-subject-row]')) {
+          tbody.insertAdjacentHTML('beforeend', plannerCoachingSubjectRowHtml_('', ''));
+        }
+      }
+    }
+  });
 }
 
 /**
@@ -1070,6 +1379,7 @@ async function plannerStudentProfileSaveClick_(root) {
   if (boot && boot.ok && boot.data) {
     const d = /** @type {{ student_profile?: Record<string, unknown> }} */ (boot.data);
     renderPlannerStudentProfile_(root, d.student_profile);
+    renderPlannerCoachingBlocks_(root, d.student_profile);
     if (msgEl) {
       msgEl.textContent = '저장했습니다.';
       window.setTimeout(function () {
@@ -1306,7 +1616,7 @@ function plannerExportDownloadFilename_(root, ext) {
  */
 function plannerBuildExportCaptureHost_(root) {
   const body = root.querySelector('.sp-plan-body');
-  const profile = root.querySelector('#sp-plan-student-info');
+  const panelStudent = root.querySelector('#sp-plan-tab-student');
   const monthLabel = root.querySelector('#sp-plan-monthly-label');
   const monthWrap = root.querySelector('#sp-plan-month-wrap');
   const host = document.createElement('div');
@@ -1317,8 +1627,15 @@ function plannerBuildExportCaptureHost_(root) {
     host.style.width = String(w) + 'px';
     host.style.maxWidth = String(w) + 'px';
   }
-  if (profile) {
-    host.appendChild(profile.cloneNode(true));
+  if (panelStudent) {
+    const studentClone = /** @type {HTMLElement} */ (panelStudent.cloneNode(true));
+    const coaching = studentClone.querySelector('#sp-plan-coaching');
+    if (coaching) coaching.remove();
+    const manual = studentClone.querySelector('#sp-plan-student-manual-reg');
+    if (manual) manual.remove();
+    const exportBar = studentClone.querySelector('#sp-plan-export-bar');
+    if (exportBar) exportBar.remove();
+    host.appendChild(studentClone);
   }
   if (monthLabel) {
     host.appendChild(monthLabel.cloneNode(true));
@@ -1879,6 +2196,9 @@ function renderPlannerStudentProfile_(root, profile) {
   PLANNER_STUDENT_PROFILE_KEYS_FOR_SAVE.forEach(function (k) {
     root.__spPlanStudentProfileInitial[k] = p[k];
   });
+  PLANNER_COACHING_PROFILE_KEYS_FOR_SAVE.forEach(function (k) {
+    root.__spPlanStudentProfileInitial[k] = p[k];
+  });
 
   function showVal(key) {
     const v = p[key];
@@ -1997,6 +2317,7 @@ function renderPlannerStudentProfile_(root, profile) {
     if (canEdit) saveRow.removeAttribute('hidden');
     else saveRow.setAttribute('hidden', 'hidden');
   }
+  renderPlannerCoachingBlocks_(root, profile);
 }
 
 /**
@@ -2377,6 +2698,11 @@ const PLAN_APP_SHELL_START = `<div class="app-shell app-shell--plan">
 const PLAN_APP_MAIN_AND_CLOSE = `<main class="app-main sp-plan-app-main app-shell app-shell--plan sp-plan-shell-body" id="sp-plan-app-main" hidden>
     <p class="sp-plan-banner" id="sp-plan-banner" hidden></p>
     <div class="panel panel--hero sp-plan-body">
+      <nav class="sp-plan-mainTabs" role="tablist" aria-label="플래너 구역">
+        <button type="button" class="sp-plan-mainTabs__btn is-active" id="sp-plan-tab-btn-student" role="tab" aria-selected="true" aria-controls="sp-plan-tab-student">학생 정보</button>
+        <button type="button" class="sp-plan-mainTabs__btn" id="sp-plan-tab-btn-monthly" role="tab" aria-selected="false" aria-controls="sp-plan-tab-monthly">월간 플래너</button>
+      </nav>
+      <div class="sp-plan-tabPanel" id="sp-plan-tab-student" role="tabpanel" aria-labelledby="sp-plan-tab-btn-student">
       <section class="sp-plan-student" id="sp-plan-student-info" aria-labelledby="sp-plan-student-info-title">
         <h2 class="sp-plan-student__title" id="sp-plan-student-info-title">학생 정보</h2>
         <div class="sp-plan-studentManualReg" id="sp-plan-student-manual-reg" hidden aria-hidden="true" aria-labelledby="sp-plan-student-manual-reg-title">
@@ -2406,17 +2732,45 @@ const PLAN_APP_MAIN_AND_CLOSE = `<main class="app-main sp-plan-app-main app-shel
             <tbody id="sp-plan-student-tbody"></tbody>
           </table>
           <div class="sp-plan-student__saveRow" id="sp-plan-student-save-row" hidden>
-            <button type="button" class="btn btn--primary" id="sp-plan-student-save">프로필 저장</button>
+            <button type="button" class="btn btn--primary" id="sp-plan-student-save">프로필·코칭 저장</button>
             <span class="sp-plan-student__saveMsg" id="sp-plan-student-save-msg" hidden></span>
           </div>
         </div>
+        <section class="sp-plan-coaching" id="sp-plan-coaching" hidden aria-hidden="true" aria-label="코칭 안내">
+          <div class="sp-plan-coaching__block" id="sp-plan-coaching-static"></div>
+          <div class="sp-plan-coaching__block">
+            <h3 class="sp-plan-coaching__h3" id="sp-plan-coaching-features-title">계획표 특징</h3>
+            <textarea class="sp-plan-coaching__textarea sp-plan-coaching__textarea--features" id="sp-plan-coaching-features" rows="10" maxlength="12000" spellcheck="true" placeholder="평일·주말 학습 특징, 커리큘럼 설계 의도 등"></textarea>
+          </div>
+          <div class="sp-plan-coaching__block">
+            <div class="sp-plan-coaching__blockHead">
+              <h3 class="sp-plan-coaching__h3">과목별 상세 안내</h3>
+              <button type="button" class="btn btn--ghost sp-plan-coaching__addRow" id="sp-plan-coaching-subject-add">과목 추가</button>
+            </div>
+            <div class="sp-plan-coaching__tableWrap">
+              <table class="sp-plan-coaching__tbl">
+                <thead><tr><th scope="col">과목</th><th scope="col">상세 내용</th><th scope="col" class="sp-plan-coaching__thAct"> </th></tr></thead>
+                <tbody id="sp-plan-coaching-subjects-body"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
       </section>
       <div class="sp-plan-exportBar" id="sp-plan-export-bar">
         <button type="button" class="btn btn--ghost sp-plan-exportBar__btn" id="sp-plan-pdf-export" title="학생 정보와 월간 달력만 캡처해 PDF로 저장합니다(여러 페이지)">PDF로 저장</button>
         <span class="sp-plan-exportBar__msg" id="sp-plan-pdf-export-msg" hidden aria-live="polite"></span>
       </div>
+      </div>
+      <div class="sp-plan-tabPanel" id="sp-plan-tab-monthly" role="tabpanel" aria-labelledby="sp-plan-tab-btn-monthly" hidden aria-hidden="true">
+      <section class="sp-plan-monthlyNotice" id="sp-plan-monthly-notice" hidden aria-hidden="true" aria-labelledby="sp-plan-monthly-notice-title">
+        <h2 class="sp-plan-monthlyNotice__title" id="sp-plan-monthly-notice-title">월 학습계획표 주요 안내</h2>
+        <p class="sp-plan-monthlyNotice__hint">달력과 같은 달 기준입니다. 내용을 입력한 뒤 「프로필·코칭 저장」을 눌러 주세요.</p>
+        <textarea class="sp-plan-monthlyNotice__body" id="sp-plan-monthly-notice-body" rows="12" maxlength="16000" spellcheck="true" placeholder="이 달 학습계획·수강기간·인증 방법 등"></textarea>
+        <p class="sp-plan-monthlyNotice__empty" id="sp-plan-monthly-notice-empty" hidden>이 달에 등록된 안내가 없습니다.</p>
+      </section>
       <div class="sp-plan-monthly-title" id="sp-plan-monthly-label">월간 학습 달력</div>
       <div class="sp-plan-calendar-slot" id="sp-plan-calendar-slot" role="region" aria-labelledby="sp-plan-monthly-label"></div>
+      </div>
     </div>
   </main>`;
 
@@ -7136,6 +7490,7 @@ function renderCalendar_(root, boot) {
     grid.innerHTML = html;
     plannerSyncCalendarChipDraggable_(root, grid);
     plannerRefreshPostPreview_(root);
+    plannerRefreshMonthlyNotice_(root);
   }
 
   function plannerEnsureDayModalSaveActions_(modalEl) {
@@ -7728,6 +8083,7 @@ function renderCalendar_(root, boot) {
       if (nav && nav.getAttribute) {
         const step = Number(nav.getAttribute('data-nav')) || 0;
         if (step) {
+          plannerFlushMonthlyNoticeDraft_(root);
           st.viewMonth = new Date(st.viewMonth.getFullYear(), st.viewMonth.getMonth() + step, 1);
           renderMonth_();
           void plannerRefetchBootstrapForViewMonth_(root);
@@ -8198,6 +8554,7 @@ function main() {
     el.__spPlanAdminMode = false;
   }
   wirePlannerAdminUnlockOnce_(el);
+  wirePlannerMainTabsOnce_(el);
   wirePlannerManualRegOnce_(el);
   wirePlannerStudentProfileSaveOnce_(el);
   wirePlannerPdfExportOnce_(el);

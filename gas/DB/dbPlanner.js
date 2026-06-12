@@ -560,6 +560,9 @@ function dbPlannerRebuildRegistryFromMaster_() {
       '',
       '',
       '',
+      '',
+      '',
+      '',
       String(firstSol[mc].item || ''),
       monthRangesJson,
       String(nowIso)
@@ -1739,7 +1742,145 @@ function dbPlannerStudentProfileFromRegistryCells_(row, rowD) {
     goal_university: cell(headers.indexOf('goal_university')),
     goal_department: cell(headers.indexOf('goal_department')),
     study_status: cell(headers.indexOf('study_status')),
+    plan_features: cell(headers.indexOf('plan_features')),
+    subject_guides_json: cell(headers.indexOf('subject_guides_json')),
+    monthly_plan_notices_json: cell(headers.indexOf('monthly_plan_notices_json')),
     phone_display: dbPlannerPhoneDisplayFromNormalized_(phNorm)
+  };
+}
+
+/**
+ * 수기 비회원용 `member_code` — `manual_yyyyMMdd_NNNNNN` (registry 전체와 중복 없음).
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} ss
+ * @return {string}
+ */
+function dbPlannerGenerateManualMemberCode_(ss) {
+  /** @type {Object<string, boolean>} */
+  var seen = {};
+  var rows = dbPlannerReadRegistryRows_(ss);
+  var ri;
+  for (ri = 0; ri < rows.length; ri++) {
+    var r0 = rows[ri];
+    if (!r0) {
+      continue;
+    }
+    if (r0.member_code) {
+      seen[String(r0.member_code)] = true;
+    }
+    if (r0.imweb_uid) {
+      seen[String(r0.imweb_uid)] = true;
+    }
+    if (r0.link_key) {
+      seen[String(r0.link_key)] = true;
+    }
+  }
+  var day = Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyyMMdd');
+  var attempt;
+  for (attempt = 0; attempt < 40; attempt++) {
+    var rnd = String(Math.floor(Math.random() * 1e6));
+    while (rnd.length < 6) {
+      rnd = '0' + rnd;
+    }
+    var code = 'manual_' + day + '_' + rnd;
+    if (!seen[code]) {
+      return code;
+    }
+  }
+  return 'manual_' + String(Date.now()) + '_' + String(Math.floor(Math.random() * 1e6));
+}
+
+/**
+ * 관리자 — `planner_registry_manual`에 학생 1명 추가 + 학생 파일 프로비저닝.
+ * @param {Object} body `{ display_name, phoneSegments }`
+ * @return {Object}
+ */
+function dbPlannerRegistryManualCreate_(body) {
+  body = body || {};
+  var displayName = String(
+    body.display_name != null ? body.display_name : body.name != null ? body.name : ''
+  ).trim();
+  var phone = dbPlannerPhoneFromSegments_(body.phoneSegments);
+  if (!displayName.length) {
+    return { ok: false, error: { code: 'BAD_REQUEST', message: '학생 이름을 입력해 주세요.' } };
+  }
+  if (!phone.length) {
+    return { ok: false, error: { code: 'BAD_REQUEST', message: '휴대전화를 11자리(010…)로 입력해 주세요.' } };
+  }
+  var ss = dbPlannerOpenMaster_();
+  if (!ss) {
+    return {
+      ok: false,
+      error: { code: 'PLANNER_NOT_CONFIGURED', message: '플래너 마스터가 연결되지 않았습니다.' }
+    };
+  }
+  dbPlannerFixRegistryPhoneColumnOnMaster_(ss);
+  var existing = dbPlannerReadRegistryRows_(ss);
+  var wantName = dbPlannerNameNorm_(displayName);
+  var dupPhone = 0;
+  var ei;
+  for (ei = 0; ei < existing.length; ei++) {
+    var ex = existing[ei];
+    if (!ex || ex.phone_normalized !== phone) {
+      continue;
+    }
+    dupPhone++;
+    if (dbPlannerNameNorm_(ex.display_name) === wantName) {
+      return {
+        ok: false,
+        error: { code: 'DUPLICATE_STUDENT', message: '같은 이름·전화로 이미 등록된 학생입니다.' }
+      };
+    }
+  }
+  var memberCode = dbPlannerGenerateManualMemberCode_(ss);
+  var nowIso = Utilities.formatDate(new Date(), 'Asia/Seoul', "yyyy-MM-dd'T'HH:mm:ss");
+  var sh = dbGetOrCreateSheetWithHeaders_(ss, DB_SHEET_PLANNER_REGISTRY_MANUAL, DB_PLANNER_REGISTRY_HEADERS);
+  var nCol = DB_PLANNER_REGISTRY_HEADERS.length;
+  var nextRow = sh.getLastRow() < 2 ? 2 : sh.getLastRow() + 1;
+  var row = [
+    memberCode,
+    '',
+    phone,
+    displayName,
+    '',
+    '',
+    '',
+    '',
+    '',
+    '',
+    '',
+    '',
+    '',
+    '',
+    '',
+    '',
+    nowIso
+  ];
+  sh.getRange(nextRow, 1, 1, nCol).setValues([row]);
+  sh.getRange(nextRow, 1, 1, nCol).setNumberFormat('@');
+  dbPlannerApplyRegistryPhoneColumnFormat_(sh);
+  dbPlannerFixRegistryPhoneColumn_(sh);
+  var prov = dbPlannerProvisionStudentsFromRegistry_(ss);
+  if (prov.provisionErrors > 0 && prov.provisioned === 0 && prov.reused === 0) {
+    return {
+      ok: false,
+      error: {
+        code: 'PLANNER_PROVISION_FAILED',
+        message: '레지스트리에는 추가했으나 학생 플래너 파일을 만들지 못했습니다. Drive 폴더·권한을 확인하세요.'
+      }
+    };
+  }
+  return {
+    ok: true,
+    data: {
+      member_code: memberCode,
+      link_key: memberCode,
+      display_name: displayName,
+      phone_normalized: phone,
+      phone_display: dbPlannerPhoneDisplayFromNormalized_(phone),
+      duplicate_phone_count: dupPhone,
+      provisioned: prov.provisioned,
+      reused_student_file: prov.reused
+    }
   };
 }
 
@@ -1795,7 +1936,10 @@ function dbPlannerRegistryProfileSave_(body) {
     'prev_major_gpa',
     'goal_university',
     'goal_department',
-    'study_status'
+    'study_status',
+    'plan_features',
+    'subject_guides_json',
+    'monthly_plan_notices_json'
   ];
   var ki;
   for (ki = 0; ki < keys.length; ki++) {
@@ -1805,9 +1949,33 @@ function dbPlannerRegistryProfileSave_(body) {
       continue;
     }
     var v = profIn[key] != null ? String(profIn[key]) : '';
+    if (key === 'subject_guides_json' || key === 'monthly_plan_notices_json') {
+      v = dbPlannerNormalizeRegistryJsonObjectCell_(v);
+    }
     sh.getRange(rowIx, col).setValue(v);
   }
   return { ok: true, data: {} };
+}
+
+/**
+ * registry JSON 열 — 객체 JSON 문자열만 허용(빈 값 → `{}`).
+ * @param {string} raw
+ * @return {string}
+ */
+function dbPlannerNormalizeRegistryJsonObjectCell_(raw) {
+  var s = String(raw != null ? raw : '').trim();
+  if (!s.length) {
+    return '{}';
+  }
+  try {
+    var o = JSON.parse(s);
+    if (!o || typeof o !== 'object' || Object.prototype.toString.call(o) === '[object Array]') {
+      return '{}';
+    }
+    return JSON.stringify(o);
+  } catch (e) {
+    return '{}';
+  }
 }
 
 /**

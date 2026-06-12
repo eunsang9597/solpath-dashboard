@@ -3163,6 +3163,182 @@ button.sp-stu-remark__item--open:hover {
   display: block;
 }
 
+#solpath-plan-root .sp-plan-mainTabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 0 0 0.85rem;
+  padding: 0.2rem;
+  border-radius: 10px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+
+#solpath-plan-root .sp-plan-mainTabs__btn {
+  flex: 1 1 8rem;
+  min-width: 0;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: #475569;
+  font-size: calc(0.82rem + var(--sp-text-bump));
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+#solpath-plan-root .sp-plan-mainTabs__btn.is-active {
+  background: #ffffff;
+  border-color: #c4b5fd;
+  color: #5b21b6;
+  box-shadow: 0 1px 4px rgba(91, 33, 182, 0.08);
+}
+
+#solpath-plan-root .sp-plan-tabPanel[hidden] {
+  display: none !important;
+}
+
+#solpath-plan-root .sp-plan-coaching[hidden],
+#solpath-plan-root:not(.is-plan-admin) #sp-plan-coaching {
+  display: none !important;
+}
+
+#solpath-plan-root .sp-plan-coaching {
+  margin-top: 1rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid #e9d5ff;
+}
+
+#solpath-plan-root .sp-plan-coaching__block {
+  margin-bottom: 1rem;
+}
+
+#solpath-plan-root .sp-plan-coaching__blockHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.45rem;
+}
+
+#solpath-plan-root .sp-plan-coaching__h3 {
+  margin: 0 0 0.35rem;
+  font-size: calc(0.88rem + var(--sp-text-bump));
+  font-weight: 750;
+  color: #6b21a8;
+}
+
+#solpath-plan-root .sp-plan-coaching__staticLead {
+  margin: 0 0 0.35rem;
+  font-size: calc(0.82rem + var(--sp-text-bump));
+  color: #4a148c;
+}
+
+#solpath-plan-root .sp-plan-coaching__staticList {
+  margin: 0;
+  padding-left: 1.1rem;
+  font-size: calc(0.75rem + var(--sp-text-bump));
+  color: #334155;
+  line-height: 1.5;
+}
+
+#solpath-plan-root .sp-plan-coaching__textarea,
+#solpath-plan-root .sp-plan-coaching__input {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 0.45rem 0.5rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: calc(0.8rem + var(--sp-text-bump));
+  font-family: inherit;
+  line-height: 1.45;
+}
+
+#solpath-plan-root .sp-plan-coaching__textarea--features {
+  min-height: 8rem;
+  resize: vertical;
+}
+
+#solpath-plan-root .sp-plan-coaching__tableWrap {
+  overflow-x: auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+#solpath-plan-root .sp-plan-coaching__tbl {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: calc(0.76rem + var(--sp-text-bump));
+}
+
+#solpath-plan-root .sp-plan-coaching__tbl th,
+#solpath-plan-root .sp-plan-coaching__tbl td {
+  padding: 0.45rem 0.5rem;
+  border-bottom: 1px solid #f1f5f9;
+  vertical-align: top;
+  text-align: left;
+}
+
+#solpath-plan-root .sp-plan-coaching__tbl th {
+  background: #faf5ff;
+  color: #5b21b6;
+  font-weight: 700;
+}
+
+#solpath-plan-root .sp-plan-coaching__subjKey {
+  width: 28%;
+  min-width: 7rem;
+}
+
+#solpath-plan-root .sp-plan-coaching__thAct,
+#solpath-plan-root .sp-plan-coaching__subjAct {
+  width: 4.5rem;
+  white-space: nowrap;
+}
+
+#solpath-plan-root .sp-plan-monthlyNotice[hidden],
+#solpath-plan-root:not(.is-plan-admin) #sp-plan-monthly-notice {
+  display: none !important;
+}
+
+#solpath-plan-root .sp-plan-monthlyNotice {
+  margin: 0 0 1rem;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid #e9d5ff;
+  border-radius: 10px;
+  background: #faf5ff;
+}
+
+#solpath-plan-root .sp-plan-monthlyNotice__title {
+  margin: 0 0 0.35rem;
+  font-size: calc(0.95rem + var(--sp-text-bump));
+  font-weight: 750;
+  color: #6b21a8;
+}
+
+#solpath-plan-root .sp-plan-monthlyNotice__hint {
+  margin: 0 0 0.5rem;
+  font-size: calc(0.68rem + var(--sp-text-bump));
+  color: #64748b;
+}
+
+#solpath-plan-root .sp-plan-monthlyNotice__body {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 9rem;
+  padding: 0.5rem 0.55rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: calc(0.8rem + var(--sp-text-bump));
+  font-family: inherit;
+  line-height: 1.45;
+  resize: vertical;
+  background: #ffffff;
+}
+
 #solpath-plan-root .sp-plan-student__code {
   font-size: 0.92em;
   padding: 0.05rem 0.28rem;
