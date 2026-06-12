@@ -93,6 +93,16 @@ function plannerApplyAdminVisibility_(root) {
       saveRow.setAttribute('hidden', 'hidden');
     }
   }
+  const manualReg = root.querySelector('#sp-plan-student-manual-reg');
+  if (manualReg) {
+    if (admin) {
+      manualReg.removeAttribute('hidden');
+      manualReg.removeAttribute('aria-hidden');
+    } else {
+      manualReg.setAttribute('hidden', 'hidden');
+      manualReg.setAttribute('aria-hidden', 'true');
+    }
+  }
 }
 
 /**
@@ -826,7 +836,19 @@ async function plannerGasCall_(payload) {
     return { ok: false, error: { code: 'NO_GAS_URL', message: 'gasBaseUrl이 없습니다.' } };
   }
   const action = String(payload.action != null ? payload.action : '');
-  if (action === 'plannerRegistryRebuild' || action === 'plannerDevFullReset' || action === 'initPlannerMasterSheets') {
+  if (
+    action === 'plannerRegistryRebuild' ||
+    action === 'plannerDevFullReset' ||
+    action === 'initPlannerMasterSheets' ||
+    action === 'plannerRegistryManualCreate'
+  ) {
+    if (action === 'plannerRegistryManualCreate') {
+      return plannerGasPostAction_(url, {
+        action: action,
+        display_name: String(payload.display_name != null ? payload.display_name : ''),
+        phoneSegments: plannerPhoneSegmentsFromPayload_(payload)
+      });
+    }
     return plannerGasPostAction_(url, { action: action });
   }
   if (action === 'plannerMatch' || action === 'plannerBootstrap') {
@@ -1069,6 +1091,104 @@ function wirePlannerStudentProfileSaveOnce_(root) {
     if (!btn) return;
     e.preventDefault();
     void plannerStudentProfileSaveClick_(root);
+  });
+}
+
+/**
+ * @param {HTMLElement} root
+ * @param {string[]} rawSegs
+ * @returns {string[]}
+ */
+function plannerReadPhoneSegments_(rawSegs) {
+  return (rawSegs || []).map(function (s) {
+    return String(s != null ? s : '').replace(/\D/g, '');
+  });
+}
+
+/**
+ * @param {HTMLElement} root
+ */
+async function plannerManualRegSubmitClick_(root) {
+  if (!root.__spPlanAdminMode) return;
+  const nameEl = /** @type {HTMLInputElement | null} */ (root.querySelector('#sp-manual-reg-name'));
+  const p0 = /** @type {HTMLInputElement | null} */ (root.querySelector('#sp-manual-reg-p0'));
+  const p1 = /** @type {HTMLInputElement | null} */ (root.querySelector('#sp-manual-reg-p1'));
+  const p2 = /** @type {HTMLInputElement | null} */ (root.querySelector('#sp-manual-reg-p2'));
+  const msgEl = root.querySelector('#sp-manual-reg-msg');
+  const btn = root.querySelector('#sp-manual-reg-submit');
+  const displayName = nameEl ? String(nameEl.value || '').trim() : '';
+  const segs = plannerReadPhoneSegments_([p0 && p0.value, p1 && p1.value, p2 && p2.value]);
+  if (!displayName.length) {
+    if (msgEl) {
+      msgEl.textContent = '학생 이름을 입력해 주세요.';
+      msgEl.removeAttribute('hidden');
+    }
+    if (nameEl) nameEl.focus();
+    return;
+  }
+  if (segs[0].length !== 3 || segs[1].length !== 4 || segs[2].length !== 4) {
+    if (msgEl) {
+      msgEl.textContent = '휴대전화를 11자리(앞 3 · 가운데 4 · 끝 4) 숫자로 입력해 주세요.';
+      msgEl.removeAttribute('hidden');
+    }
+    if (p0 && segs[0].length < 3) p0.focus();
+    else if (p1 && segs[1].length < 4) p1.focus();
+    else if (p2) p2.focus();
+    return;
+  }
+  if (btn instanceof HTMLButtonElement) {
+    btn.disabled = true;
+  }
+  if (msgEl) {
+    msgEl.textContent = '등록 중…';
+    msgEl.removeAttribute('hidden');
+  }
+  try {
+    const res = await plannerGasCall_({
+      action: 'plannerRegistryManualCreate',
+      display_name: displayName,
+      phoneSegments: segs
+    });
+    if (!res || !res.ok) {
+      const m =
+        res && res.error && res.error.message != null ? String(res.error.message) : '학생 수기 등록에 실패했습니다.';
+      if (msgEl) msgEl.textContent = m;
+      return;
+    }
+    const d = /** @type {{ member_code?: string, duplicate_phone_count?: number }} */ (res.data || {});
+    const mc = d.member_code != null ? String(d.member_code) : '';
+    let okMsg = '등록했습니다.';
+    if (mc.length) okMsg += ' (코드: ' + mc + ')';
+    if (Number(d.duplicate_phone_count) > 0) {
+      okMsg += ' 같은 번호가 이미 ' + String(d.duplicate_phone_count) + '명 있어, 게이트에서 이름 확인이 필요할 수 있습니다.';
+    }
+    if (msgEl) msgEl.textContent = okMsg;
+    if (nameEl) nameEl.value = '';
+    if (p0) p0.value = '';
+    if (p1) p1.value = '';
+    if (p2) p2.value = '';
+  } finally {
+    if (btn instanceof HTMLButtonElement) {
+      btn.disabled = false;
+    }
+  }
+}
+
+function wirePlannerManualRegOnce_(root) {
+  if (root.__spPlanManualRegWired) return;
+  root.__spPlanManualRegWired = true;
+  plannerWirePhoneSegInputs_(
+    /** @type {HTMLInputElement} */ (root.querySelector('#sp-manual-reg-p0')),
+    /** @type {HTMLInputElement} */ (root.querySelector('#sp-manual-reg-p1')),
+    /** @type {HTMLInputElement} */ (root.querySelector('#sp-manual-reg-p2'))
+  );
+  root.addEventListener('click', function (e) {
+    const t = e.target instanceof HTMLElement ? e.target : null;
+    if (!t) return;
+    const btn = t.id === 'sp-manual-reg-submit' ? t : t.closest ? t.closest('#sp-manual-reg-submit') : null;
+    if (!btn) return;
+    e.preventDefault();
+    void plannerManualRegSubmitClick_(root);
   });
 }
 
@@ -2259,6 +2379,27 @@ const PLAN_APP_MAIN_AND_CLOSE = `<main class="app-main sp-plan-app-main app-shel
     <div class="panel panel--hero sp-plan-body">
       <section class="sp-plan-student" id="sp-plan-student-info" aria-labelledby="sp-plan-student-info-title">
         <h2 class="sp-plan-student__title" id="sp-plan-student-info-title">학생 정보</h2>
+        <div class="sp-plan-studentManualReg" id="sp-plan-student-manual-reg" hidden aria-hidden="true" aria-labelledby="sp-plan-student-manual-reg-title">
+          <h3 class="sp-plan-studentManualReg__title" id="sp-plan-student-manual-reg-title">학생 수기 등록</h3>
+          <p class="sp-plan-studentManualReg__hint">이름·휴대전화만 입력하면 수기 등록 목록에 추가되고 학생 플래너 파일이 만들어집니다. 멤버 코드는 서버에서 자동 발급됩니다.</p>
+          <div class="sp-plan-studentManualReg__form">
+            <label class="sp-plan-studentManualReg__lbl">이름
+              <input type="text" id="sp-manual-reg-name" class="sp-plan-studentManualReg__input sp-plan-studentManualReg__input--name" maxlength="80" autocomplete="off" spellcheck="true" placeholder="홍길동"/>
+            </label>
+            <div class="sp-plan-studentManualReg__telWrap">
+              <span class="sp-plan-studentManualReg__lbl" id="sp-manual-reg-phone-legend">휴대전화</span>
+              <div class="sp-plan-studentManualReg__tel" role="group" aria-labelledby="sp-manual-reg-phone-legend">
+                <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="3" class="sp-plan-studentManualReg__seg sp-plan-studentManualReg__seg--3" id="sp-manual-reg-p0" aria-label="휴대전화 앞자리 세 자리" autocomplete="off"/>
+                <span class="sp-plan-studentManualReg__dash" aria-hidden="true">-</span>
+                <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="4" class="sp-plan-studentManualReg__seg sp-plan-studentManualReg__seg--4" id="sp-manual-reg-p1" aria-label="휴대전화 중간 네 자리" autocomplete="off"/>
+                <span class="sp-plan-studentManualReg__dash" aria-hidden="true">-</span>
+                <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="4" class="sp-plan-studentManualReg__seg sp-plan-studentManualReg__seg--4" id="sp-manual-reg-p2" aria-label="휴대전화 끝 네 자리" autocomplete="off"/>
+              </div>
+            </div>
+            <button type="button" class="btn btn--primary sp-plan-studentManualReg__btn" id="sp-manual-reg-submit">수기 등록</button>
+          </div>
+          <p class="sp-plan-studentManualReg__msg" id="sp-manual-reg-msg" hidden aria-live="polite"></p>
+        </div>
         <p class="sp-plan-student__hint">비어 있는 항목만 입력할 수 있습니다. 저장한 내용은 이 화면에서 다시 수정할 수 없습니다.</p>
         <div class="sp-plan-student__wrap">
           <table class="sp-plan-student__tbl">
@@ -2371,13 +2512,12 @@ function readPhoneSegments_(segs) {
 }
 
 /**
- * 휴대전화 세 칸: input·붙여넣기에서 숫자만 유지, 3·4·4. 긴 번호 붙여넣기 시 한 번에 나눔.
- * @param {HTMLElement} root
+ * 휴대전화 세 칸: input·붙여넣기에서 숫자만 유지, 3·4·4.
+ * @param {HTMLInputElement|null} p0
+ * @param {HTMLInputElement|null} p1
+ * @param {HTMLInputElement|null} p2
  */
-function wirePlanPhoneDigitsOnly_(root) {
-  const p0 = /** @type {HTMLInputElement | null} */ (root.querySelector('#sp-plan-p0'));
-  const p1 = /** @type {HTMLInputElement | null} */ (root.querySelector('#sp-plan-p1'));
-  const p2 = /** @type {HTMLInputElement | null} */ (root.querySelector('#sp-plan-p2'));
+function plannerWirePhoneSegInputs_(p0, p1, p2) {
   if (!p0 || !p1 || !p2) return;
 
   const MAXL = [3, 4, 4];
@@ -2483,6 +2623,18 @@ function wirePlanPhoneDigitsOnly_(root) {
       }
     });
   });
+}
+
+/**
+ * 게이트 휴대전화 세 칸.
+ * @param {HTMLElement} root
+ */
+function wirePlanPhoneDigitsOnly_(root) {
+  plannerWirePhoneSegInputs_(
+    /** @type {HTMLInputElement | null} */ (root.querySelector('#sp-plan-p0')),
+    /** @type {HTMLInputElement | null} */ (root.querySelector('#sp-plan-p1')),
+    /** @type {HTMLInputElement | null} */ (root.querySelector('#sp-plan-p2'))
+  );
 }
 
 /** 일일 타임라인 행 순서(6…23, 0…5) · `시_칸` 키 · 프론트만 */
@@ -8046,6 +8198,7 @@ function main() {
     el.__spPlanAdminMode = false;
   }
   wirePlannerAdminUnlockOnce_(el);
+  wirePlannerManualRegOnce_(el);
   wirePlannerStudentProfileSaveOnce_(el);
   wirePlannerPdfExportOnce_(el);
   wirePlannerPersonalTodosApplyOnce_(el);
