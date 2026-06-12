@@ -2678,8 +2678,7 @@ const PLAN_DEV_HTML = `<div class="sp-plan-devbar" id="sp-plan-devbar" role="reg
   <span class="sp-plan-devbar__label">제작용</span>
   <button type="button" class="btn btn--ghost sp-plan-devbar__btn" id="sp-plan-dev-skip-gate" title="전화·이름 확인 없이 메인 화면만 표시합니다. (추적·GAS 호출 없음)">원페이지만(게이트 생략)</button>
   <button type="button" class="btn btn--ghost sp-plan-devbar__btn" id="sp-plan-dev-init" title="Drive에 플래너 마스터 스프레드시트가 없으면 새로 만들고, 필요한 시트·헤더를 맞춥니다.">마스터 준비(파일·탭)</button>
-  <button type="button" class="btn btn--ghost sp-plan-devbar__btn" id="sp-plan-dev-sync">동기화(레지스트리+학생파일)</button>
-  <button type="button" class="btn btn--ghost sp-plan-devbar__btn" id="sp-plan-dev-reset">DB 초기화(학생파일 포함)</button>
+  <button type="button" class="btn btn--ghost sp-plan-devbar__btn" id="sp-plan-dev-sync" title="주문 원천 DB에서 레지스트리를 다시 쓰고, 학생 파일·월 탭을 맞춥니다. 학생 todo 데이터는 지우지 않습니다.">동기화(레지스트리+학생파일)</button>
   <span class="sp-plan-devbar__msg" id="sp-plan-dev-msg" aria-live="polite"></span>
 </div>`;
 
@@ -2705,27 +2704,6 @@ const PLAN_APP_MAIN_AND_CLOSE = `<main class="app-main sp-plan-app-main app-shel
       <div class="sp-plan-tabPanel" id="sp-plan-tab-student" role="tabpanel" aria-labelledby="sp-plan-tab-btn-student">
       <section class="sp-plan-student" id="sp-plan-student-info" aria-labelledby="sp-plan-student-info-title">
         <h2 class="sp-plan-student__title" id="sp-plan-student-info-title">학생 정보</h2>
-        <div class="sp-plan-studentManualReg" id="sp-plan-student-manual-reg" hidden aria-hidden="true" aria-labelledby="sp-plan-student-manual-reg-title">
-          <h3 class="sp-plan-studentManualReg__title" id="sp-plan-student-manual-reg-title">학생 수기 등록</h3>
-          <p class="sp-plan-studentManualReg__hint">이름·휴대전화만 입력하면 수기 등록 목록에 추가되고 학생 플래너 파일이 만들어집니다. 멤버 코드는 서버에서 자동 발급됩니다.</p>
-          <div class="sp-plan-studentManualReg__form">
-            <label class="sp-plan-studentManualReg__lbl">이름
-              <input type="text" id="sp-manual-reg-name" class="sp-plan-studentManualReg__input sp-plan-studentManualReg__input--name" maxlength="80" autocomplete="off" spellcheck="true" placeholder="홍길동"/>
-            </label>
-            <div class="sp-plan-studentManualReg__telWrap">
-              <span class="sp-plan-studentManualReg__lbl" id="sp-manual-reg-phone-legend">휴대전화</span>
-              <div class="sp-plan-studentManualReg__tel" role="group" aria-labelledby="sp-manual-reg-phone-legend">
-                <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="3" class="sp-plan-studentManualReg__seg sp-plan-studentManualReg__seg--3" id="sp-manual-reg-p0" aria-label="휴대전화 앞자리 세 자리" autocomplete="off"/>
-                <span class="sp-plan-studentManualReg__dash" aria-hidden="true">-</span>
-                <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="4" class="sp-plan-studentManualReg__seg sp-plan-studentManualReg__seg--4" id="sp-manual-reg-p1" aria-label="휴대전화 중간 네 자리" autocomplete="off"/>
-                <span class="sp-plan-studentManualReg__dash" aria-hidden="true">-</span>
-                <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="4" class="sp-plan-studentManualReg__seg sp-plan-studentManualReg__seg--4" id="sp-manual-reg-p2" aria-label="휴대전화 끝 네 자리" autocomplete="off"/>
-              </div>
-            </div>
-            <button type="button" class="btn btn--primary sp-plan-studentManualReg__btn" id="sp-manual-reg-submit">수기 등록</button>
-          </div>
-          <p class="sp-plan-studentManualReg__msg" id="sp-manual-reg-msg" hidden aria-live="polite"></p>
-        </div>
         <p class="sp-plan-student__hint">비어 있는 항목만 입력할 수 있습니다. 저장한 내용은 이 화면에서 다시 수정할 수 없습니다.</p>
         <div class="sp-plan-student__wrap">
           <table class="sp-plan-student__tbl">
@@ -2796,7 +2774,30 @@ const PLAN_ADMIN_MODAL_HTML = `<div class="sp-plan-modal sp-plan-modal--admin" i
       </div>
     </div>`;
 
+const PLAN_STUDENT_MANUAL_REG_HTML = `<div class="sp-plan-studentManualReg" id="sp-plan-student-manual-reg" hidden aria-hidden="true" aria-labelledby="sp-plan-student-manual-reg-title">
+  <h3 class="sp-plan-studentManualReg__title" id="sp-plan-student-manual-reg-title">학생 수기 등록</h3>
+  <p class="sp-plan-studentManualReg__hint">이름·휴대전화만 입력하면 수기 등록 목록에 추가되고 학생 플래너 파일이 만들어집니다. 멤버 코드는 서버에서 자동 발급됩니다.</p>
+  <div class="sp-plan-studentManualReg__form">
+    <label class="sp-plan-studentManualReg__lbl">이름
+      <input type="text" id="sp-manual-reg-name" class="sp-plan-studentManualReg__input sp-plan-studentManualReg__input--name" maxlength="80" autocomplete="off" spellcheck="true" placeholder="홍길동"/>
+    </label>
+    <div class="sp-plan-studentManualReg__telWrap">
+      <span class="sp-plan-studentManualReg__lbl" id="sp-manual-reg-phone-legend">휴대전화</span>
+      <div class="sp-plan-studentManualReg__tel" role="group" aria-labelledby="sp-manual-reg-phone-legend">
+        <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="3" class="sp-plan-studentManualReg__seg sp-plan-studentManualReg__seg--3" id="sp-manual-reg-p0" aria-label="휴대전화 앞자리 세 자리" autocomplete="off"/>
+        <span class="sp-plan-studentManualReg__dash" aria-hidden="true">-</span>
+        <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="4" class="sp-plan-studentManualReg__seg sp-plan-studentManualReg__seg--4" id="sp-manual-reg-p1" aria-label="휴대전화 중간 네 자리" autocomplete="off"/>
+        <span class="sp-plan-studentManualReg__dash" aria-hidden="true">-</span>
+        <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="4" class="sp-plan-studentManualReg__seg sp-plan-studentManualReg__seg--4" id="sp-manual-reg-p2" aria-label="휴대전화 끝 네 자리" autocomplete="off"/>
+      </div>
+    </div>
+    <button type="button" class="btn btn--primary sp-plan-studentManualReg__btn" id="sp-manual-reg-submit">수기 등록</button>
+  </div>
+  <p class="sp-plan-studentManualReg__msg" id="sp-manual-reg-msg" hidden aria-live="polite"></p>
+</div>`;
+
 const GATE_HTML = `<div class="sp-plan-gate">
+  ${PLAN_STUDENT_MANUAL_REG_HTML}
   <p class="sp-plan-gate__lead">솔패스 수강 확인을 위해 휴대전화 번호를 입력해 주세요.</p>
   <p class="sp-plan-gate__privacy">입력하신 정보는 본인 확인과 플래너 이용에만 사용됩니다.</p>
   <div class="sp-plan-gate__pair" role="group" aria-label="이름 및 휴대전화">
@@ -8774,9 +8775,8 @@ function wirePlanDevBar_(root) {
   const msg = root.querySelector('#sp-plan-dev-msg');
   const skipBtn = root.querySelector('#sp-plan-dev-skip-gate');
   const initBtn = root.querySelector('#sp-plan-dev-init');
-  const resetBtn = root.querySelector('#sp-plan-dev-reset');
   const syncBtn = root.querySelector('#sp-plan-dev-sync');
-  if (!skipBtn || !initBtn || !resetBtn || !syncBtn) return;
+  if (!skipBtn || !initBtn || !syncBtn) return;
 
   function showDevMsg(text) {
     if (msg) msg.textContent = text || '';
@@ -8814,25 +8814,6 @@ function wirePlanDevBar_(root) {
       line = '마스터 준비가 완료되었습니다.';
     }
     showDevMsg(line + (url ? ' ' + url : ''));
-  });
-
-  resetBtn.addEventListener('click', async function () {
-    showDevMsg('');
-    if (
-      !confirm(
-        '플래너 마스터에서 레지스트리·방문 기록·학생 링크(2행~)을 비우고, 연결된 학생용 스프레드시트를 모두 휴지통으로 보냅니다. 계속할까요?'
-      )
-    ) {
-      return;
-    }
-    const r = await plannerGasCall_({ action: 'plannerDevFullReset' });
-    if (!r || !r.ok) {
-      const m = r && r.error && r.error.message != null ? String(r.error.message) : '초기화에 실패했습니다.';
-      showDevMsg(m);
-      return;
-    }
-    const d = /** @type {{ trashedStudentFiles?: number }} */ (r.data || {});
-    showDevMsg('완료: 학생 파일 휴지통 ' + (d.trashedStudentFiles != null ? d.trashedStudentFiles : 0) + '개.');
   });
 
   syncBtn.addEventListener('click', async function () {
