@@ -3103,14 +3103,10 @@ function plannerEnsureCalRegModal_(root, fixedTimeOptsStart, fixedTimeOptsEnd) {
     plannerCalRegModalBodyHtml_(fixedTimeOptsStart, fixedTimeOptsEnd) +
     '</div></div>';
   root.appendChild(el);
-  const fss = el.querySelector('#sp-calreg-fixed-start');
-  const fse = el.querySelector('#sp-calreg-fixed-end');
-  if (fss instanceof HTMLSelectElement) fss.selectedIndex = 0;
-  if (fse instanceof HTMLSelectElement) {
-    const o6 = fse.querySelector('option[value="6"]');
-    if (o6 instanceof HTMLOptionElement) fse.value = '6';
-    else if (fse.options.length) fse.selectedIndex = Math.min(2, fse.options.length - 1);
-  }
+  plannerSetFixedTimelineSelectDefaults_(
+    el.querySelector('#sp-calreg-fixed-start'),
+    el.querySelector('#sp-calreg-fixed-end')
+  );
   plannerWireCalRegModalOnce_(root);
 }
 
@@ -5665,6 +5661,94 @@ function plannerFixedTimelineSelectOptionsHtml_(includeEndBoundary) {
 }
 
 /**
+ * 타임라인 시·10분 칸 → 고정 일정 select `value`(order index).
+ * @param {number} hour 0~23
+ * @param {number} [sub] 0~5
+ * @returns {number}
+ */
+function plannerFixedTimelineOrderIndexForHour_(hour, sub) {
+  const hi = PLAN_TIMELINE_HOURS_ORDERED.indexOf(Number(hour));
+  if (hi < 0) return -1;
+  const s = Number(sub);
+  return hi * PLAN_TIMELINE_CELLS_PER_HOUR + (isFinite(s) ? s : 0);
+}
+
+/** 고정 일정 시간 기본값 — 새벽 03:00~04:00 (학생 시간표에 거의 안 보이는 구간). */
+function plannerDefaultFixedTimelineOrderRange_() {
+  const startIx = plannerFixedTimelineOrderIndexForHour_(3, 0);
+  const endIx = plannerFixedTimelineOrderIndexForHour_(4, 0);
+  return {
+    startIx: startIx >= 0 ? startIx : 0,
+    endIx: endIx >= 0 ? endIx : 6
+  };
+}
+
+/**
+ * @param {HTMLSelectElement|null} startEl
+ * @param {HTMLSelectElement|null} endEl
+ */
+function plannerSetFixedTimelineSelectDefaults_(startEl, endEl) {
+  const r = plannerDefaultFixedTimelineOrderRange_();
+  if (startEl instanceof HTMLSelectElement) {
+    startEl.value = String(r.startIx);
+  }
+  if (endEl instanceof HTMLSelectElement) {
+    endEl.value = String(r.endIx);
+  }
+}
+
+/**
+ * 보는 달 안 시작·종료일 → 일(day) 구간. 빈 문자열이면 1일·말일.
+ * @param {Date} viewMonth
+ * @param {string} startDateOpt `YYYY-MM-DD`
+ * @param {string} endDateOpt `YYYY-MM-DD`
+ * @returns {{ startDay: number, endDay: number, error?: string }}
+ */
+function plannerParseMonthDayRange_(viewMonth, startDateOpt, endDateOpt) {
+  const y = viewMonth.getFullYear();
+  const m0 = viewMonth.getMonth();
+  const last = new Date(y, m0 + 1, 0).getDate();
+  let startDay = 1;
+  let endDay = last;
+
+  /**
+   * @param {string} raw
+   * @returns {{ day: number, error?: string }}
+   */
+  function dayInViewMonth_(raw) {
+    const s = String(raw != null ? raw : '').trim();
+    if (!s.length) return { day: -1 };
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return { day: -1, error: '날짜 형식이 올바르지 않습니다.' };
+    const parts = s.split('-').map(function (p) {
+      return Number(p);
+    });
+    const sd = new Date(parts[0], parts[1] - 1, parts[2]);
+    if (isNaN(sd.getTime())) return { day: -1, error: '날짜가 올바르지 않습니다.' };
+    if (sd.getFullYear() !== y || sd.getMonth() !== m0) {
+      return { day: -1, error: '시작일·종료일은 현재 보고 있는 달 안에서만 선택할 수 있습니다.' };
+    }
+    return { day: sd.getDate() };
+  }
+
+  const startStr = String(startDateOpt != null ? startDateOpt : '').trim();
+  const endStr = String(endDateOpt != null ? endDateOpt : '').trim();
+  if (startStr.length) {
+    const p0 = dayInViewMonth_(startStr);
+    if (p0.error) return { startDay: 1, endDay: last, error: p0.error };
+    if (p0.day > 0) startDay = p0.day;
+  }
+  if (endStr.length) {
+    const p1 = dayInViewMonth_(endStr);
+    if (p1.error) return { startDay: 1, endDay: last, error: p1.error };
+    if (p1.day > 0) endDay = p1.day;
+  }
+  if (startDay > endDay) {
+    return { startDay: startDay, endDay: endDay, error: '시작일은 종료일보다 늦을 수 없습니다.' };
+  }
+  return { startDay: startDay, endDay: endDay };
+}
+
+/**
  * @param {object} st
  * @param {string} ymd
  * @param {string} slotKey
@@ -5812,9 +5896,11 @@ function plannerMarkMonthTodoDeleted_(st, ymd, taskId) {
  * @param {string} title
  * @param {number} startIx
  * @param {number} endIx
+ * @param {string} [startDateOpt] `YYYY-MM-DD` · 빈 값이면 그 달 1일
+ * @param {string} [endDateOpt] `YYYY-MM-DD` · 빈 값이면 그 달 말일
  * @returns {string} 빈 문자열=성공, 아니면 에러 문구
  */
-function plannerApplyFixedScheduleForMonth_(st, viewMonth, weekdays, title, startIx, endIx) {
+function plannerApplyFixedScheduleForMonth_(st, viewMonth, weekdays, title, startIx, endIx, startDateOpt, endDateOpt) {
   const name = String(title != null ? title : '').trim();
   if (!name.length) return '일정 이름을 입력해 주세요.';
   if (!weekdays.length) return '요일을 한 개 이상 선택해 주세요.';
@@ -5829,9 +5915,22 @@ function plannerApplyFixedScheduleForMonth_(st, viewMonth, weekdays, title, star
   }
   if (s0 < 0 || s0 >= maxIx) return '시간 범위가 올바르지 않습니다.';
   if (s1 <= 0 || s1 > maxIx) return '시간 범위가 올바르지 않습니다.';
+  const range = plannerParseMonthDayRange_(viewMonth, startDateOpt, endDateOpt);
+  if (range.error) return range.error;
+  const startDay = range.startDay;
+  const endDay = range.endDay;
   const y = viewMonth.getFullYear();
   const m0 = viewMonth.getMonth();
-  const last = new Date(y, m0 + 1, 0).getDate();
+  let hasDay = false;
+  let dCheck;
+  for (dCheck = startDay; dCheck <= endDay; dCheck++) {
+    const ddChk = new Date(y, m0, dCheck);
+    if (weekdays.indexOf(ddChk.getDay()) >= 0) {
+      hasDay = true;
+      break;
+    }
+  }
+  if (!hasDay) return '선택한 기간·요일에 해당하는 날짜가 없습니다.';
   const ruleId = 'fxr_' + String(Date.now()) + '_' + String(Math.floor(Math.random() * 1e6));
   plannerEnsureMonthTodos_(st);
   if (!st.dayFixedBlockSlotsByDate) st.dayFixedBlockSlotsByDate = {};
@@ -5844,7 +5943,7 @@ function plannerApplyFixedScheduleForMonth_(st, viewMonth, weekdays, title, star
   const timeline_slots = JSON.stringify(slotKeysForRows);
   let d;
   let skdx;
-  for (d = 1; d <= last; d++) {
+  for (d = startDay; d <= endDay; d++) {
     const dd = new Date(y, m0, d);
     if (weekdays.indexOf(dd.getDay()) < 0) continue;
     const ymd = plannerYmdFromParts_(y, m0, d);
@@ -7067,6 +7166,14 @@ function renderCalendar_(root, boot) {
     vmMan instanceof Date && !isNaN(Number(vmMan.getTime()))
       ? plannerYmdFromParts_(vmMan.getFullYear(), vmMan.getMonth(), 1)
       : plannerYmdFromParts_(new Date().getFullYear(), new Date().getMonth(), 1);
+  const defFixedEnd =
+    vmMan instanceof Date && !isNaN(Number(vmMan.getTime()))
+      ? plannerYmdFromParts_(
+          vmMan.getFullYear(),
+          vmMan.getMonth(),
+          new Date(vmMan.getFullYear(), vmMan.getMonth() + 1, 0).getDate()
+        )
+      : defManDue;
 
   const fixedTimeOptsStart = plannerFixedTimelineSelectOptionsHtml_(false);
   const fixedTimeOptsEnd = plannerFixedTimelineSelectOptionsHtml_(true);
@@ -7126,9 +7233,17 @@ function renderCalendar_(root, boot) {
     '<span class="sp-plan-todoReg__panelBadge sp-plan-todoReg__panelBadge--fixed" aria-hidden="true">고정</span>' +
     '<div class="sp-plan-todoReg__panelHeadText">' +
     '<h3 class="sp-plan-todoReg__panelTitle">고정 일정</h3>' +
-    '<p class="sp-plan-todoReg__panelSub">매주 같은 요일·시간에 반복되는 일정입니다. 해당 시간은 시간표에서 사용할 수 없습니다.</p>' +
+    '<p class="sp-plan-todoReg__panelSub">선택한 기간·요일·시간에 반복됩니다. 해당 시간은 시간표에서 사용할 수 없습니다.</p>' +
     '</div></div>' +
     '<p class="sp-plan-quick__err" id="sp-plan-fixed-err" hidden></p>' +
+    '<div class="sp-plan-manual__grid sp-plan-manual__grid--fixedDates">' +
+    '<label class="sp-plan-manual__lbl">시작일<input type="date" id="sp-fixed-start-date" class="sp-plan-manual__input" value="' +
+    esc(defManDue) +
+    '"/></label>' +
+    '<label class="sp-plan-manual__lbl">종료일<input type="date" id="sp-fixed-end-date" class="sp-plan-manual__input" value="' +
+    esc(defFixedEnd) +
+    '"/></label>' +
+    '</div>' +
     '<div class="sp-plan-quick__row sp-plan-quick__row--horiz">' +
     '<span class="sp-plan-quick__lbl">요일</span>' +
     '<div class="sp-plan-quick__chks" role="group" aria-label="고정 일정 요일">' +
@@ -7200,14 +7315,10 @@ function renderCalendar_(root, boot) {
 
   renderMonth_();
 
-  const fss0 = slot.querySelector('#sp-fixed-start');
-  const fse0 = slot.querySelector('#sp-fixed-end');
-  if (fss0 instanceof HTMLSelectElement) fss0.selectedIndex = 0;
-  if (fse0 instanceof HTMLSelectElement) {
-    const o6 = fse0.querySelector('option[value="6"]');
-    if (o6 instanceof HTMLOptionElement) fse0.value = '6';
-    else if (fse0.options.length) fse0.selectedIndex = Math.min(2, fse0.options.length - 1);
-  }
+  plannerSetFixedTimelineSelectDefaults_(
+    slot.querySelector('#sp-fixed-start'),
+    slot.querySelector('#sp-fixed-end')
+  );
 
   plannerEnsureCalRegModal_(root, fixedTimeOptsStart, fixedTimeOptsEnd);
   plannerQuickCurriculumRefreshCascade_(slot, st, 'all');
@@ -7353,6 +7464,8 @@ function renderCalendar_(root, boot) {
         const titleEl = slot.querySelector('#sp-fixed-title');
         const startEl = slot.querySelector('#sp-fixed-start');
         const endEl = slot.querySelector('#sp-fixed-end');
+        const fixedStartDateEl = slot.querySelector('#sp-fixed-start-date');
+        const fixedEndDateEl = slot.querySelector('#sp-fixed-end-date');
         const title =
           titleEl && 'value' in titleEl ? String(/** @type {HTMLInputElement} */ (titleEl).value).trim() : '';
         const weekdays = [];
@@ -7363,7 +7476,24 @@ function renderCalendar_(root, boot) {
         }
         const sIx = startEl && 'value' in startEl ? String(/** @type {HTMLSelectElement} */ (startEl).value) : '';
         const eIx = endEl && 'value' in endEl ? String(/** @type {HTMLSelectElement} */ (endEl).value) : '';
-        const msg = plannerApplyFixedScheduleForMonth_(st, st.viewMonth, weekdays, title, Number(sIx), Number(eIx));
+        const fixedStartDate =
+          fixedStartDateEl && 'value' in fixedStartDateEl
+            ? String(/** @type {HTMLInputElement} */ (fixedStartDateEl).value).trim()
+            : '';
+        const fixedEndDate =
+          fixedEndDateEl && 'value' in fixedEndDateEl
+            ? String(/** @type {HTMLInputElement} */ (fixedEndDateEl).value).trim()
+            : '';
+        const msg = plannerApplyFixedScheduleForMonth_(
+          st,
+          st.viewMonth,
+          weekdays,
+          title,
+          Number(sIx),
+          Number(eIx),
+          fixedStartDate,
+          fixedEndDate
+        );
         if (errF) {
           if (msg) {
             errF.textContent = msg;
