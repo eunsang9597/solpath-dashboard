@@ -7725,7 +7725,9 @@ function renderCalendar_(root, boot) {
         const asg = plannerAssignedMinutesForDay_(st, key) > 0 ? 1 : 0;
         const memoIcon = plannerDayMemoIconHtml_(st, key);
         const dayEvents = plannerEventsForDay_(st, key);
-        const eventTip = dayEvents.length ? ' title="' + esc(plannerDayEventHoverTitle_(dayEvents)) + '"' : '';
+        const eventTitleAttr = dayEvents.length
+          ? ' title="' + esc(plannerDayEventHoverTitle_(dayEvents)) + '"'
+          : '';
         const hasEventCls = dayEvents.length ? ' has-event' : '';
         let dots = '';
         if (apiN) dots += '<span class="sp-plan-day__dot sp-plan-day__dot--api" title="일정"></span>';
@@ -7733,9 +7735,9 @@ function renderCalendar_(root, boot) {
         if (mn) dots += '<span class="sp-plan-day__dot sp-plan-day__dot--manual" title="개별 등록"></span>';
         if (asg) dots += '<span class="sp-plan-day__dot sp-plan-day__dot--assign" title="시간표"></span>';
         html += `
-        <button type="button" class="sp-plan-day${wkCls}${inMonth ? '' : ' is-out'}${memoIcon ? ' has-memo' : ''}${hasEventCls}" data-ymd="${key}" ${inMonth ? '' : 'disabled'}>
+        <button type="button" class="sp-plan-day${wkCls}${inMonth ? '' : ' is-out'}${memoIcon ? ' has-memo' : ''}${hasEventCls}" data-ymd="${key}"${eventTitleAttr} ${inMonth ? '' : 'disabled'}>
           <div class="sp-plan-day__top">
-            <span class="sp-plan-day__dateHead"${eventTip}>
+            <span class="sp-plan-day__dateHead">
               <span class="sp-plan-day__num">${d.getDate()}</span>${memoIcon}
             </span>
             ${badge ? `<span class="sp-plan-day__badge" aria-label="요약 ${badge}건">${badge}</span>` : ''}
