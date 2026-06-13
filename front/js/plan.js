@@ -3064,23 +3064,6 @@ function plannerDayEventHoverTitle_(events) {
 }
 
 /**
- * @param {number|string} dayNum
- * @returns {string}
- */
-function plannerDayEventStarNumHtml_(dayNum) {
-  const n = esc(String(dayNum));
-  return (
-    '<span class="sp-plan-day__eventStar" aria-hidden="true">' +
-    '<svg class="sp-plan-day__eventStarSvg" viewBox="0 0 24 24" focusable="false" aria-hidden="true">' +
-    '<path fill="currentColor" d="M12 2.5l2.86 5.79 6.39.93-4.62 4.51 1.09 6.36L12 17.77l-5.72 3.01 1.09-6.36-4.62-4.51 6.39-.93L12 2.5z"/>' +
-    '</svg>' +
-    '<span class="sp-plan-day__num sp-plan-day__num--inStar">' +
-    n +
-    '</span></span>'
-  );
-}
-
-/**
  * @param {object} st
  * @param {string} dateYmd
  * @returns {string}
@@ -7743,9 +7726,6 @@ function renderCalendar_(root, boot) {
         const memoIcon = plannerDayMemoIconHtml_(st, key);
         const dayEvents = plannerEventsForDay_(st, key);
         const eventTip = dayEvents.length ? ' title="' + esc(plannerDayEventHoverTitle_(dayEvents)) + '"' : '';
-        const numInner = dayEvents.length
-          ? plannerDayEventStarNumHtml_(d.getDate())
-          : '<span class="sp-plan-day__num">' + d.getDate() + '</span>';
         const hasEventCls = dayEvents.length ? ' has-event' : '';
         let dots = '';
         if (apiN) dots += '<span class="sp-plan-day__dot sp-plan-day__dot--api" title="일정"></span>';
@@ -7756,7 +7736,7 @@ function renderCalendar_(root, boot) {
         <button type="button" class="sp-plan-day${wkCls}${inMonth ? '' : ' is-out'}${memoIcon ? ' has-memo' : ''}${hasEventCls}" data-ymd="${key}" ${inMonth ? '' : 'disabled'}>
           <div class="sp-plan-day__top">
             <span class="sp-plan-day__dateHead"${eventTip}>
-              ${numInner}${memoIcon}
+              <span class="sp-plan-day__num">${d.getDate()}</span>${memoIcon}
             </span>
             ${badge ? `<span class="sp-plan-day__badge" aria-label="요약 ${badge}건">${badge}</span>` : ''}
           </div>
