@@ -103,9 +103,10 @@ function plannerApplyAdminVisibility_(root) {
       manualReg.setAttribute('aria-hidden', 'true');
     }
   }
+  const showMemberCoaching = plannerStudentProfileIsMemberView_(root);
   const coaching = root.querySelector('#sp-plan-coaching');
   if (coaching) {
-    if (admin) {
+    if (showMemberCoaching) {
       coaching.removeAttribute('hidden');
       coaching.removeAttribute('aria-hidden');
     } else {
@@ -115,7 +116,7 @@ function plannerApplyAdminVisibility_(root) {
   }
   const monthlyNotice = root.querySelector('#sp-plan-monthly-notice');
   if (monthlyNotice) {
-    if (admin) {
+    if (showMemberCoaching) {
       monthlyNotice.removeAttribute('hidden');
       monthlyNotice.removeAttribute('aria-hidden');
     } else {
@@ -123,6 +124,7 @@ function plannerApplyAdminVisibility_(root) {
       monthlyNotice.setAttribute('aria-hidden', 'true');
     }
   }
+  plannerSyncCoachingReadOnlyState_(root);
 }
 
 /**
@@ -1145,12 +1147,46 @@ function plannerCollectStudentProfilePayloadForSave_(root) {
 }
 
 /**
+ * 코칭·월별 안내 — 회원은 조회, 관리자 모드에서만 입력·저장 UI.
+ * @param {HTMLElement} root
+ */
+function plannerSyncCoachingReadOnlyState_(root) {
+  const canEdit = plannerStudentProfileCanEdit_(root);
+  const coaching = root.querySelector('#sp-plan-coaching');
+  if (coaching) {
+    coaching.classList.toggle('is-coaching-readonly', !canEdit);
+  }
+  const monthly = root.querySelector('#sp-plan-monthly-notice');
+  if (monthly) {
+    monthly.classList.toggle('is-readonly', !canEdit);
+  }
+  const featEl = root.querySelector('#sp-plan-coaching-features');
+  if (featEl instanceof HTMLTextAreaElement) {
+    featEl.readOnly = !canEdit;
+    if (canEdit) featEl.removeAttribute('aria-readonly');
+    else featEl.setAttribute('aria-readonly', 'true');
+  }
+  const monEl = root.querySelector('#sp-plan-monthly-notice-body');
+  if (monEl instanceof HTMLTextAreaElement) {
+    monEl.readOnly = !canEdit;
+    if (canEdit) monEl.removeAttribute('aria-readonly');
+    else monEl.setAttribute('aria-readonly', 'true');
+  }
+  const monHint = root.querySelector('.sp-plan-monthlyNotice__hint');
+  if (monHint) {
+    if (canEdit) monHint.removeAttribute('hidden');
+    else monHint.setAttribute('hidden', 'hidden');
+  }
+}
+
+/**
  * @param {HTMLElement} root
  * @param {Record<string, unknown>|null|undefined} profile
  */
 function renderPlannerCoachingBlocks_(root, profile) {
   const wrap = root.querySelector('#sp-plan-coaching');
   if (!wrap) return;
+  const canEdit = plannerStudentProfileCanEdit_(root);
   const p = plannerNormalizeStudentProfileFromApi_(profile);
   const staticEl = wrap.querySelector('#sp-plan-coaching-static');
   if (staticEl) staticEl.innerHTML = PLANNER_STATIC_MAJOR_NOTICE_HTML;
@@ -1167,16 +1203,46 @@ function renderPlannerCoachingBlocks_(root, profile) {
   if (subjBody) {
     const keys = Object.keys(subjObj);
     let h = '';
-    if (!keys.length) {
-      h += plannerCoachingSubjectRowHtml_('', '');
+    if (canEdit) {
+      if (!keys.length) {
+        h += plannerCoachingSubjectRowHtml_('', '');
+      } else {
+        keys.forEach(function (k) {
+          h += plannerCoachingSubjectRowHtml_(k, subjObj[k] || '');
+        });
+      }
+    } else if (!keys.length) {
+      h =
+        '<tr><td colspan="2" class="sp-plan-coaching__subjEmpty" role="cell">등록된 과목별 안내가 없습니다.</td></tr>';
     } else {
       keys.forEach(function (k) {
-        h += plannerCoachingSubjectRowHtml_(k, subjObj[k] || '');
+        h += plannerCoachingSubjectRowReadHtml_(k, subjObj[k] || '');
       });
     }
     subjBody.innerHTML = h;
   }
   plannerRefreshMonthlyNotice_(root);
+  plannerSyncCoachingReadOnlyState_(root);
+}
+
+/**
+ * @param {string} subject
+ * @param {string} body
+ * @returns {string}
+ */
+function plannerCoachingSubjectRowReadHtml_(subject, body) {
+  const sk = String(subject != null ? subject : '').trim();
+  const bv = String(body != null ? body : '').trim();
+  if (!sk.length && !bv.length) return '';
+  return (
+    '<tr data-sp-plan-subject-row>' +
+    '<th scope="row" class="sp-plan-coaching__subjKeyRead">' +
+    esc(sk.length ? sk : '—') +
+    '</th>' +
+    '<td class="sp-plan-coaching__subjBodyRead">' +
+    esc(bv.length ? bv : '—') +
+    '</td></tr>'
+  );
 }
 
 /**
@@ -1249,6 +1315,7 @@ function plannerRefreshMonthlyNotice_(root) {
       emptyEl.setAttribute('hidden', 'hidden');
     }
   }
+  plannerSyncCoachingReadOnlyState_(root);
 }
 
 /**

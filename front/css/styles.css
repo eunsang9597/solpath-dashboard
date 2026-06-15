@@ -3212,7 +3212,7 @@ button.sp-stu-remark__item--open:hover {
 }
 
 #solpath-plan-root .sp-plan-coaching[hidden],
-#solpath-plan-root:not(.is-plan-admin) #sp-plan-coaching {
+#solpath-plan-root .sp-plan-monthlyNotice[hidden] {
   display: none !important;
 }
 
@@ -3311,8 +3311,43 @@ button.sp-stu-remark__item--open:hover {
   white-space: nowrap;
 }
 
-#solpath-plan-root .sp-plan-monthlyNotice[hidden],
-#solpath-plan-root:not(.is-plan-admin) #sp-plan-monthly-notice {
+#solpath-plan-root .sp-plan-coaching.is-coaching-readonly .sp-plan-coaching__addRow,
+#solpath-plan-root .sp-plan-coaching.is-coaching-readonly .sp-plan-coaching__thAct,
+#solpath-plan-root .sp-plan-coaching.is-coaching-readonly .sp-plan-coaching__subjAct {
+  display: none !important;
+}
+
+#solpath-plan-root .sp-plan-coaching.is-coaching-readonly .sp-plan-coaching__textarea {
+  background: #f8fafc;
+  border-color: #e2e8f0;
+  cursor: default;
+  resize: none;
+}
+
+#solpath-plan-root .sp-plan-coaching__subjKeyRead {
+  width: 28%;
+  min-width: 5.5rem;
+  font-weight: 750;
+  color: #5b21b6;
+  vertical-align: top;
+}
+
+#solpath-plan-root .sp-plan-coaching__subjBodyRead {
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.45;
+  color: #334155;
+  vertical-align: top;
+}
+
+#solpath-plan-root .sp-plan-coaching__subjEmpty {
+  padding: 0.65rem 0.5rem;
+  color: #64748b;
+  font-size: calc(0.75rem + var(--sp-text-bump));
+  text-align: center;
+}
+
+#solpath-plan-root .sp-plan-monthlyNotice[hidden] {
   display: none !important;
 }
 
@@ -3349,6 +3384,13 @@ button.sp-stu-remark__item--open:hover {
   line-height: 1.45;
   resize: vertical;
   background: #ffffff;
+}
+
+#solpath-plan-root .sp-plan-monthlyNotice.is-readonly .sp-plan-monthlyNotice__body {
+  background: #f8fafc;
+  border-color: #e2e8f0;
+  cursor: default;
+  resize: none;
 }
 
 #solpath-plan-root .sp-plan-student__code {
