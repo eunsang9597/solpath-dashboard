@@ -67,7 +67,7 @@
 | `title` | 제목 · `memo`면 메모 본문 |
 | `date` | `YYYY-MM-DD` |
 | `trace_dates` | JSON 배열 문자열 — **밀림 UI 없음**, 서버·이동 API용 코드만 |
-| `category` | `vocab` \| `grammar` \| `logic` \| `read` \| `misc` \| `fixed` \| `memo` \| `routine` |
+| `category` | `vocab` \| `grammar` \| `logic` \| `read` \| `math` \| `misc` \| `fixed` \| `memo` \| `routine` |
 | `lecture_id` | 마스터 강의 PK (없으면 빈 문자열) |
 | `timeline_slots` | JSON 배열 문자열 (`[]` = 미칠함) |
 | `sort_key` | 같은 날 정렬 — **과목 순서** (§4) |
@@ -84,7 +84,7 @@
 
 상수 `PLANNER_STUDY_CATEGORY_ORDER`:
 
-**어휘 → 문법 → 논리 → 독해 → 기타**
+**어휘 → 문법 → 논리 → 독해 → 수학 → 기타**
 
 - 달력 칸 요약 그룹, 일일 모달 할 일 표, `sort_key` 부여(`plannerAssignCategorySortKeysForViewMonth_`)에 동일 적용.
 - trace ghost·고정·루틴·메모는 별도 rank (`plannerCompareMonthTodoDisplay_`).
@@ -135,6 +135,7 @@
 | `plannerBootstrap` | `year_month`, `personal`, `common`, `student_profile`, `curriculum` |
 | `plannerRegistryProfileSave` | 프로필 빈칸만 |
 | `plannerPersonalTodosApply` | **fetch POST**, 월 탭 덮어쓰기 · `lecture_id` 마스터 검증(`dbPlanner`) |
+| `plannerAdminVerify` | 어드민 암호 검증 — `outcome: ok` \| `fail` (정적 `admin_solpath`) |
 
 월 이동: bootstrap 재호출 (`plannerReloadBootstrapForViewMonth_`).
 
@@ -146,7 +147,7 @@
 |------|------|
 | 밀림 UI | `trace_dates`, `plannerApplyTodoDateMove_` — **UI 없음** |
 | 할 일 드래그 정렬 | **하지 않음** (§4) |
-| §8.3 Drive 파일명 `display_name(uid)` | 문서·코드 별도 |
+| Drive 파일명 rename (기존 파일) | 신규만 `display_name(imweb_uid)` — 기존 링크 재사용 시 제목 유지 |
 | 게스트 일일 잠금 | 코드 잔존 (`planGuestUnlockMock` 시연용) |
 
 ---

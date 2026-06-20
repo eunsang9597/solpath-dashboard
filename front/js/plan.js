@@ -2626,7 +2626,7 @@ function plannerCurriculumWeekLessonRangeFromQuickPlan_(st, weekDateKeys) {
     plannerMonthTodosForDay_(st, key).forEach(function (t) {
       if (!t || plannerIsTraceGhostDisplay_(t)) return;
       const subj = String(t.category != null ? t.category : '').trim();
-      if (!/^(grammar|logic|read|vocab|misc)$/.test(subj)) return;
+      if (!plannerIsStudyCategoryCode_(subj)) return;
       const lessons = plannerLessonsFromStudyTitle_(String(t.title != null ? t.title : ''));
       lessons.forEach(function (L) {
         if (!isFinite(L) || L <= 0) return;
@@ -2654,7 +2654,7 @@ function plannerCurriculumLessonOutlineFromRange_(r) {
 }
 
 /**
- * 마스터 `subject` 컬럼만 → `grammar`|`logic`|`read`|`vocab`|`misc` (매칭 없으면 빈 문자열).
+ * 마스터 `subject` 컬럼만 → 학습 과목 코드 (매칭 없으면 빈 문자열).
  * @param {string} subjectRaw
  * @returns {string}
  */
@@ -2665,6 +2665,7 @@ function plannerSubjectCodeFromSubjectField_(subjectRaw) {
   if (sl === 'grammar' || s === '문법') return 'grammar';
   if (sl === 'logic' || s === '논리') return 'logic';
   if (sl === 'read' || s === '독해') return 'read';
+  if (sl === 'math' || s === '수학') return 'math';
   if (sl === 'vocab' || s === '어휘') return 'vocab';
   if (sl === 'misc' || s === '기타') return 'misc';
   return '';
@@ -2686,6 +2687,7 @@ function plannerSubjectCodeFromCatalogCourse_(course) {
   if (/\bgrammar\b|문법/.test(blob)) return 'grammar';
   if (/\blogic\b|논리/.test(blob)) return 'logic';
   if (/\bread\b|독해/.test(blob)) return 'read';
+  if (/\bmath\b|수학/.test(blob)) return 'math';
   if (/\bvocab\b|어휘/.test(blob)) return 'vocab';
   if (/\bmisc\b|기타/.test(blob)) return 'misc';
   return 'misc';
@@ -2826,7 +2828,7 @@ function plannerCurriculumWeekPayloadFromMonthTodos_(st, weekIndex, weekDateKeys
       const cat = String(t.category != null ? t.category : '').trim();
       if (!cat || cat === PLAN_CATEGORY_FIXED || cat === PLAN_CATEGORY_EVENT || cat === 'memo' || cat === PLAN_CATEGORY_ROUTINE) return;
       if (plannerIsRoutineExcludedFromStudyTotals_(t.task_id, cat)) return;
-      const subj = /^(grammar|logic|read|vocab|misc)$/.test(cat) ? cat : 'misc';
+      const subj = plannerIsStudyCategoryCode_(cat) ? cat : 'misc';
       if (!bySubj[subj]) bySubj[subj] = { titles: [], lectureIds: [] };
       const title = String(t.title != null ? t.title : '').trim();
       if (title && bySubj[subj].titles.indexOf(title) < 0) bySubj[subj].titles.push(title);
@@ -3320,8 +3322,93 @@ const PLAN_CATEGORY_EVENT = 'event';
 /** DB `category` — 일일 모달 루틴(취침·식사). `timeline_slots` 칠한 뒤에만 POST */
 const PLAN_CATEGORY_ROUTINE = 'routine';
 
-/** 같은 날 표시·`sort_key` 부여: 어휘 → 문법 → 논리 → 독해 → 기타 (드래그 순서 없음). */
-const PLANNER_STUDY_CATEGORY_ORDER = ['vocab', 'grammar', 'logic', 'read', 'misc'];
+/**
+ * 학습 과목 단일 소스 — 코드·라벨·짧은 표기. 새 과목은 여기 + `styles.css` 동일 `--{code}` 패턴.
+ * @type {{ code: string, label: string, short: string }[]}
+ */
+const PLANNER_STUDY_SUBJECT_DEFS = [
+  { code: 'vocab', label: '어휘', short: '어' },
+  { code: 'grammar', label: '문법', short: '문' },
+  { code: 'logic', label: '논리', short: '논' },
+  { code: 'read', label: '독해', short: '독' },
+  { code: 'math', label: '수학', short: '수' },
+  { code: 'misc', label: '기타', short: '기' }
+];
+
+/** 같은 날 표시·`sort_key` 부여 (드래그 순서 없음). */
+const PLANNER_STUDY_CATEGORY_ORDER = PLANNER_STUDY_SUBJECT_DEFS.map(function (d) {
+  return d.code;
+});
+
+/** @param {string} code @returns {boolean} */
+function plannerIsStudyCategoryCode_(code) {
+  const c = String(code != null ? code : '').trim();
+  return PLANNER_STUDY_CATEGORY_ORDER.indexOf(c) >= 0;
+}
+
+/** @param {string} code @returns {string} */
+function plannerStudyCategoryLabelFromCode_(code) {
+  const c = String(code != null ? code : '').trim();
+  for (let i = 0; i < PLANNER_STUDY_SUBJECT_DEFS.length; i++) {
+    if (PLANNER_STUDY_SUBJECT_DEFS[i].code === c) return PLANNER_STUDY_SUBJECT_DEFS[i].label;
+  }
+  return '';
+}
+
+/** @param {string} code @returns {string} */
+function plannerStudyCategoryShortFromCode_(code) {
+  const c = String(code != null ? code : '').trim();
+  for (let i = 0; i < PLANNER_STUDY_SUBJECT_DEFS.length; i++) {
+    if (PLANNER_STUDY_SUBJECT_DEFS[i].code === c) return PLANNER_STUDY_SUBJECT_DEFS[i].short;
+  }
+  return '';
+}
+
+/**
+ * 직접등록 등 `<select>` 옵션 HTML.
+ * @param {{ selected?: string, includeFixed?: boolean }} [opts]
+ * @returns {string}
+ */
+function plannerStudyCategorySelectOptionsHtml_(opts) {
+  const o = opts && typeof opts === 'object' ? opts : {};
+  const selected = String(o.selected != null ? o.selected : 'misc').trim() || 'misc';
+  let html = '';
+  PLANNER_STUDY_SUBJECT_DEFS.forEach(function (d) {
+    html +=
+      '<option value="' +
+      d.code +
+      '"' +
+      (d.code === selected ? ' selected' : '') +
+      '>' +
+      d.label +
+      '</option>';
+  });
+  if (o.includeFixed) {
+    html += '<option value="fixed">고정</option>';
+  }
+  return html;
+}
+
+/** @returns {Record<string, number>} */
+function plannerStudyCategoryMinutesAccumulator_() {
+  /** @type {Record<string, number>} */
+  const acc = {};
+  PLANNER_STUDY_CATEGORY_ORDER.forEach(function (code) {
+    acc[code] = 0;
+  });
+  return acc;
+}
+
+/** task_id 등 문자열에서 학습 과목 코드 추출(없으면 `misc`). @param {string} id @returns {string} */
+function plannerTodoCategoryToken_(id) {
+  const s = String(id != null ? id : '');
+  if (plannerIsStudyCategoryCode_(s)) return s;
+  const core = PLANNER_STUDY_CATEGORY_ORDER.filter(function (c) {
+    return c !== 'misc';
+  }).join('|');
+  const m = s.match(new RegExp('(' + core + ')'));
+  return m ? m[1] : 'misc';
+}
 
 /**
  * @param {object|null|undefined} row
@@ -3517,12 +3604,9 @@ function plannerWithFixedRoutineTodosFirst_(dateYmd, list) {
  */
 function plannerCategoryLabelKo_(cat) {
   const c = String(cat != null ? cat : '').trim() || 'misc';
+  const fromStudy = plannerStudyCategoryLabelFromCode_(c);
+  if (fromStudy) return fromStudy;
   const m = {
-    grammar: '문법',
-    logic: '논리',
-    read: '독해',
-    vocab: '어휘',
-    misc: '기타',
     fixed: '고정일정',
     event: '이벤트',
     routine: '루틴'
@@ -3916,7 +4000,8 @@ function plannerLegacyManualRegPanelHtml_(defManDue) {
     esc(defManDue) +
     '"/></label>' +
     '<label class="sp-plan-manual__lbl">과목<select id="sp-manual-cat" class="sp-plan-manual__select">' +
-    '<option value="vocab">어휘</option><option value="grammar">문법</option><option value="logic">논리</option><option value="read">독해</option><option value="misc" selected>기타</option><option value="fixed">고정</option></select></label>' +
+    plannerStudyCategorySelectOptionsHtml_({ selected: 'misc', includeFixed: true }) +
+    '</select></label>' +
     '</div>' +
     '<button type="button" class="btn btn--primary sp-plan-manual__add" id="sp-manual-add">할 일 추가</button>' +
     '</div>' +
@@ -3955,8 +4040,8 @@ function plannerCalRegModalBodyHtml_(fixedTimeOptsStart, fixedTimeOptsEnd) {
     '<div class="sp-plan-manual__grid">' +
     '<label class="sp-plan-manual__lbl">제목<input type="text" id="sp-calreg-manual-title" class="sp-plan-manual__input" maxlength="200" placeholder="예: 모의고사 오답" autocomplete="off"/></label>' +
     '<label class="sp-plan-manual__lbl">과목<select id="sp-calreg-manual-cat" class="sp-plan-manual__select">' +
-    '<option value="vocab">어휘</option><option value="grammar">문법</option><option value="logic">논리</option><option value="read">독해</option><option value="misc" selected>기타</option>' +
-    '<option value="fixed">고정</option></select></label>' +
+    plannerStudyCategorySelectOptionsHtml_({ selected: 'misc', includeFixed: true }) +
+    '</select></label>' +
     '</div>' +
     '<div id="sp-calreg-manual-fixed-time" class="sp-plan-calReg__fixedTime" hidden>' +
     '<div class="sp-plan-quick__row sp-plan-quick__row--horiz">' +
@@ -4871,13 +4956,9 @@ function plannerRebuildQuickPostPayload_(st) {
 }
 
 /** 커리큘럼 개별 등록 — 과목 코드(마스터 `courses.subject` 매칭용). */
-const PLANNER_CURR_SUBJECT_OPTS = [
-  { code: 'vocab', label: '어휘' },
-  { code: 'grammar', label: '문법' },
-  { code: 'logic', label: '논리' },
-  { code: 'read', label: '독해' },
-  { code: 'misc', label: '기타' }
-];
+const PLANNER_CURR_SUBJECT_OPTS = PLANNER_STUDY_SUBJECT_DEFS.map(function (d) {
+  return { code: d.code, label: d.label };
+});
 
 /**
  * 커리큘럼 등록 과목 셀렉트 옵션 — `기타`는 카탈로그 없어도 항상 노출.
@@ -5491,7 +5572,10 @@ function plannerAppendManualTodoFromForm_(slot, st, opts) {
     if (!msgFx.length && titleEl) /** @type {HTMLInputElement} */ (titleEl).value = '';
     return msgFx;
   }
-  const allowedC = { grammar: true, logic: true, read: true, vocab: true, misc: true };
+  const allowedC = {};
+  PLANNER_STUDY_CATEGORY_ORDER.forEach(function (code) {
+    allowedC[code] = true;
+  });
   const c = allowedC[category] ? category : 'misc';
   let task_id = '';
   try {
@@ -6021,7 +6105,7 @@ function plannerCurBadgeSpan_(mod, label, attrs) {
   const body = String(label != null ? label : '').trim();
   if (!body) return '';
   const modStr = String(mod != null ? mod : '').trim();
-  const m = /^(grammar|logic|read|vocab|misc|fixed)$/.test(modStr) ? modStr : 'misc';
+  const m = (plannerIsStudyCategoryCode_(modStr) || modStr === 'fixed') ? modStr : 'misc';
   const tid = attrs && attrs.taskId ? String(attrs.taskId).trim() : '';
   if (attrs && attrs.isTrace) {
     const traceYmd = attrs.traceYmd != null ? String(attrs.traceYmd).trim() : '';
@@ -6150,7 +6234,7 @@ function plannerDayCellTodoChipHtml_(item, mod) {
   const tid = String(item && item.task_id != null ? item.task_id : '').trim();
   if (!t || !tid) return '';
   const m =
-    mod && /^(grammar|logic|read|vocab|misc)$/.test(mod)
+    mod && (plannerIsStudyCategoryCode_(mod) || mod === 'fixed')
       ? mod
       : plannerTodoCategoryToken_(tid);
   if (item && item.isTrace) {
@@ -6171,7 +6255,7 @@ function plannerDayCellTodoChipHtml_(item, mod) {
 function plannerDayCellGroupHtml_(mod, _headLabel, items) {
   const list = Array.isArray(items) ? items : [];
   if (!list.length) return '';
-  const m = /^(grammar|logic|read|vocab)$/.test(mod) ? mod : 'misc';
+  const m = plannerIsStudyCategoryCode_(mod) && mod !== 'misc' ? mod : 'misc';
   const chips = list
     .map(function (it) {
       return plannerDayCellTodoChipHtml_(it, m);
@@ -6232,7 +6316,10 @@ function plannerDayMemoIconHtml_(st, ymd) {
  * @returns {string}
  */
 function plannerQuickPlanCellSummaryHtml_(st, key) {
-  const subjName = { vocab: '어휘', grammar: '문법', logic: '논리', read: '독해', misc: '기타' };
+  const subjName = {};
+  PLANNER_STUDY_SUBJECT_DEFS.forEach(function (d) {
+    subjName[d.code] = d.label;
+  });
   const order = PLANNER_STUDY_CATEGORY_ORDER.slice();
   /** @type {Record<string, { title: string, task_id: string, mark: string, isTrace?: boolean, traceYmd?: string }[]>} */
   const byCat = {};
@@ -6306,13 +6393,7 @@ function plannerMigrateLegacySlotsToTodo_(legacy) {
   return out;
 }
 
-/** 과목 합산·레거시: task_id 문자열에서 grammar|logic|… 토큰 */
-function plannerTodoCategoryToken_(id) {
-  const s = String(id != null ? id : '');
-  if (/^(grammar|logic|read|vocab)$/.test(s)) return s;
-  const m = s.match(/(grammar|logic|read|vocab)/);
-  return m ? m[1] : 'misc';
-}
+/** 과목 합산·레거시: task_id 문자열에서 학습 과목 코드 추출 — `plannerTodoCategoryToken_` (상단 정의). */
 
 /**
  * @param {object} [st]
@@ -6597,7 +6678,7 @@ function plannerCategoryHueClassForTodo_(taskId, category) {
   if (c === PLAN_CATEGORY_FIXED) return 'fixed';
   if (c === PLAN_CATEGORY_ROUTINE) return 'routine';
   if (c === 'memo') return 'memo';
-  if (/^(grammar|logic|read|vocab|misc)$/.test(c)) return c;
+  if (plannerIsStudyCategoryCode_(c)) return c;
   return 'misc';
 }
 
@@ -6612,17 +6693,11 @@ function plannerCategoryShortLabelForTodo_(taskId, category) {
   if (id === PLAN_FIXED_SLEEP_TODO_ID) return '취';
   if (id === PLAN_FIXED_MEAL_TODO_ID) return '식';
   const c = String(category != null ? category : '').trim();
-  const m = {
-    grammar: '문',
-    logic: '논',
-    read: '독',
-    vocab: '어',
-    misc: '기',
-    fixed: '고',
-    routine: '루',
-    memo: '메'
-  };
-  return m[c] != null ? m[c] : '기';
+  if (c === PLAN_CATEGORY_FIXED) return '고';
+  if (c === PLAN_CATEGORY_ROUTINE) return '루';
+  if (c === 'memo') return '메';
+  const short = plannerStudyCategoryShortFromCode_(c);
+  return short || '기';
 }
 
 /**
@@ -7261,7 +7336,7 @@ function plannerTodoCompletionSet_(st, ymd, taskId, mark) {
 function plannerSubjectMinutesFromTimeline_(st, ymd) {
   const slots = st.dayTimelineTodoByDate && st.dayTimelineTodoByDate[ymd];
   /** @type {Record<string, number>} */
-  const acc = { grammar: 0, logic: 0, read: 0, vocab: 0, misc: 0 };
+  const acc = plannerStudyCategoryMinutesAccumulator_();
   if (!slots || typeof slots !== 'object') return acc;
   const map = plannerDayTodoIdMapForDay_(ymd, st);
   Object.keys(slots).forEach(function (k) {
@@ -7299,7 +7374,10 @@ function plannerFormatStudyDurationKo_(minutes) {
  */
 function plannerDayModalSubjectStatsHtml_(st, ymd) {
   const acc = plannerSubjectMinutesFromTimeline_(st, ymd);
-  const labels = { vocab: '어휘', grammar: '문법', logic: '논리', read: '독해', misc: '기타' };
+  const labels = {};
+  PLANNER_STUDY_SUBJECT_DEFS.forEach(function (d) {
+    labels[d.code] = d.label;
+  });
   const order = PLANNER_STUDY_CATEGORY_ORDER.slice();
   let sum = 0;
   const items = [];

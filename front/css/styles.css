@@ -5246,6 +5246,12 @@ button.sp-stu-remark__item--open:hover {
   border-color: #fb7185;
 }
 
+#solpath-plan-root .sp-plan-curBadge--math {
+  background: #e0f2fe;
+  color: #0369a1;
+  border-color: #38bdf8;
+}
+
 #solpath-plan-root .sp-plan-curBadge--vocab {
   background: #ffedd5;
   color: #9a3412;
@@ -5943,6 +5949,9 @@ button.sp-stu-remark__item--open:hover {
 #solpath-plan-root .sp-plan-todoSideTable tbody tr.sp-plan-todoCat--read > *:first-child {
   box-shadow: inset 4px 0 0 #e11d48;
 }
+#solpath-plan-root .sp-plan-todoSideTable tbody tr.sp-plan-todoCat--math > *:first-child {
+  box-shadow: inset 4px 0 0 #0284c7;
+}
 #solpath-plan-root .sp-plan-todoSideTable tbody tr.sp-plan-todoCat--vocab > *:first-child {
   box-shadow: inset 4px 0 0 #ea580c;
 }
@@ -6535,6 +6544,11 @@ button.sp-stu-remark__item--open:hover {
   color: #9f1239;
   border-color: #fb7185;
 }
+#solpath-plan-root .sp-plan-hourTodoPill--cat-math {
+  background: #e0f2fe;
+  color: #0369a1;
+  border-color: #38bdf8;
+}
 #solpath-plan-root .sp-plan-hourTodoPill--cat-vocab {
   background: #ffedd5;
   color: #9a3412;
@@ -6654,6 +6668,10 @@ button.sp-stu-remark__item--open:hover {
 #solpath-plan-root .sp-plan-slotcell--todo--read.is-on {
   border-color: #e11d48;
   background: linear-gradient(180deg, #fff1f2 0%, #fda4af 100%);
+}
+#solpath-plan-root .sp-plan-slotcell--todo--math.is-on {
+  border-color: #0284c7;
+  background: linear-gradient(180deg, #e0f2fe 0%, #7dd3fc 100%);
 }
 #solpath-plan-root .sp-plan-slotcell--todo--vocab.is-on {
   border-color: #ea580c;
@@ -6880,6 +6898,12 @@ button.sp-stu-remark__item--open:hover {
   box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.22);
 }
 
+#solpath-plan-root .sp-plan-timecell--todo--math.is-on {
+  border-color: #0284c7;
+  background: linear-gradient(180deg, #e0f2fe 0%, #7dd3fc 100%);
+  box-shadow: inset 0 0 0 1px rgba(2, 132, 199, 0.25);
+}
+
 #solpath-plan-root .sp-plan-timecell--todo--vocab.is-on {
   border-color: #ca8a04;
   background: linear-gradient(180deg, #fef9c3 0%, #fde047 100%);
@@ -6932,6 +6956,11 @@ button.sp-stu-remark__item--open:hover {
 #solpath-plan-root .sp-plan-chip--read {
   background: #bfdbfe;
   color: #1e3a8a;
+}
+
+#solpath-plan-root .sp-plan-chip--math {
+  background: #e0f2fe;
+  color: #0369a1;
 }
 
 #solpath-plan-root .sp-plan-chip--vocab {
