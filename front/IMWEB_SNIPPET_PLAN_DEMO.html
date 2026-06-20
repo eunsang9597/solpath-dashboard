@@ -1,0 +1,28 @@
+<!-- 플래너 홍보 데모 전용 — 본편 IMWEB_SNIPPET_PLAN.html 과 별도 임웹 페이지에만 삽입 -->
+<!-- 배포: plan.js·fixture push 후 @sha 를 SOLPATH_CDN_COMMIT / 아래 URL 과 맞출 것 -->
+<!-- SOLPATH_PIN: (배포 후 apply-solpath-cdn-pin.sh 로 갱신) -->
+<script>
+window.__SOLPATH__ = {
+  cdnCommit: "04f2168602b35a072b6f5c8c1ee12b86432e961b",
+  planDemo: {
+    active: true,
+    yearMonth: "2026-06",
+    fixtureUrl: "https://cdn.jsdelivr.net/gh/eunsang9597/solpath-dashboard@04f2168/front/demo/planner-demo-fixture.json"
+  }
+};
+</script>
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
+<link
+  rel="stylesheet"
+  href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css"
+/>
+<link
+  rel="stylesheet"
+  href="https://cdn.jsdelivr.net/gh/eunsang9597/solpath-dashboard@04f2168/front/css/styles.css"
+/>
+<div id="solpath-plan-root" class="solpath-mount" style="max-width:100%;width:100%;margin:0;padding:0;box-sizing:border-box"></div>
+<script
+  type="module"
+  crossorigin="anonymous"
+  src="https://cdn.jsdelivr.net/gh/eunsang9597/solpath-dashboard@04f2168/front/js/plan.js"
+></script>

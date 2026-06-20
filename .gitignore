@@ -17,6 +17,9 @@ front/*
 !front/IMWEB_SNIPPET_INJECT.html
 !front/IMWEB_SNIPPET.html
 !front/IMWEB_SNIPPET_PLAN.html
+!front/IMWEB_SNIPPET_PLAN_DEMO.html
+!front/demo/
+!front/demo/**
 !front/README.md
 !front/index.html
 !front/js/
@@ -40,3 +43,6 @@ Thumbs.db
 # --- Logs ---
 *.log
 npm-debug.log*
+
+# --- Planner handoff (local-only) ---
+handoff/

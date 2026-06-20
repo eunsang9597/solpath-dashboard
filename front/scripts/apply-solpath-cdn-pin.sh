@@ -24,7 +24,8 @@ export NEW_SHORT
 for f in \
   "${ROOT}/IMWEB_SNIPPET_INJECT.html" \
   "${ROOT}/IMWEB_SNIPPET.html" \
-  "${ROOT}/IMWEB_SNIPPET_PLAN.html"; do
+  "${ROOT}/IMWEB_SNIPPET_PLAN.html" \
+  "${ROOT}/IMWEB_SNIPPET_PLAN_DEMO.html"; do
   if [[ ! -f "$f" ]]; then
     echo "없음: $f" >&2
     exit 1

@@ -5,12 +5,20 @@
  */
 function spReadPlanInjected_() {
   if (typeof globalThis === 'undefined') {
-    return { url: '' };
+    return { url: '', planDemo: { active: false, yearMonth: '', fixtureUrl: '', fixture: null } };
   }
   const o = globalThis.__SOLPATH__;
   if (!o || typeof o !== 'object') {
-    return { url: '' };
+    return { url: '', planDemo: { active: false, yearMonth: '', fixtureUrl: '', fixture: null } };
   }
+  const demoRaw = o.planDemo && typeof o.planDemo === 'object' ? o.planDemo : null;
+  const planDemo = {
+    active: Boolean(demoRaw && demoRaw.active === true),
+    yearMonth: String(demoRaw && demoRaw.yearMonth != null ? demoRaw.yearMonth : '').trim(),
+    startTab: String(demoRaw && demoRaw.startTab != null ? demoRaw.startTab : 'student').trim(),
+    fixtureUrl: String(demoRaw && demoRaw.fixtureUrl != null ? demoRaw.fixtureUrl : '').trim(),
+    fixture: demoRaw && demoRaw.fixture != null && typeof demoRaw.fixture === 'object' ? demoRaw.fixture : null
+  };
   return {
     url: String(
       o.gasBaseUrl != null
@@ -20,14 +28,20 @@ function spReadPlanInjected_() {
           : o.execUrl != null
             ? o.execUrl
             : ''
-    ).trim()
+    ).trim(),
+    planDemo: planDemo
   };
 }
 
 const _planInj = spReadPlanInjected_();
 const GAS_BASE_URL = _planInj.url || '';
+/** @type {{ active: boolean, yearMonth: string, startTab: string, fixtureUrl: string, fixture: object|null }} */
+const PLAN_DEMO = _planInj.planDemo || { active: false, yearMonth: '', startTab: 'student', fixtureUrl: '', fixture: null };
 const GAS_MODE = {
   get useMock() {
+    if (PLAN_DEMO.active) {
+      return false;
+    }
     return !String(GAS_BASE_URL).trim();
   },
   get canSync() {
@@ -36,6 +50,156 @@ const GAS_MODE = {
 };
 
 const MOUNT_ID = 'solpath-plan-root';
+
+/**
+ * @param {HTMLElement} root
+ * @returns {boolean}
+ */
+function plannerIsPlanDemoRoot_(root) {
+  return Boolean(root && root.classList && root.classList.contains('is-plan-demo'));
+}
+
+/**
+ * @param {{ yearMonth?: string }} cfg
+ * @returns {Date}
+ */
+function plannerPlanDemoViewMonthDate_(cfg) {
+  const ym = String(cfg && cfg.yearMonth != null ? cfg.yearMonth : '').trim();
+  const m = ym.match(/^(\d{4})-(\d{1,2})$/);
+  if (m) {
+    return new Date(Number(m[1]), Number(m[2]) - 1, 1);
+  }
+  return new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+}
+
+/**
+ * @param {unknown} raw
+ * @returns {{ role: string, common: object[], personal: object[] | null, student_profile: Record<string, unknown> | null, curriculum: unknown }}
+ */
+function plannerNormalizePlanDemoFixture_(raw) {
+  const o = raw && typeof raw === 'object' ? /** @type {Record<string, unknown>} */ (raw) : {};
+  const prof =
+    o.student_profile != null && typeof o.student_profile === 'object'
+      ? /** @type {Record<string, unknown>} */ (o.student_profile)
+      : null;
+  return {
+    role: o.role === 'member' ? 'member' : 'guest',
+    common: Array.isArray(o.common) ? o.common : [],
+    personal: Array.isArray(o.personal) ? o.personal : [],
+    student_profile: prof,
+    curriculum: o.curriculum
+  };
+}
+
+/**
+ * @param {{ fixtureUrl?: string, fixture?: object|null }} cfg
+ * @returns {Promise<Record<string, unknown>>}
+ */
+async function plannerLoadPlanDemoFixture_(cfg) {
+  if (cfg.fixture && typeof cfg.fixture === 'object') {
+    return /** @type {Record<string, unknown>} */ (cfg.fixture);
+  }
+  const url = String(cfg.fixtureUrl != null ? cfg.fixtureUrl : '').trim();
+  if (!url.length) {
+    throw new Error('planDemo.fixtureUrl 또는 planDemo.fixture 가 필요합니다.');
+  }
+  const res = await fetch(url, { method: 'GET', credentials: 'omit', cache: 'default' });
+  if (!res.ok) {
+    throw new Error('데모 데이터를 불러오지 못했습니다 (HTTP ' + String(res.status) + ').');
+  }
+  const data = await res.json();
+  if (!data || typeof data !== 'object') {
+    throw new Error('데모 데이터 JSON 형식이 올바르지 않습니다.');
+  }
+  return /** @type {Record<string, unknown>} */ (data);
+}
+
+/**
+ * 홍보 데모 — 저장·월 이동·관리 UI만 숨김. 학생 정보·월간 탭은 모두 표시(조회 전용).
+ * @param {HTMLElement} root
+ */
+function plannerApplyPlanDemoChrome_(root) {
+  root.classList.add('is-plan-demo');
+  /** @param {string} sel */
+  function hide(sel) {
+    const el = root.querySelector(sel);
+    if (!el) return;
+    el.setAttribute('hidden', 'hidden');
+    el.setAttribute('aria-hidden', 'true');
+  }
+  hide('#sp-plan-devbar');
+  hide('#sp-plan-quick-reg');
+  hide('#sp-plan-export-bar');
+  hide('#sp-plan-student-manual-reg');
+  hide('#sp-plan-admin-modal');
+  const adminTap = root.querySelector('#sp-plan-admin-tap');
+  if (adminTap && adminTap.parentElement) {
+    adminTap.parentElement.setAttribute('hidden', 'hidden');
+    adminTap.parentElement.setAttribute('aria-hidden', 'true');
+  }
+  hide('.sp-plan-month__nav[data-nav="-1"]');
+  hide('.sp-plan-month__nav[data-nav="1"]');
+  const monthActions = root.querySelector('.sp-plan-month__actions');
+  if (monthActions) {
+    monthActions.setAttribute('hidden', 'hidden');
+    monthActions.setAttribute('aria-hidden', 'true');
+  }
+  const startTab =
+    PLAN_DEMO.startTab === 'monthly' || PLAN_DEMO.startTab === 'student' ? PLAN_DEMO.startTab : 'student';
+  if (typeof root.__spPlanShowMainTab === 'function') {
+    root.__spPlanShowMainTab(startTab);
+  }
+}
+
+/**
+ * @param {HTMLElement} root
+ * @returns {Promise<void>}
+ */
+async function plannerStartPlanDemo_(root) {
+  root.classList.add('is-plan-demo');
+  root.__spPlanAdminMode = false;
+  root.__spPlanActiveTab = PLAN_DEMO.startTab === 'monthly' ? 'monthly' : 'student';
+  root.__spPlanDemoViewMonth = plannerPlanDemoViewMonthDate_(PLAN_DEMO);
+
+  const gate = root.querySelector('.sp-plan-gate');
+  if (gate) {
+    gate.setAttribute('hidden', 'hidden');
+    gate.setAttribute('aria-hidden', 'true');
+  }
+  plannerRevealPlanMain_(root);
+
+  const ban = root.querySelector('#sp-plan-banner');
+  /** @type {{ role: string, common: object[], personal: object[] | null, student_profile: Record<string, unknown> | null, curriculum: unknown }} */
+  let pack;
+  try {
+    const raw = await plannerLoadPlanDemoFixture_(PLAN_DEMO);
+    pack = plannerNormalizePlanDemoFixture_(raw);
+  } catch (e) {
+    const m = e && typeof e === 'object' && 'message' in e ? String(/** @type {{ message?: string }} */ (e).message) : String(e);
+    if (ban) {
+      ban.textContent = m;
+      ban.removeAttribute('hidden');
+    }
+    renderCalendar_(root, { role: 'guest', common: [], personal: [], curriculum: { courses: [], lectures: [] } });
+    plannerApplyPlanDemoChrome_(root);
+    plannerApplyAdminVisibility_(root);
+    return;
+  }
+
+  if (ban) {
+    ban.setAttribute('hidden', 'hidden');
+  }
+  renderCalendar_(root, {
+    role: pack.role,
+    common: pack.common,
+    personal: pack.personal,
+    curriculum: pack.curriculum
+  });
+  renderPlannerStudentProfile_(root, pack.student_profile);
+  plannerRefreshMonthlyNotice_(root);
+  plannerApplyPlanDemoChrome_(root);
+  plannerApplyAdminVisibility_(root);
+}
 
 /** `styles.css`가 막혀도 게이트 한 줄·가운데 유지 */
 const PLAN_GATE_FALLBACK_CSS = `#solpath-plan-root .sp-plan-gate{display:flex!important;flex-direction:column!important;align-items:center!important;margin-left:auto!important;margin-right:auto!important;width:100%!important;max-width:min(100%,52rem)!important;box-sizing:border-box!important;padding:1rem clamp(0.75rem,3vw,1.75rem) 1.25rem!important}#solpath-plan-root .sp-plan-gate__lead,#solpath-plan-root .sp-plan-gate__privacy{width:100%;max-width:100%;text-align:center;margin:0 0 0.5rem}#solpath-plan-root .sp-plan-gate__privacy{margin-bottom:1rem;color:#64748b;font-size:0.85rem}#solpath-plan-root .sp-plan-gate__pair{display:flex!important;flex-wrap:wrap!important;align-items:flex-start!important;justify-content:center!important;gap:0.75rem 2rem!important;width:100%!important;max-width:100%!important;margin-left:auto!important;margin-right:auto!important;padding-left:0.25rem!important;padding-right:0.25rem!important;overflow:visible!important;box-sizing:border-box!important}#solpath-plan-root .sp-plan-gate__stack{display:flex!important;flex-direction:column!important;gap:0.28rem!important;flex:0 0 auto!important}#solpath-plan-root .sp-plan-gate__stack--tel{align-items:flex-start!important}#solpath-plan-root .sp-plan-gate__lbl{font-size:0.75rem;font-weight:600;color:#1e293b;text-align:left;align-self:stretch}#solpath-plan-root .sp-plan-gate__tel{display:inline-flex!important;flex-wrap:nowrap!important;align-items:center!important;gap:0.35rem!important}#solpath-plan-root .sp-plan-gate__dash{color:#94a3b8;font-weight:600;flex-shrink:0}#solpath-plan-root .sp-plan-gate__input{box-sizing:border-box;padding:0.45rem 0.35rem;border:1px solid #cbd5e1;border-radius:8px;font-size:1rem}#solpath-plan-root .sp-plan-gate__input--seg3{width:6.5rem!important;min-width:6.5rem!important;max-width:7.5rem!important;padding:0.5rem 0.65rem!important;text-align:center;flex-shrink:0;box-sizing:border-box!important}#solpath-plan-root .sp-plan-gate__input--seg4{width:8rem!important;min-width:8rem!important;max-width:9rem!important;padding:0.5rem 0.65rem!important;text-align:center;flex-shrink:0;box-sizing:border-box!important}#solpath-plan-root .sp-plan-gate__input--name{width:min(100%,14rem);min-width:6.5rem;max-width:20rem;text-align:left;padding-left:0.45rem;padding-right:0.45rem}#solpath-plan-root .sp-plan-gate__err{margin:0.5rem 0 0;width:100%;max-width:100%;text-align:center;color:#b71c1c;font-size:0.8rem}#solpath-plan-root .sp-plan-gate__btn{margin-top:0.85rem;align-self:center}`;
@@ -593,6 +757,9 @@ function plannerNormalizeCurriculumFromBootstrap_(raw) {
  * @returns {Promise<void>}
  */
 function plannerRefetchBootstrapForViewMonth_(root) {
+  if (plannerIsPlanDemoRoot_(root)) {
+    return Promise.resolve();
+  }
   const ctx = root.__spPlannerBootstrapCtx;
   const st = root.__spPlanState;
   if (
@@ -854,10 +1021,16 @@ async function plannerGasPostAction_(url, bodyObj) {
  */
 async function plannerGasCall_(payload) {
   const url = String(GAS_BASE_URL || '').trim();
+  const action = String(payload.action != null ? payload.action : '');
+  if (PLAN_DEMO.active) {
+    return {
+      ok: false,
+      error: { code: 'PLAN_DEMO', message: '데모 화면에서는 서버 요청을 하지 않습니다.' }
+    };
+  }
   if (!url) {
     return { ok: false, error: { code: 'NO_GAS_URL', message: 'gasBaseUrl이 없습니다.' } };
   }
-  const action = String(payload.action != null ? payload.action : '');
   if (
     action === 'plannerRegistryRebuild' ||
     action === 'plannerDevFullReset' ||
@@ -7681,6 +7854,12 @@ function renderCalendar_(root, boot) {
   if (!(st.viewMonth instanceof Date) || isNaN(Number(st.viewMonth))) {
     st.viewMonth = new Date();
   }
+  if (plannerIsPlanDemoRoot_(root)) {
+    const fixVm = root.__spPlanDemoViewMonth;
+    if (fixVm instanceof Date && !isNaN(fixVm.getTime())) {
+      st.viewMonth = new Date(fixVm.getTime());
+    }
+  }
 
   plannerApplyBootstrapPersonal_(st, personal, st.role);
 
@@ -8442,6 +8621,9 @@ function renderCalendar_(root, boot) {
       }
       const nav = t.closest ? t.closest('[data-nav]') : null;
       if (nav && nav.getAttribute) {
+        if (plannerIsPlanDemoRoot_(root)) {
+          return;
+        }
         const step = Number(nav.getAttribute('data-nav')) || 0;
         if (step) {
           plannerFlushMonthlyNoticeDraft_(root);
@@ -8891,10 +9073,14 @@ function main() {
   if (!el) return;
   injectPlanGateFallbackCss_();
   el.innerHTML = `<div class="sp-plan-rootinner">${PLAN_DEV_HTML}${PLAN_APP_SHELL_START}${GATE_HTML}${PLAN_ADMIN_MODAL_HTML}${PLAN_APP_MAIN_AND_CLOSE}</div>`;
-  try {
-    el.__spPlanAdminMode = sessionStorage.getItem(PLAN_SESSION_ADMIN_KEY) === '1';
-  } catch (_e) {
+  if (PLAN_DEMO.active) {
     el.__spPlanAdminMode = false;
+  } else {
+    try {
+      el.__spPlanAdminMode = sessionStorage.getItem(PLAN_SESSION_ADMIN_KEY) === '1';
+    } catch (_e) {
+      el.__spPlanAdminMode = false;
+    }
   }
   wirePlannerAdminUnlockOnce_(el);
   wirePlannerMainTabsOnce_(el);
@@ -8906,6 +9092,10 @@ function main() {
   renderPlannerStudentProfile_(el, null);
   wirePlanDevBar_(el);
   plannerApplyAdminVisibility_(el);
+  if (PLAN_DEMO.active) {
+    void plannerStartPlanDemo_(el);
+    return;
+  }
   if (GAS_MODE.useMock) {
     const g = el.querySelector('.sp-plan-gate');
     if (g) {
