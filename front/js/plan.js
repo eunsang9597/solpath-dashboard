@@ -127,6 +127,7 @@ function plannerApplyPlanDemoChrome_(root) {
     el.setAttribute('hidden', 'hidden');
     el.setAttribute('aria-hidden', 'true');
   }
+  hide('.sp-plan-gate');
   hide('#sp-plan-devbar');
   hide('#sp-plan-quick-reg');
   hide('#sp-plan-export-bar');
@@ -1146,6 +1147,14 @@ function plannerStudentFieldIsEmpty_(v) {
  * @returns {Record<string, string>}
  */
 function plannerParseProfileJsonObject_(raw) {
+  if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+    /** @type {Record<string, string>} */
+    const outObj = {};
+    Object.keys(/** @type {Record<string, unknown>} */ (raw)).forEach(function (k) {
+      outObj[k] = raw[k] != null ? String(raw[k]) : '';
+    });
+    return outObj;
+  }
   const s = String(raw != null ? raw : '').trim();
   if (!s.length) return {};
   try {
@@ -6175,9 +6184,14 @@ function plannerQuickPlanCellSummaryHtml_(st, key) {
     if (!t || typeof t !== 'object') return;
     const tid = String(t.task_id != null ? t.task_id : '').trim();
     if (!tid) return;
-    if (plannerIsRoutineExcludedFromStudyTotals_(tid, t.category)) return;
-    const cat = String(t.category != null ? t.category : 'misc').trim() || 'misc';
-    if (cat === PLAN_CATEGORY_FIXED || cat === PLAN_CATEGORY_EVENT || cat === 'memo') return;
+    const catRaw = String(t.category != null ? t.category : 'misc').trim() || 'misc';
+    if (catRaw === PLAN_CATEGORY_FIXED || catRaw === PLAN_CATEGORY_EVENT || catRaw === 'memo') return;
+    if (plannerIsRoutineExcludedFromStudyTotals_(tid, catRaw)) {
+      if (!PLAN_DEMO.active) return;
+    }
+    const cat =
+      catRaw === PLAN_CATEGORY_ROUTINE && PLAN_DEMO.active ? 'misc' : catRaw;
+    if (!/^(grammar|logic|read|vocab|misc)$/.test(cat)) return;
     const title = String(t.title != null ? t.title : '').trim();
     if (!title) return;
     if (!byCat[cat]) byCat[cat] = [];
@@ -9088,14 +9102,20 @@ function main() {
   wirePlannerStudentProfileSaveOnce_(el);
   wirePlannerPdfExportOnce_(el);
   wirePlannerPersonalTodosApplyOnce_(el);
-  plannerSetGatePending_(el);
   renderPlannerStudentProfile_(el, null);
   wirePlanDevBar_(el);
   plannerApplyAdminVisibility_(el);
   if (PLAN_DEMO.active) {
+    el.classList.add('is-plan-demo');
+    const gateEarly = el.querySelector('.sp-plan-gate');
+    if (gateEarly) {
+      gateEarly.setAttribute('hidden', 'hidden');
+      gateEarly.setAttribute('aria-hidden', 'true');
+    }
     void plannerStartPlanDemo_(el);
     return;
   }
+  plannerSetGatePending_(el);
   if (GAS_MODE.useMock) {
     const g = el.querySelector('.sp-plan-gate');
     if (g) {

@@ -7038,6 +7038,7 @@ button.sp-stu-remark__item--open:hover {
 /* 6. (구) 행별 max-content + !important 그리드 — 제거됨; 월간 그리드는 #solpath-plan-root .sp-plan-month__dow / __weekRow 단일 정의 */
 
 /* 홍보 데모 — JS plannerApplyPlanDemoChrome_ 와 함께 (이중 숨김) */
+#solpath-plan-root.is-plan-demo .sp-plan-gate,
 #solpath-plan-root.is-plan-demo .sp-plan-devbar,
 #solpath-plan-root.is-plan-demo #sp-plan-quick-reg,
 #solpath-plan-root.is-plan-demo #sp-plan-export-bar,
