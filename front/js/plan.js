@@ -2654,12 +2654,32 @@ function plannerCurriculumLessonOutlineFromRange_(r) {
 }
 
 /**
+ * 마스터 `subject` 컬럼만 → `grammar`|`logic`|`read`|`vocab`|`misc` (매칭 없으면 빈 문자열).
+ * @param {string} subjectRaw
+ * @returns {string}
+ */
+function plannerSubjectCodeFromSubjectField_(subjectRaw) {
+  const s = String(subjectRaw != null ? subjectRaw : '').trim();
+  if (!s.length) return '';
+  const sl = s.toLowerCase();
+  if (sl === 'grammar' || s === '문법') return 'grammar';
+  if (sl === 'logic' || s === '논리') return 'logic';
+  if (sl === 'read' || s === '독해') return 'read';
+  if (sl === 'vocab' || s === '어휘') return 'vocab';
+  if (sl === 'misc' || s === '기타') return 'misc';
+  return '';
+}
+
+/**
  * 강좌 행(`subject`·`course_name`) → 빠른등록 코드 `grammar`|`logic`|`read`|`vocab` (없으면 빈 문자열).
+ * `subject` 컬럼이 있으면 우선(예: LOGIC-TREE 독해 강좌명에 logic 오매칭 방지).
  * @param {object} course
  * @returns {string}
  */
 function plannerSubjectCodeFromCatalogCourse_(course) {
   const c = course && typeof course === 'object' ? course : {};
+  const fromSubject = plannerSubjectCodeFromSubjectField_(c.subject);
+  if (fromSubject) return fromSubject;
   const subj = String(c.subject != null ? c.subject : '').trim().toLowerCase();
   const cn = String(c.course_name != null ? c.course_name : '').trim().toLowerCase();
   const blob = subj + ' ' + cn;
