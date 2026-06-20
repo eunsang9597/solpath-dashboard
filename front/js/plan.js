@@ -6184,14 +6184,9 @@ function plannerQuickPlanCellSummaryHtml_(st, key) {
     if (!t || typeof t !== 'object') return;
     const tid = String(t.task_id != null ? t.task_id : '').trim();
     if (!tid) return;
-    const catRaw = String(t.category != null ? t.category : 'misc').trim() || 'misc';
-    if (catRaw === PLAN_CATEGORY_FIXED || catRaw === PLAN_CATEGORY_EVENT || catRaw === 'memo') return;
-    if (plannerIsRoutineExcludedFromStudyTotals_(tid, catRaw)) {
-      if (!PLAN_DEMO.active) return;
-    }
-    const cat =
-      catRaw === PLAN_CATEGORY_ROUTINE && PLAN_DEMO.active ? 'misc' : catRaw;
-    if (!/^(grammar|logic|read|vocab|misc)$/.test(cat)) return;
+    if (plannerIsRoutineExcludedFromStudyTotals_(tid, t.category)) return;
+    const cat = String(t.category != null ? t.category : 'misc').trim() || 'misc';
+    if (cat === PLAN_CATEGORY_FIXED || cat === PLAN_CATEGORY_EVENT || cat === 'memo') return;
     const title = String(t.title != null ? t.title : '').trim();
     if (!title) return;
     if (!byCat[cat]) byCat[cat] = [];
