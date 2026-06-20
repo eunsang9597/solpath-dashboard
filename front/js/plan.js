@@ -115,7 +115,44 @@ async function plannerLoadPlanDemoFixture_(cfg) {
 }
 
 /**
- * 홍보 데모 — 저장·월 이동·관리 UI만 숨김. 학생 정보·월간 탭은 모두 표시(조회 전용).
+ * 홍보 데모 — 탭 없이 학생 정보 아래 월간 플래너를 한 페이지에 표시.
+ * @param {HTMLElement} root
+ */
+function plannerApplyPlanDemoSinglePageLayout_(root) {
+  const tabs = root.querySelector('.sp-plan-mainTabs');
+  if (tabs) {
+    tabs.setAttribute('hidden', 'hidden');
+    tabs.setAttribute('aria-hidden', 'true');
+  }
+
+  const panelStudent = root.querySelector('#sp-plan-tab-student');
+  const panelMonthly = root.querySelector('#sp-plan-tab-monthly');
+  if (!panelMonthly) return;
+
+  let shell = root.querySelector('.sp-plan-demoMonthlyShell');
+  if (!shell) {
+    shell = document.createElement('div');
+    shell.className = 'sp-plan-demoMonthlyShell';
+    if (panelStudent) {
+      panelStudent.insertAdjacentElement('afterend', shell);
+    } else {
+      const body = root.querySelector('.sp-plan-body');
+      if (!body) return;
+      body.appendChild(shell);
+    }
+    shell.appendChild(panelMonthly);
+  }
+
+  if (panelStudent) {
+    panelStudent.removeAttribute('hidden');
+    panelStudent.removeAttribute('aria-hidden');
+  }
+  panelMonthly.removeAttribute('hidden');
+  panelMonthly.removeAttribute('aria-hidden');
+}
+
+/**
+ * 홍보 데모 — 저장·월 이동·관리 UI만 숨김. 학생 정보·월간 플래너 한 페이지(조회 전용).
  * @param {HTMLElement} root
  */
 function plannerApplyPlanDemoChrome_(root) {
@@ -145,11 +182,7 @@ function plannerApplyPlanDemoChrome_(root) {
     monthActions.setAttribute('hidden', 'hidden');
     monthActions.setAttribute('aria-hidden', 'true');
   }
-  const startTab =
-    PLAN_DEMO.startTab === 'monthly' || PLAN_DEMO.startTab === 'student' ? PLAN_DEMO.startTab : 'student';
-  if (typeof root.__spPlanShowMainTab === 'function') {
-    root.__spPlanShowMainTab(startTab);
-  }
+  plannerApplyPlanDemoSinglePageLayout_(root);
 }
 
 /**
@@ -1557,7 +1590,11 @@ function wirePlannerMainTabsOnce_(root) {
       showTab('monthly');
     });
   }
-  showTab(root.__spPlanActiveTab === 'monthly' ? 'monthly' : 'student');
+  if (PLAN_DEMO.active || root.classList.contains('is-plan-demo')) {
+    plannerApplyPlanDemoSinglePageLayout_(root);
+  } else {
+    showTab(root.__spPlanActiveTab === 'monthly' ? 'monthly' : 'student');
+  }
 
   root.addEventListener('click', function (e) {
     const t = e.target instanceof HTMLElement ? e.target : null;
@@ -5172,7 +5209,7 @@ function plannerCurriculumRefreshCascade_(slot, st, fromLevel, formKind) {
     const lecItems = lecRows.map(function (L) {
       const lid = L.lecture_id != null ? String(L.lecture_id) : '';
       const no = Number(L.lecture_no);
-      const label = plannerCurriculumTodoTitle_(cname, no);
+      const label = plannerCurriculumLectureOptionLabel_(L.lecture_name, no);
       return { value: lid, label: label };
     });
     plannerSelectFillOptions_(lecEl, lecItems, '회차 선택');

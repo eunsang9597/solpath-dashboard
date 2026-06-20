@@ -7043,6 +7043,23 @@ button.sp-stu-remark__item--open:hover {
 #solpath-plan-root.is-plan-demo #sp-plan-quick-reg,
 #solpath-plan-root.is-plan-demo #sp-plan-export-bar,
 #solpath-plan-root.is-plan-demo .sp-plan-month__nav,
-#solpath-plan-root.is-plan-demo .sp-plan-month__actions {
+#solpath-plan-root.is-plan-demo .sp-plan-month__actions,
+#solpath-plan-root.is-plan-demo .sp-plan-mainTabs {
   display: none !important;
+}
+
+#solpath-plan-root.is-plan-demo .sp-plan-demoMonthlyShell {
+  width: 100%;
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid #e2e8f0;
+}
+
+#solpath-plan-root.is-plan-demo #sp-plan-tab-student,
+#solpath-plan-root.is-plan-demo #sp-plan-tab-monthly {
+  display: block !important;
+}
+
+#solpath-plan-root.is-plan-demo #sp-plan-tab-monthly {
+  margin-top: 0;
 }
