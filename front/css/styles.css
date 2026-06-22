@@ -7144,7 +7144,7 @@ button.sp-stu-remark__item--open:hover {
   }
 
   #solpath-plan-root.is-plan-demo .sp-plan-month {
-    --sp-plan-month-lead: 12rem;
+    --sp-plan-month-lead: 5.75rem;
     --sp-plan-day-col-min: 5rem;
     width: max-content;
     min-width: 100%;
@@ -7185,6 +7185,30 @@ button.sp-stu-remark__item--open:hover {
   #solpath-plan-root.is-plan-demo .sp-plan-month__weekMeta-wk {
     font-size: calc(0.62rem + var(--sp-text-bump));
     line-height: 1.25;
+  }
+
+  #solpath-plan-root.is-plan-demo .sp-plan-month__weekLead--demoMobile {
+    display: flex;
+    flex-direction: column;
+    gap: 0.28rem;
+    min-width: 0;
+  }
+
+  #solpath-plan-root.is-plan-demo .sp-plan-weekCurBtn {
+    width: 100%;
+    margin: 0;
+    padding: 0.34rem 0.25rem;
+    font-size: calc(0.58rem + var(--sp-text-bump));
+    font-weight: 750;
+    line-height: 1.28;
+    text-align: center;
+    border-radius: 8px;
+    border: 1px solid #c4b5fd;
+    background: linear-gradient(180deg, #faf5ff 0%, #f3e8ff 100%);
+    color: #5b21b6;
+    box-sizing: border-box;
+    white-space: normal;
+    word-break: keep-all;
   }
 
   #solpath-plan-root.is-plan-demo .sp-plan-month__weekLead .sp-plan-cur {
@@ -7294,10 +7318,10 @@ button.sp-stu-remark__item--open:hover {
   }
 
   #solpath-plan-root.is-plan-demo .sp-plan-month .sp-plan-day {
-    min-height: 5rem;
+    min-height: 3.15rem;
     min-width: var(--sp-plan-day-col-min);
-    padding: 0.35rem 0.32rem 0.38rem;
-    gap: 0.2rem;
+    padding: 0.32rem 0.3rem 0.34rem;
+    gap: 0.16rem;
   }
 
   #solpath-plan-root.is-plan-demo .sp-plan-day__num {
@@ -7328,6 +7352,122 @@ button.sp-stu-remark__item--open:hover {
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 2;
     overflow: hidden;
+  }
+
+  /* 데모 모바일 — 주간 교재·할 일 요약 모달 */
+  #solpath-plan-root.is-plan-demo .sp-plan-modal--demoWeek .sp-plan-modal__panel,
+  #solpath-plan-root.is-plan-demo .sp-plan-modal--demoDayPeek .sp-plan-modal__panel {
+    width: min(100vw - 1rem, 26rem);
+    max-height: min(92vh, 100%);
+  }
+
+  #solpath-plan-root.is-plan-demo .sp-plan-modal--demoDayPeek .sp-plan-modal__panel {
+    display: flex;
+    flex-direction: column;
+  }
+
+  #solpath-plan-root.is-plan-demo .sp-plan-weekModal__body {
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 0.65rem 0.75rem 0.85rem;
+  }
+
+  #solpath-plan-root.is-plan-demo .sp-plan-dayPeek__body {
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 0.65rem 0.75rem;
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+
+  #solpath-plan-root.is-plan-demo .sp-plan-dayPeek__foot {
+    padding: 0.55rem 0.75rem 0.75rem;
+    border-top: 1px solid #e2e8f0;
+    background: #faf8ff;
+    flex-shrink: 0;
+  }
+
+  #solpath-plan-root.is-plan-demo .sp-plan-dayPeek__foot .btn {
+    width: 100%;
+  }
+
+  #solpath-plan-root.is-plan-demo .sp-plan-dayPeek__empty {
+    margin: 0;
+    color: #64748b;
+    font-size: calc(0.82rem + var(--sp-text-bump));
+    text-align: center;
+    padding: 1rem 0.5rem;
+  }
+
+  #solpath-plan-root.is-plan-demo .sp-plan-dayPeek__lbl {
+    font-size: calc(0.62rem + var(--sp-text-bump));
+    font-weight: 750;
+    color: #64748b;
+    margin-bottom: 0.2rem;
+  }
+
+  #solpath-plan-root.is-plan-demo .sp-plan-dayPeek__sum .sp-plan-dayCellSum {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  #solpath-plan-root.is-plan-demo .sp-plan-dayPeek__sum .sp-plan-curBadge {
+    font-size: calc(0.72rem + var(--sp-text-bump));
+    line-height: 1.35;
+  }
+
+  #solpath-plan-root.is-plan-demo .sp-plan-dayPeek__sum .sp-plan-curBadge__text {
+    display: inline;
+    overflow: visible;
+    white-space: normal;
+    word-break: keep-all;
+    -webkit-line-clamp: unset;
+  }
+
+  #solpath-plan-root.is-plan-demo .sp-plan-dayPeek__fixed {
+    margin-top: 0.55rem;
+    padding-top: 0.5rem;
+    border-top: 1px dashed #e2e8f0;
+  }
+
+  #solpath-plan-root.is-plan-demo .sp-plan-dayPeek__fixed .sp-plan-day__fixedFoot {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  #solpath-plan-root.is-plan-demo .sp-plan-dayPeek__fixed .sp-plan-day__fixedTxt {
+    display: block;
+    font-size: calc(0.78rem + var(--sp-text-bump));
+    font-weight: 650;
+    color: #dc2626;
+    line-height: 1.35;
+    overflow: visible;
+    -webkit-line-clamp: unset;
+  }
+
+  #solpath-plan-root.is-plan-demo .sp-plan-dayPeek__events,
+  #solpath-plan-root.is-plan-demo .sp-plan-dayPeek__memo {
+    margin-top: 0.55rem;
+    padding-top: 0.5rem;
+    border-top: 1px dashed #e2e8f0;
+  }
+
+  #solpath-plan-root.is-plan-demo .sp-plan-dayPeek__memoTxt {
+    margin: 0;
+    font-size: calc(0.78rem + var(--sp-text-bump));
+    line-height: 1.45;
+    color: #334155;
+    white-space: pre-wrap;
+  }
+
+  #solpath-plan-root.is-plan-demo .sp-plan-dayPeek__evList {
+    margin: 0;
+    padding-left: 1.1rem;
+    font-size: calc(0.76rem + var(--sp-text-bump));
+    color: #334155;
+    line-height: 1.4;
   }
 
   /* 일일 모달 — 데모에서도 날짜 탭 시 조회 */
