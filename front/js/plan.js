@@ -3023,7 +3023,95 @@ function plannerFindCatalogCourseById_(courses, courseId) {
 }
 
 /**
+ * 주간 커리큘럼 — todo 1건이 속할 강좌/강의 그룹 키.
+ * @param {{ lectures?: object[] }} pack
+ * @param {string} title
+ * @param {string} lectureId
+ * @returns {string}
+ */
+function plannerCurriculumWeekGroupKeyForTodo_(pack, title, lectureId) {
+  const lid = String(lectureId != null ? lectureId : '').trim();
+  if (lid.length) {
+    const lec = plannerFindCatalogLectureById_(pack.lectures, lid);
+    if (lec && lec.course_id != null && String(lec.course_id).trim() !== '') {
+      return 'course:' + String(lec.course_id).trim();
+    }
+    return 'lecture:' + lid;
+  }
+  const tit = String(title != null ? title : '').trim();
+  if (tit.length) {
+    const name = plannerCurriculumCourseNameFromTodoTitle_(tit);
+    if (name.length) return 'title:' + name;
+  }
+  return 'manual';
+}
+
+/**
+ * 주간 커리큘럼 — 그룹(강좌·강의·수기) 1개 → 표 1행.
+ * @param {string} code 과목 코드
+ * @param {{ titles: string[], lectureIds: string[] }} bucket
+ * @param {{ courses?: object[], lectures?: object[] }} pack
+ * @returns {PlannerCurriculumRowPayload}
+ */
+function plannerCurriculumWeekRowFromGroup_(code, bucket, pack) {
+  /** @type {number[]} */
+  const lessonNums = [];
+  (bucket.titles || []).forEach(function (tit) {
+    plannerLessonsFromStudyTitle_(tit).forEach(function (n) {
+      lessonNums.push(n);
+    });
+  });
+  let outline = plannerLessonsToOutline_(lessonNums) || '';
+  if (!outline.length) outline = '—';
+  let textbook_goal = '';
+  let link_url = '';
+  const lids = bucket.lectureIds || [];
+  for (let li = 0; li < lids.length; li++) {
+    const lec = plannerFindCatalogLectureById_(pack.lectures, lids[li]);
+    if (!lec) continue;
+    const course = plannerFindCatalogCourseById_(pack.courses, lec.course_id);
+    if (!course) continue;
+    textbook_goal = plannerCurriculumCourseNameOnly_(course.instructor, course.course_name, '');
+    link_url = String(course.link_url != null ? course.link_url : '').trim();
+    if (textbook_goal.length) break;
+  }
+  if (!textbook_goal.length && bucket.titles && bucket.titles.length) {
+    textbook_goal = plannerCurriculumCourseNameFromTodoTitle_(bucket.titles[0]);
+  }
+  if (!textbook_goal.length) textbook_goal = '—';
+  return {
+    subject: plannerCategoryLabelKo_(code),
+    subject_code: code,
+    textbook_goal: textbook_goal,
+    lesson_outline: outline,
+    link_url: link_url
+  };
+}
+
+/**
+ * 주간 교재 payload — 과목 수(같은 과목 여러 강좌는 1과목으로).
+ * @param {PlannerCurriculumRowPayload[]} rows
+ * @returns {number}
+ */
+function plannerCurriculumWeekDistinctSubjectCount_(rows) {
+  /** @type {Record<string, boolean>} */
+  const seen = {};
+  let n = 0;
+  (rows || []).forEach(function (r) {
+    if (!r) return;
+    const code = String(r.subject_code != null ? r.subject_code : '').trim();
+    if (!code.length) return;
+    if (code === 'misc' && r.textbook_goal === '—' && r.lesson_outline === '—') return;
+    if (seen[code]) return;
+    seen[code] = true;
+    n++;
+  });
+  return n;
+}
+
+/**
  * 해당 주 `monthTodos`만으로 주간 커리큘럼 표 payload (할 일 없으면 빈 `rows`).
+ * 같은 과목에 서로 다른 강좌·강의가 있으면 **행을 나눠** 모두 표시한다.
  * @param {object} st
  * @param {number} weekIndex
  * @param {string[]} weekDateKeys
@@ -3032,8 +3120,7 @@ function plannerFindCatalogCourseById_(courses, courseId) {
  */
 function plannerCurriculumWeekPayloadFromMonthTodos_(st, weekIndex, weekDateKeys, curriculum) {
   const pack = plannerNormalizeCurriculumFromBootstrap_(curriculum);
-  const ranges = plannerCurriculumWeekLessonRangeFromQuickPlan_(st, weekDateKeys);
-  /** @type {Record<string, { titles: string[], lectureIds: string[] }>} */
+  /** @type {Record<string, { groupKey: string, titles: string[], lectureIds: string[] }[]>} */
   const bySubj = {};
   (weekDateKeys || []).forEach(function (key) {
     plannerMonthTodosForDay_(st, key).forEach(function (t) {
@@ -3042,18 +3129,32 @@ function plannerCurriculumWeekPayloadFromMonthTodos_(st, weekIndex, weekDateKeys
       if (!cat || cat === PLAN_CATEGORY_FIXED || cat === PLAN_CATEGORY_EVENT || cat === 'memo' || cat === PLAN_CATEGORY_ROUTINE) return;
       if (plannerIsRoutineExcludedFromStudyTotals_(t.task_id, cat)) return;
       const subj = plannerIsStudyCategoryCode_(cat) ? cat : 'misc';
-      if (!bySubj[subj]) bySubj[subj] = { titles: [], lectureIds: [] };
+      if (!bySubj[subj]) bySubj[subj] = [];
       const title = String(t.title != null ? t.title : '').trim();
-      if (title && bySubj[subj].titles.indexOf(title) < 0) bySubj[subj].titles.push(title);
       const lid = String(t.lecture_id != null ? t.lecture_id : '').trim();
-      if (lid && bySubj[subj].lectureIds.indexOf(lid) < 0) bySubj[subj].lectureIds.push(lid);
+      if (!title.length && !lid.length) return;
+      const groupKey = plannerCurriculumWeekGroupKeyForTodo_(pack, title, lid);
+      let bucket = null;
+      const groups = bySubj[subj];
+      for (let gi = 0; gi < groups.length; gi++) {
+        if (groups[gi].groupKey === groupKey) {
+          bucket = groups[gi];
+          break;
+        }
+      }
+      if (!bucket) {
+        bucket = { groupKey: groupKey, titles: [], lectureIds: [] };
+        groups.push(bucket);
+      }
+      if (title && bucket.titles.indexOf(title) < 0) bucket.titles.push(title);
+      if (lid && bucket.lectureIds.indexOf(lid) < 0) bucket.lectureIds.push(lid);
     });
   });
   /** @type {PlannerCurriculumRowPayload[]} */
   const rows = [];
   PLANNER_STUDY_CATEGORY_ORDER.forEach(function (code) {
-    const bucket = bySubj[code];
-    if (!bucket || !bucket.titles.length) {
+    const groups = bySubj[code];
+    if (!groups || !groups.length) {
       if (code === 'misc') {
         rows.push({
           subject: plannerCategoryLabelKo_('misc'),
@@ -3065,46 +3166,9 @@ function plannerCurriculumWeekPayloadFromMonthTodos_(st, weekIndex, weekDateKeys
       }
       return;
     }
-    const r = ranges[code];
-    let outline = plannerCurriculumLessonOutlineFromRange_(r) || '';
-    if (!outline.length) {
-      /** @type {number[]} */
-      const lessonNums = [];
-      bucket.titles.forEach(function (tit) {
-        plannerLessonsFromStudyTitle_(tit).forEach(function (n) {
-          lessonNums.push(n);
-        });
-      });
-      outline = plannerLessonsToOutline_(lessonNums) || '';
-    }
-    if (!outline.length) outline = '—';
-    let textbook_goal = '';
-    let link_url = '';
-    bucket.lectureIds.some(function (lid) {
-      const lec = plannerFindCatalogLectureById_(pack.lectures, lid);
-      if (!lec) return false;
-      const cid = lec.course_id;
-      const course = plannerFindCatalogCourseById_(pack.courses, cid);
-      if (course) {
-        textbook_goal = plannerCurriculumCourseNameOnly_(
-          course.instructor,
-          course.course_name,
-          ''
-        );
-        link_url = String(course.link_url != null ? course.link_url : '').trim();
-      }
-      return Boolean(textbook_goal.length);
-    });
-    if (!textbook_goal.length && bucket.titles.length) {
-      textbook_goal = plannerCurriculumCourseNameFromTodoTitle_(bucket.titles[0]);
-    }
-    if (!textbook_goal.length) textbook_goal = '—';
-    rows.push({
-      subject: plannerCategoryLabelKo_(code),
-      subject_code: code,
-      textbook_goal: textbook_goal,
-      lesson_outline: outline,
-      link_url: link_url
+    groups.forEach(function (bucket) {
+      if (!bucket.titles.length && !bucket.lectureIds.length) return;
+      rows.push(plannerCurriculumWeekRowFromGroup_(code, bucket, pack));
     });
   });
   return {
@@ -8300,8 +8364,7 @@ function renderCalendar_(root, boot) {
       );
       html += '<div class="sp-plan-month__weekRow">';
       if (planMobile) {
-        const subjN =
-          curPayload && curPayload.rows && curPayload.rows.length ? curPayload.rows.length : 0;
+        const subjN = plannerCurriculumWeekDistinctSubjectCount_(curPayload.rows || []);
         html +=
           '<div class="sp-plan-month__weekLead sp-plan-month__weekLead--planMobile">' +
           '<div class="sp-plan-month__weekMeta" aria-label="주간 구간">' +
