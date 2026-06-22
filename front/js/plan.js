@@ -183,6 +183,22 @@ function plannerApplyPlanDemoChrome_(root) {
     monthActions.setAttribute('aria-hidden', 'true');
   }
   plannerApplyPlanDemoSinglePageLayout_(root);
+  plannerApplyPlanDemoMobileHint_(root);
+}
+
+/**
+ * 홍보 데모 — 모바일 달력 가로 스크롤 안내(데모 전용, 1회 삽입).
+ * @param {HTMLElement} root
+ */
+function plannerApplyPlanDemoMobileHint_(root) {
+  const slot = root.querySelector('#sp-plan-calendar-slot');
+  if (!slot || !slot.parentElement) return;
+  if (slot.parentElement.querySelector('.sp-plan-mobileCalHint')) return;
+  const hint = document.createElement('p');
+  hint.className = 'sp-plan-mobileCalHint';
+  hint.setAttribute('aria-hidden', 'true');
+  hint.textContent = '달력은 좌우로 밀어서 보세요. 날짜를 누르면 그날 할 일·시간표를 볼 수 있습니다.';
+  slot.parentElement.insertBefore(hint, slot);
 }
 
 /**
