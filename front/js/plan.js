@@ -12,12 +12,27 @@ function spReadPlanInjected_() {
     return { url: '', planDemo: { active: false, yearMonth: '', fixtureUrl: '', fixture: null } };
   }
   const demoRaw = o.planDemo && typeof o.planDemo === 'object' ? o.planDemo : null;
+  /** @type {{ mun?: { fixtureUrl: string, fixture: object|null }, sci?: { fixtureUrl: string, fixture: object|null } }} */
+  const fixtures = {};
+  const fixturesRaw = demoRaw && demoRaw.fixtures && typeof demoRaw.fixtures === 'object' ? demoRaw.fixtures : null;
+  if (fixturesRaw) {
+    ['mun', 'sci'].forEach(function (key) {
+      const row = fixturesRaw[key];
+      if (!row || typeof row !== 'object') return;
+      fixtures[key] = {
+        fixtureUrl: String(row.fixtureUrl != null ? row.fixtureUrl : '').trim(),
+        fixture: row.fixture != null && typeof row.fixture === 'object' ? row.fixture : null
+      };
+    });
+  }
   const planDemo = {
     active: Boolean(demoRaw && demoRaw.active === true),
     yearMonth: String(demoRaw && demoRaw.yearMonth != null ? demoRaw.yearMonth : '').trim(),
     startTab: String(demoRaw && demoRaw.startTab != null ? demoRaw.startTab : 'student').trim(),
+    defaultTrack: String(demoRaw && demoRaw.defaultTrack != null ? demoRaw.defaultTrack : 'mun').trim(),
     fixtureUrl: String(demoRaw && demoRaw.fixtureUrl != null ? demoRaw.fixtureUrl : '').trim(),
-    fixture: demoRaw && demoRaw.fixture != null && typeof demoRaw.fixture === 'object' ? demoRaw.fixture : null
+    fixture: demoRaw && demoRaw.fixture != null && typeof demoRaw.fixture === 'object' ? demoRaw.fixture : null,
+    fixtures: fixtures
   };
   return {
     url: String(
@@ -35,8 +50,16 @@ function spReadPlanInjected_() {
 
 const _planInj = spReadPlanInjected_();
 const GAS_BASE_URL = _planInj.url || '';
-/** @type {{ active: boolean, yearMonth: string, startTab: string, fixtureUrl: string, fixture: object|null }} */
-const PLAN_DEMO = _planInj.planDemo || { active: false, yearMonth: '', startTab: 'student', fixtureUrl: '', fixture: null };
+/** @type {{ active: boolean, yearMonth: string, startTab: string, defaultTrack: string, fixtureUrl: string, fixture: object|null, fixtures: object }} */
+const PLAN_DEMO = _planInj.planDemo || {
+  active: false,
+  yearMonth: '',
+  startTab: 'student',
+  defaultTrack: 'mun',
+  fixtureUrl: '',
+  fixture: null,
+  fixtures: {}
+};
 const GAS_MODE = {
   get useMock() {
     if (PLAN_DEMO.active) {
@@ -112,6 +135,183 @@ async function plannerLoadPlanDemoFixture_(cfg) {
     throw new Error('데모 데이터 JSON 형식이 올바르지 않습니다.');
   }
   return /** @type {Record<string, unknown>} */ (data);
+}
+
+/** @returns {boolean} */
+function plannerPlanDemoHasMultiTrack_() {
+  const fx = PLAN_DEMO.fixtures;
+  return Boolean(fx && fx.mun && fx.sci);
+}
+
+/**
+ * @param {unknown} raw
+ * @returns {''|'mun'|'sci'}
+ */
+function plannerPlanDemoNormalizeTrack_(raw) {
+  const s = String(raw != null ? raw : '')
+    .trim()
+    .toLowerCase();
+  if (!s.length) return '';
+  if (s === 'sci' || s === 'science' || s === '이과' || s === 'nat' || s === 'natural') return 'sci';
+  if (s === 'mun' || s === 'liberal' || s === '문과' || s === 'humanities') return 'mun';
+  return '';
+}
+
+/**
+ * URL `?spPlanTrack=mun|sci` · `#spPlanTrack=…` · 스니펫 `defaultTrack`.
+ * @returns {'mun'|'sci'}
+ */
+function plannerPlanDemoInitialTrack_() {
+  const fromUrl = plannerPlanDemoTrackFromUrl_();
+  if (fromUrl) return fromUrl;
+  const def = plannerPlanDemoNormalizeTrack_(PLAN_DEMO.defaultTrack);
+  return def === 'sci' ? 'sci' : 'mun';
+}
+
+/**
+ * @returns {''|'mun'|'sci'}
+ */
+function plannerPlanDemoTrackFromUrl_() {
+  if (typeof window === 'undefined') return '';
+  try {
+    const q = new URLSearchParams(window.location.search);
+    const keys = ['spPlanTrack', 'planTrack', 'track'];
+    let i;
+    for (i = 0; i < keys.length; i++) {
+      const t = plannerPlanDemoNormalizeTrack_(q.get(keys[i]));
+      if (t) return t;
+    }
+    const hash = String(window.location.hash || '').replace(/^#/, '');
+    const hm = hash.match(/(?:^|[?&])spPlanTrack=(mun|sci)/i);
+    if (hm) return hm[1].toLowerCase() === 'sci' ? 'sci' : 'mun';
+  } catch (_e) {
+    /* ignore */
+  }
+  return '';
+}
+
+/**
+ * @param {'mun'|'sci'} track
+ */
+function plannerPlanDemoSyncTrackInUrl_(track) {
+  if (typeof window === 'undefined' || !window.history || !window.history.replaceState) return;
+  try {
+    const url = new URL(window.location.href);
+    url.searchParams.set('spPlanTrack', track === 'sci' ? 'sci' : 'mun');
+    window.history.replaceState({}, '', url.pathname + url.search + url.hash);
+  } catch (_e) {
+    /* ignore */
+  }
+}
+
+/**
+ * @param {'mun'|'sci'} track
+ * @returns {{ fixtureUrl: string, fixture: object|null }}
+ */
+function plannerPlanDemoFixtureCfgForTrack_(track) {
+  const t = track === 'sci' ? 'sci' : 'mun';
+  const fx = PLAN_DEMO.fixtures;
+  if (fx && fx[t]) {
+    return {
+      fixtureUrl: String(fx[t].fixtureUrl || ''),
+      fixture: fx[t].fixture || null
+    };
+  }
+  return {
+    fixtureUrl: PLAN_DEMO.fixtureUrl,
+    fixture: PLAN_DEMO.fixture
+  };
+}
+
+/**
+ * @param {HTMLElement} root
+ */
+function plannerMountDemoTrackBar_(root) {
+  if (!plannerPlanDemoHasMultiTrack_()) return;
+  if (root.querySelector('#sp-plan-demo-track-bar')) return;
+  const bar = document.createElement('div');
+  bar.id = 'sp-plan-demo-track-bar';
+  bar.className = 'sp-plan-demoTrackBar';
+  bar.setAttribute('role', 'tablist');
+  bar.setAttribute('aria-label', '데모 계열 선택');
+  bar.innerHTML =
+    '<button type="button" class="sp-plan-demoTrackBar__btn" data-sp-demo-track="mun" role="tab" aria-selected="false">문과 데모</button>' +
+    '<button type="button" class="sp-plan-demoTrackBar__btn" data-sp-demo-track="sci" role="tab" aria-selected="false">이과 데모</button>';
+  const shell = root.querySelector('.sp-plan-rootinner');
+  if (shell) {
+    shell.insertBefore(bar, shell.firstChild);
+  } else {
+    root.prepend(bar);
+  }
+}
+
+/**
+ * @param {HTMLElement} root
+ * @param {'mun'|'sci'} track
+ */
+function plannerUpdateDemoTrackBar_(root, track) {
+  const bar = root.querySelector('#sp-plan-demo-track-bar');
+  if (!bar) return;
+  bar.querySelectorAll('[data-sp-demo-track]').forEach(function (btn) {
+    if (!(btn instanceof HTMLElement)) return;
+    const on = btn.getAttribute('data-sp-demo-track') === track;
+    btn.classList.toggle('is-active', on);
+    btn.setAttribute('aria-selected', on ? 'true' : 'false');
+  });
+}
+
+/**
+ * @param {HTMLElement} root
+ * @param {'mun'|'sci'} track
+ * @returns {Promise<void>}
+ */
+async function plannerSwitchPlanDemoTrack_(root, track) {
+  root.__spPlanDemoTrack = track;
+  plannerPlanDemoSyncTrackInUrl_(track);
+  plannerUpdateDemoTrackBar_(root, track);
+  const ban = root.querySelector('#sp-plan-banner');
+  if (ban) ban.setAttribute('hidden', 'hidden');
+  const cfg = plannerPlanDemoFixtureCfgForTrack_(track);
+  const raw = await plannerLoadPlanDemoFixture_(cfg);
+  const pack = plannerNormalizePlanDemoFixture_(raw);
+  if (ban) ban.setAttribute('hidden', 'hidden');
+  renderCalendar_(root, {
+    role: pack.role,
+    common: pack.common,
+    personal: pack.personal,
+    curriculum: pack.curriculum
+  });
+  renderPlannerStudentProfile_(root, pack.student_profile);
+  plannerRefreshMonthlyNotice_(root);
+}
+
+/**
+ * @param {HTMLElement} root
+ */
+function wirePlannerDemoTrackOnce_(root) {
+  if (root.__spPlanDemoTrackWired) return;
+  root.__spPlanDemoTrackWired = true;
+  root.addEventListener('click', function (e) {
+    const t = e.target instanceof HTMLElement ? e.target : null;
+    if (!t) return;
+    const btn = t.closest ? t.closest('[data-sp-demo-track]') : null;
+    if (!(btn instanceof HTMLElement)) return;
+    const track = plannerPlanDemoNormalizeTrack_(btn.getAttribute('data-sp-demo-track'));
+    if (!track || track === root.__spPlanDemoTrack) return;
+    e.preventDefault();
+    const ban = root.querySelector('#sp-plan-banner');
+    if (ban) {
+      ban.textContent = '데모 데이터 불러오는 중…';
+      ban.removeAttribute('hidden');
+    }
+    plannerSwitchPlanDemoTrack_(root, track).catch(function (err) {
+      const m = err && typeof err === 'object' && 'message' in err ? String(err.message) : String(err);
+      if (ban) {
+        ban.textContent = m;
+        ban.removeAttribute('hidden');
+      }
+    });
+  });
 }
 
 /**
@@ -384,6 +584,11 @@ async function plannerStartPlanDemo_(root) {
   root.__spPlanAdminMode = false;
   root.__spPlanActiveTab = PLAN_DEMO.startTab === 'monthly' ? 'monthly' : 'student';
   root.__spPlanDemoViewMonth = plannerPlanDemoViewMonthDate_(PLAN_DEMO);
+  const demoTrack = plannerPlanDemoInitialTrack_();
+  root.__spPlanDemoTrack = demoTrack;
+  plannerMountDemoTrackBar_(root);
+  plannerUpdateDemoTrackBar_(root, demoTrack);
+  plannerPlanDemoSyncTrackInUrl_(demoTrack);
 
   const gate = root.querySelector('.sp-plan-gate');
   if (gate) {
@@ -396,7 +601,7 @@ async function plannerStartPlanDemo_(root) {
   /** @type {{ role: string, common: object[], personal: object[] | null, student_profile: Record<string, unknown> | null, curriculum: unknown }} */
   let pack;
   try {
-    const raw = await plannerLoadPlanDemoFixture_(PLAN_DEMO);
+    const raw = await plannerLoadPlanDemoFixture_(plannerPlanDemoFixtureCfgForTrack_(demoTrack));
     pack = plannerNormalizePlanDemoFixture_(raw);
   } catch (e) {
     const m = e && typeof e === 'object' && 'message' in e ? String(/** @type {{ message?: string }} */ (e).message) : String(e);
@@ -9707,6 +9912,7 @@ function main() {
   wirePlannerCoachingSubjReadOnce_(el);
   wirePlannerPdfExportOnce_(el);
   wirePlannerPersonalTodosApplyOnce_(el);
+  wirePlannerDemoTrackOnce_(el);
   renderPlannerStudentProfile_(el, null);
   wirePlanDevBar_(el);
   plannerApplyAdminVisibility_(el);

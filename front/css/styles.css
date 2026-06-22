@@ -7066,6 +7066,51 @@ button.sp-stu-remark__item--open:hover {
 
 /* 6. (구) 행별 max-content + !important 그리드 — 제거됨; 월간 그리드는 #solpath-plan-root .sp-plan-month__dow / __weekRow 단일 정의 */
 
+/* 홍보 데모 — 문과/이과 전환 바 */
+#solpath-plan-root .sp-plan-demoTrackBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  margin: 0 0 0.75rem;
+  padding: 0.45rem 0.5rem;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+  border: 1px solid #e2e8f0;
+  box-sizing: border-box;
+}
+
+#solpath-plan-root .sp-plan-demoTrackBar__btn {
+  flex: 1 1 8.5rem;
+  min-width: 0;
+  max-width: 14rem;
+  margin: 0;
+  padding: 0.5rem 0.85rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #fff;
+  color: #475569;
+  font-size: calc(0.78rem + var(--sp-text-bump));
+  font-weight: 700;
+  line-height: 1.25;
+  cursor: pointer;
+  box-sizing: border-box;
+  transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+
+#solpath-plan-root .sp-plan-demoTrackBar__btn:hover {
+  border-color: #a78bfa;
+  color: #5b21b6;
+}
+
+#solpath-plan-root .sp-plan-demoTrackBar__btn.is-active {
+  border-color: #7c3aed;
+  background: #f5f3ff;
+  color: #4c1d95;
+  box-shadow: 0 0 0 1px rgba(124, 58, 237, 0.15);
+}
+
 /* 홍보 데모 — JS plannerApplyPlanDemoChrome_ 와 함께 (이중 숨김) */
 #solpath-plan-root.is-plan-demo .sp-plan-gate,
 #solpath-plan-root.is-plan-demo .sp-plan-devbar,
