@@ -316,6 +316,20 @@ function wirePlannerCoachingSubjReadOnce_(root) {
     if (!list || !list[idx]) return;
     plannerOpenCoachingSubjModal_(root, list[idx].subject, list[idx].body);
   });
+  if (!root.__spPlanCoachingMobileMqWired) {
+    root.__spPlanCoachingMobileMqWired = true;
+    try {
+      const mq = window.matchMedia(PLAN_MOBILE_MQ);
+      mq.addEventListener('change', function () {
+        plannerCloseCoachingSubjModal_(root);
+        if (root.__spPlanStudentProfileInitial && typeof root.__spPlanStudentProfileInitial === 'object') {
+          renderPlannerCoachingBlocks_(root, root.__spPlanStudentProfileInitial);
+        }
+      });
+    } catch (_mqErr) {
+      /* matchMedia 미지원 */
+    }
+  }
 }
 
 /**
@@ -1609,9 +1623,10 @@ function renderPlannerCoachingBlocks_(root, profile) {
     } else {
       /** @type {{ subject: string, body: string }[]} */
       const readList = [];
+      const planMobile = plannerIsPlanMobile_(root);
       keys.forEach(function (k, idx) {
         readList.push({ subject: k, body: subjObj[k] || '' });
-        h += plannerCoachingSubjectRowReadHtml_(k, subjObj[k] || '', idx);
+        h += plannerCoachingSubjectRowReadHtml_(k, subjObj[k] || '', idx, planMobile);
       });
       root.__spPlanCoachingSubjReadList = readList;
     }
@@ -1625,13 +1640,14 @@ function renderPlannerCoachingBlocks_(root, profile) {
  * @param {string} subject
  * @param {string} body
  * @param {number} readIdx
+ * @param {boolean} [mobilePreview] 모바일일 때만 미리보기·「전체 보기」
  * @returns {string}
  */
-function plannerCoachingSubjectRowReadHtml_(subject, body, readIdx) {
+function plannerCoachingSubjectRowReadHtml_(subject, body, readIdx, mobilePreview) {
   const sk = String(subject != null ? subject : '').trim();
   const bv = String(body != null ? body : '').trim();
   if (!sk.length && !bv.length) return '';
-  const prev = plannerCoachingSubjectPreviewText_(bv);
+  const prev = mobilePreview ? plannerCoachingSubjectPreviewText_(bv) : { preview: bv, truncated: false };
   let bodyCell;
   if (prev.truncated && bv.length) {
     bodyCell =
@@ -3183,7 +3199,7 @@ const PLAN_DEV_HTML = `<div class="sp-plan-devbar" id="sp-plan-devbar" role="reg
   <span class="sp-plan-devbar__label">제작용</span>
   <button type="button" class="btn btn--ghost sp-plan-devbar__btn" id="sp-plan-dev-skip-gate" title="전화·이름 확인 없이 메인 화면만 표시합니다. (추적·GAS 호출 없음)">원페이지만(게이트 생략)</button>
   <button type="button" class="btn btn--ghost sp-plan-devbar__btn" id="sp-plan-dev-init" title="Drive에 플래너 마스터 스프레드시트가 없으면 새로 만들고, 필요한 시트·헤더를 맞춥니다.">마스터 준비(파일·탭)</button>
-  <button type="button" class="btn btn--ghost sp-plan-devbar__btn" id="sp-plan-dev-sync" title="주문 원천 DB에서 레지스트리를 다시 쓰고, 학생 파일·월 탭을 맞춥니다. 학생 todo 데이터는 지우지 않습니다.">동기화(레지스트리+학생파일)</button>
+  <button type="button" class="btn btn--ghost sp-plan-devbar__btn" id="sp-plan-dev-sync" title="주문 원천 DB에서 레지스트리를 갱신합니다. planner_registry에 수기로 넣은 행·프로필·코칭 열은 유지하고, 주문에서 다시 쓰는 행만 회원·주문 정보를 맞춥니다. 학생 todo 데이터는 지우지 않습니다.">동기화(레지스트리+학생파일)</button>
   <span class="sp-plan-devbar__msg" id="sp-plan-dev-msg" aria-live="polite"></span>
 </div>`;
 
@@ -9596,7 +9612,9 @@ function wirePlanDevBar_(root) {
     showDevMsg(
       '레지스트리 ' +
         (d.written != null ? d.written : 0) +
-        '행, 신규 학생파일 ' +
+        '행' +
+        (d.preservedRegistryRows ? ', 수기 유지 ' + d.preservedRegistryRows : '') +
+        ', 신규 학생파일 ' +
         (d.provisioned != null ? d.provisioned : 0) +
         ', 재사용 ' +
         (d.reusedStudentFiles != null ? d.reusedStudentFiles : 0) +

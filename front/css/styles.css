@@ -7097,24 +7097,6 @@ button.sp-stu-remark__item--open:hover {
   vertical-align: top;
 }
 
-#solpath-plan-root .sp-plan-coaching__subjPreview {
-  margin: 0 0 0.35rem;
-  white-space: pre-wrap;
-  word-break: break-word;
-  line-height: 1.45;
-  color: #334155;
-}
-
-#solpath-plan-root .sp-plan-coaching__subjMore {
-  padding: 0.2rem 0.45rem;
-  font-size: calc(0.68rem + var(--sp-text-bump));
-  font-weight: 700;
-  color: #5b21b6;
-  border: 1px solid #ddd6fe;
-  border-radius: 6px;
-  background: #faf5ff;
-}
-
 #solpath-plan-root .sp-plan-coachingSubjModal__body {
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
@@ -7205,6 +7187,24 @@ button.sp-stu-remark__item--open:hover {
     display: block;
     width: auto;
     padding: 0;
+  }
+
+  #solpath-plan-root .sp-plan-coaching__subjPreview {
+    margin: 0 0 0.35rem;
+    white-space: pre-wrap;
+    word-break: break-word;
+    line-height: 1.45;
+    color: #334155;
+  }
+
+  #solpath-plan-root .sp-plan-coaching__subjMore {
+    padding: 0.2rem 0.45rem;
+    font-size: calc(0.68rem + var(--sp-text-bump));
+    font-weight: 700;
+    color: #5b21b6;
+    border: 1px solid #ddd6fe;
+    border-radius: 6px;
+    background: #faf5ff;
   }
 
   /* 가로 스크롤은 슬롯 한 곳 — 7열을 뷰포트에 억지로 맞추지 않음 */
