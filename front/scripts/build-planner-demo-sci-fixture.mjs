@@ -114,6 +114,7 @@ const rows = lines.slice(1).map((line) => {
   return o;
 });
 
+/** 일일 모달 학생 메모 — 문과 데모와 같은 날짜·톤, 내용은 이과 TSV 일정만 반영 */
 const memos = [
   {
     task_id: '__sp_memo_2026-05-01',
@@ -130,10 +131,66 @@ const memos = [
     updated_date: '2026-06-22'
   },
   {
+    task_id: '__sp_memo_2026-05-04',
+    title:
+      '5월 첫 제대로 된 루틴 날. 학교 끝나고 문법 13·14강(동명사·부정사)이랑 단문 CH08까지 했어요. 저녁 적분 DAY11도 끝냈습니다.',
+    date: '2026-05-04',
+    category: 'memo',
+    lecture_id: '',
+    timeline_slots: '[]',
+    sort_key: -800,
+    mark: 'none',
+    trace_dates: '[]',
+    created_date: '2026-06-22',
+    updated_date: '2026-06-22'
+  },
+  {
     task_id: '__sp_memo_2026-05-06',
     title:
-      '월말고사 성적 확인했어요. 수학은 괜찮았는데 영어 문법이 조금 밀렸어요. 오후 적분 DAY13은 끝냈고 내일 학교 끝나고 문법 2강 채울게요.',
+      '월말고사 성적 확인했어요. 수학은 괜찮았는데 영어 문법이 조금 밀렸어요. 학교 끝나고 적분 DAY13은 했고, 내일 문법 2강 채울게요.',
     date: '2026-05-06',
+    category: 'memo',
+    lecture_id: '',
+    timeline_slots: '[]',
+    sort_key: -800,
+    mark: 'none',
+    trace_dates: '[]',
+    created_date: '2026-06-22',
+    updated_date: '2026-06-22'
+  },
+  {
+    task_id: '__sp_memo_2026-05-10',
+    title:
+      '일요일이라 영어는 쉬고 선대 28~29강만 마무리했어요. 다음 주부터 학교·영어·수학 다시 병행해야 해서 오늘은 수학 정리만 했습니다.',
+    date: '2026-05-10',
+    category: 'memo',
+    lecture_id: '',
+    timeline_slots: '[]',
+    sort_key: -800,
+    mark: 'none',
+    trace_dates: '[]',
+    created_date: '2026-06-22',
+    updated_date: '2026-06-22'
+  },
+  {
+    task_id: '__sp_memo_2026-05-12',
+    title:
+      '학교 수업이 길어서 솔루틴이랑 적분 DAY17만 했어요. 문법·독해는 밀렸는데 △, 목요일에 비교 파트부터 다시 채울 예정이에요.',
+    date: '2026-05-12',
+    category: 'memo',
+    lecture_id: '',
+    timeline_slots: '[]',
+    sort_key: -800,
+    mark: 'none',
+    trace_dates: '[]',
+    created_date: '2026-06-22',
+    updated_date: '2026-06-22'
+  },
+  {
+    task_id: '__sp_memo_2026-05-14',
+    title:
+      '문법 비교①②랑 단문 부연 ①② 봤어요. 학교 끝나고 시간이 빠듯했는데 적분 DAY19까지는 끝냈습니다. 솔루틴 No.09도 유지했어요.',
+    date: '2026-05-14',
     category: 'memo',
     lecture_id: '',
     timeline_slots: '[]',
@@ -146,8 +203,22 @@ const memos = [
   {
     task_id: '__sp_memo_2026-05-16',
     title:
-      '토요일 김영 모의고사 치르고 왔어요. 오전에 독해·문법, 오후에 수학 weekly까지 했는데 체력이 빠졌네요. 일요일은 수학 선대만 가볍게.',
+      '김영 상위권 모의고사 치르고 왔어요. 오전 문법·독해, 오후 적분 weekly 6회까지 했는데 체력이 빠졌네요. 일요일엔 선대만 가볍게.',
     date: '2026-05-16',
+    category: 'memo',
+    lecture_id: '',
+    timeline_slots: '[]',
+    sort_key: -800,
+    mark: 'none',
+    trace_dates: '[]',
+    created_date: '2026-06-22',
+    updated_date: '2026-06-22'
+  },
+  {
+    task_id: '__sp_memo_2026-05-21',
+    title:
+      '이번 주 밀렸던 문법·독해 정리하는 날. 관사·대명사 2강이랑 단문독해 전체 복습, 적분 DAY24까지 채웠어요. 내일도 이어갈게요.',
+    date: '2026-05-21',
     category: 'memo',
     lecture_id: '',
     timeline_slots: '[]',
@@ -160,8 +231,36 @@ const memos = [
   {
     task_id: '__sp_memo_2026-05-25',
     title:
-      '문법 전체 테스트 있는 날. 학습 현황 보고 준비하면서 201·301 N회독 속도가 걱정돼요. 로직트리 OT부터 다시 맞춰볼게요.',
+      '문법 전체 테스트·학습 현황 보고 날. 201·301 N회독 속도가 걱정돼서 OT부터 다시 맞춰봤어요. 로직트리 1~2강은 짧게만 봤습니다 △.',
     date: '2026-05-25',
+    category: 'memo',
+    lecture_id: '',
+    timeline_slots: '[]',
+    sort_key: -800,
+    mark: 'none',
+    trace_dates: '[]',
+    created_date: '2026-06-22',
+    updated_date: '2026-06-22'
+  },
+  {
+    task_id: '__sp_memo_2026-05-29',
+    title:
+      '5월 월말고사 시작. 시험 기간이라 영어는 솔루틴만 하고 수학은 적분 DAY30 위주로 했어요 △. 고사 끝나면 로직트리 진도 다시 올릴게요.',
+    date: '2026-05-29',
+    category: 'memo',
+    lecture_id: '',
+    timeline_slots: '[]',
+    sort_key: -800,
+    mark: 'none',
+    trace_dates: '[]',
+    created_date: '2026-06-22',
+    updated_date: '2026-06-22'
+  },
+  {
+    task_id: '__sp_memo_2026-05-30',
+    title:
+      '월말고사 다음 날. 독해 4강 몰아서 들었고 적분 weekly 8회까지 했어요. 5월 마지막 주라 주차 캡처 인증도 올려뒀습니다.',
+    date: '2026-05-30',
     category: 'memo',
     lecture_id: '',
     timeline_slots: '[]',
