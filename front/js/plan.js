@@ -183,14 +183,19 @@ function plannerApplyPlanDemoChrome_(root) {
     monthActions.setAttribute('aria-hidden', 'true');
   }
   plannerApplyPlanDemoSinglePageLayout_(root);
-  plannerApplyPlanDemoMobileHint_(root);
+  plannerApplyPlanMobileCalHint_(root);
 }
 
+/** @type {number} */
+const PLANNER_COACHING_SUBJ_PREVIEW_MAX = 140;
+
+const PLAN_MOBILE_MQ = '(max-width: 720px)';
+
 /**
- * 홍보 데모 — 모바일 달력 가로 스크롤 안내(데모 전용, 1회 삽입).
+ * 모바일 달력 안내(1회 삽입) — 본편·데모 공통.
  * @param {HTMLElement} root
  */
-function plannerApplyPlanDemoMobileHint_(root) {
+function plannerApplyPlanMobileCalHint_(root) {
   const slot = root.querySelector('#sp-plan-calendar-slot');
   if (!slot || !slot.parentElement) return;
   if (slot.parentElement.querySelector('.sp-plan-mobileCalHint')) return;
@@ -201,16 +206,14 @@ function plannerApplyPlanDemoMobileHint_(root) {
   slot.parentElement.insertBefore(hint, slot);
 }
 
-const PLAN_DEMO_MOBILE_MQ = '(max-width: 720px)';
-
 /**
  * @param {HTMLElement} root
  * @returns {boolean}
  */
-function plannerIsPlanDemoMobile_(root) {
-  if (!plannerIsPlanDemoRoot_(root)) return false;
+function plannerIsPlanMobile_(root) {
+  if (!root) return false;
   if (typeof window === 'undefined' || !window.matchMedia) return false;
-  return window.matchMedia(PLAN_DEMO_MOBILE_MQ).matches;
+  return window.matchMedia(PLAN_MOBILE_MQ).matches;
 }
 
 /**
@@ -225,12 +228,103 @@ function plannerFormatYmdKoShort_(ymd) {
 }
 
 /**
- * 데모 모바일 — 달력 칸 요약(할 일·고정·이벤트·메모).
+ * @param {string} text
+ * @returns {{ preview: string, truncated: boolean }}
+ */
+function plannerCoachingSubjectPreviewText_(text) {
+  const full = String(text != null ? text : '').trim();
+  if (full.length <= PLANNER_COACHING_SUBJ_PREVIEW_MAX) {
+    return { preview: full, truncated: false };
+  }
+  let cut = full.slice(0, PLANNER_COACHING_SUBJ_PREVIEW_MAX);
+  const lastNl = cut.lastIndexOf('\n');
+  if (lastNl > PLANNER_COACHING_SUBJ_PREVIEW_MAX * 0.55) {
+    cut = cut.slice(0, lastNl);
+  }
+  return { preview: cut.trimEnd() + '…', truncated: true };
+}
+
+/**
+ * @param {HTMLElement} root
+ * @param {string} subject
+ * @param {string} body
+ */
+function plannerOpenCoachingSubjModal_(root, subject, body) {
+  plannerEnsureCoachingSubjModal_(root);
+  const m = root.querySelector('#sp-plan-coaching-subj-modal');
+  if (!m) return;
+  const sk = String(subject != null ? subject : '').trim();
+  const bv = String(body != null ? body : '').trim();
+  const title = m.querySelector('#sp-plan-coaching-subj-modal-title');
+  if (title) title.textContent = sk.length ? sk : '과목별 상세 안내';
+  const bodyEl = m.querySelector('#sp-plan-coaching-subj-modal-body');
+  if (bodyEl) bodyEl.textContent = bv.length ? bv : '—';
+  m.removeAttribute('hidden');
+}
+
+/**
+ * @param {HTMLElement} root
+ */
+function plannerCloseCoachingSubjModal_(root) {
+  const m = root.querySelector('#sp-plan-coaching-subj-modal');
+  if (m) m.setAttribute('hidden', 'hidden');
+}
+
+/**
+ * @param {HTMLElement} root
+ */
+function plannerEnsureCoachingSubjModal_(root) {
+  let m = root.querySelector('#sp-plan-coaching-subj-modal');
+  if (m) return;
+  m = document.createElement('div');
+  m.id = 'sp-plan-coaching-subj-modal';
+  m.className = 'sp-plan-modal sp-plan-modal--coachingSubj';
+  m.setAttribute('hidden', 'hidden');
+  m.innerHTML =
+    '<div class="sp-plan-modal__backdrop" data-sp-plan-close="coaching-subj" aria-hidden="true"></div>' +
+    '<div class="sp-plan-modal__panel" role="dialog" aria-modal="true" aria-labelledby="sp-plan-coaching-subj-modal-title">' +
+    '<div class="sp-plan-modal__head">' +
+    '<div class="sp-plan-modal__title" id="sp-plan-coaching-subj-modal-title">과목별 상세 안내</div>' +
+    '<button type="button" class="btn btn--ghost sp-plan-modal__close" data-sp-plan-close="coaching-subj">닫기</button>' +
+    '</div>' +
+    '<div class="sp-plan-modal__body sp-plan-coachingSubjModal__body" id="sp-plan-coaching-subj-modal-body"></div>' +
+    '</div>';
+  root.appendChild(m);
+  m.addEventListener('click', function (e) {
+    const t = e.target instanceof HTMLElement ? e.target : null;
+    if (!t) return;
+    if (t.getAttribute('data-sp-plan-close') === 'coaching-subj' || t.closest('[data-sp-plan-close="coaching-subj"]')) {
+      plannerCloseCoachingSubjModal_(root);
+    }
+  });
+}
+
+/**
+ * @param {HTMLElement} root
+ */
+function wirePlannerCoachingSubjReadOnce_(root) {
+  if (root.__spPlanCoachingSubjReadWired) return;
+  root.__spPlanCoachingSubjReadWired = true;
+  root.addEventListener('click', function (e) {
+    const t = e.target instanceof HTMLElement ? e.target : null;
+    if (!t) return;
+    const btn = t.closest ? t.closest('[data-sp-coaching-subj-open]') : null;
+    if (!(btn instanceof HTMLElement)) return;
+    e.preventDefault();
+    const idx = Number(btn.getAttribute('data-sp-coaching-subj-idx'));
+    const list = root.__spPlanCoachingSubjReadList;
+    if (!list || !list[idx]) return;
+    plannerOpenCoachingSubjModal_(root, list[idx].subject, list[idx].body);
+  });
+}
+
+/**
+ * 모바일 — 달력 칸 요약(할 일·고정·이벤트·메모).
  * @param {object} st
  * @param {string} key ymd
  * @returns {string}
  */
-function plannerPlanDemoDayPeekBodyHtml_(st, key) {
+function plannerPlanDayPeekBodyHtml_(st, key) {
   /** @type {string[]} */
   const parts = [];
   const summary = plannerQuickPlanCellSummaryHtml_(st, key);
@@ -1511,10 +1605,15 @@ function renderPlannerCoachingBlocks_(root, profile) {
     } else if (!keys.length) {
       h =
         '<tr><td colspan="2" class="sp-plan-coaching__subjEmpty" role="cell">등록된 과목별 안내가 없습니다.</td></tr>';
+      root.__spPlanCoachingSubjReadList = [];
     } else {
-      keys.forEach(function (k) {
-        h += plannerCoachingSubjectRowReadHtml_(k, subjObj[k] || '');
+      /** @type {{ subject: string, body: string }[]} */
+      const readList = [];
+      keys.forEach(function (k, idx) {
+        readList.push({ subject: k, body: subjObj[k] || '' });
+        h += plannerCoachingSubjectRowReadHtml_(k, subjObj[k] || '', idx);
       });
+      root.__spPlanCoachingSubjReadList = readList;
     }
     subjBody.innerHTML = h;
   }
@@ -1525,20 +1624,36 @@ function renderPlannerCoachingBlocks_(root, profile) {
 /**
  * @param {string} subject
  * @param {string} body
+ * @param {number} readIdx
  * @returns {string}
  */
-function plannerCoachingSubjectRowReadHtml_(subject, body) {
+function plannerCoachingSubjectRowReadHtml_(subject, body, readIdx) {
   const sk = String(subject != null ? subject : '').trim();
   const bv = String(body != null ? body : '').trim();
   if (!sk.length && !bv.length) return '';
+  const prev = plannerCoachingSubjectPreviewText_(bv);
+  let bodyCell;
+  if (prev.truncated && bv.length) {
+    bodyCell =
+      '<td class="sp-plan-coaching__subjBodyRead sp-plan-coaching__subjBodyRead--preview">' +
+      '<p class="sp-plan-coaching__subjPreview">' +
+      esc(prev.preview) +
+      '</p>' +
+      '<button type="button" class="btn btn--ghost sp-plan-coaching__subjMore" data-sp-coaching-subj-open data-sp-coaching-subj-idx="' +
+      String(readIdx) +
+      '">전체 보기</button>' +
+      '</td>';
+  } else {
+    bodyCell =
+      '<td class="sp-plan-coaching__subjBodyRead">' + esc(bv.length ? bv : '—') + '</td>';
+  }
   return (
     '<tr data-sp-plan-subject-row>' +
     '<th scope="row" class="sp-plan-coaching__subjKeyRead">' +
     esc(sk.length ? sk : '—') +
     '</th>' +
-    '<td class="sp-plan-coaching__subjBodyRead">' +
-    esc(bv.length ? bv : '—') +
-    '</td></tr>'
+    bodyCell +
+    '</tr>'
   );
 }
 
@@ -8151,7 +8266,7 @@ function renderCalendar_(root, boot) {
     }
 
     let html = '';
-    const demoMobile = plannerIsPlanDemoMobile_(root);
+    const planMobile = plannerIsPlanMobile_(root);
     for (let w = 0; w < 6; w++) {
       const sun = new Date(start.getFullYear(), start.getMonth(), start.getDate() + w * 7);
       const sat = new Date(sun.getFullYear(), sun.getMonth(), sun.getDate() + 6);
@@ -8168,11 +8283,11 @@ function renderCalendar_(root, boot) {
         st
       );
       html += '<div class="sp-plan-month__weekRow">';
-      if (demoMobile) {
+      if (planMobile) {
         const subjN =
           curPayload && curPayload.rows && curPayload.rows.length ? curPayload.rows.length : 0;
         html +=
-          '<div class="sp-plan-month__weekLead sp-plan-month__weekLead--demoMobile">' +
+          '<div class="sp-plan-month__weekLead sp-plan-month__weekLead--planMobile">' +
           '<div class="sp-plan-month__weekMeta" aria-label="주간 구간">' +
           '<div class="sp-plan-month__weekMeta-range">' +
           mdShort(sun) +
@@ -8235,8 +8350,8 @@ function renderCalendar_(root, boot) {
             ${badge ? `<span class="sp-plan-day__badge" aria-label="요약 ${badge}건">${badge}</span>` : ''}
           </div>
           <div class="sp-plan-day__dots" aria-hidden="true">${dots}</div>
-          ${demoMobile ? '' : plannerQuickPlanCellSummaryHtml_(st, key)}
-          ${demoMobile ? '' : plannerFixedScheduleFooterHtml_(st, key)}
+          ${planMobile ? '' : plannerQuickPlanCellSummaryHtml_(st, key)}
+          ${planMobile ? '' : plannerFixedScheduleFooterHtml_(st, key)}
         </button>`;
       }
       html += '</div>';
@@ -8270,14 +8385,12 @@ function renderCalendar_(root, boot) {
     );
   }
 
-  function ensureDemoMobileModals_() {
-    if (!plannerIsPlanDemoRoot_(root)) return;
-
+  function ensurePlanMobileModals_() {
     let weekM = root.querySelector('#sp-plan-week-modal');
     if (!weekM) {
       weekM = document.createElement('div');
       weekM.id = 'sp-plan-week-modal';
-      weekM.className = 'sp-plan-modal sp-plan-modal--demoWeek';
+      weekM.className = 'sp-plan-modal sp-plan-modal--weekCur';
       weekM.setAttribute('hidden', 'hidden');
       weekM.innerHTML =
         '<div class="sp-plan-modal__backdrop" data-sp-plan-close="week" aria-hidden="true"></div>' +
@@ -8302,7 +8415,7 @@ function renderCalendar_(root, boot) {
     if (!peekM) {
       peekM = document.createElement('div');
       peekM.id = 'sp-plan-day-peek-modal';
-      peekM.className = 'sp-plan-modal sp-plan-modal--demoDayPeek';
+      peekM.className = 'sp-plan-modal sp-plan-modal--dayPeek';
       peekM.setAttribute('hidden', 'hidden');
       peekM.innerHTML =
         '<div class="sp-plan-modal__backdrop" data-sp-plan-close="peek" aria-hidden="true"></div>' +
@@ -8337,10 +8450,16 @@ function renderCalendar_(root, boot) {
       });
     }
 
-    if (!root.__spPlanDemoMobileEscWired) {
-      root.__spPlanDemoMobileEscWired = true;
+    if (!root.__spPlanMobileEscWired) {
+      root.__spPlanMobileEscWired = true;
       document.addEventListener('keydown', function (e) {
-        if (e.key !== 'Escape' || !plannerIsPlanDemoRoot_(root)) return;
+        if (e.key !== 'Escape') return;
+        const coachingEl = root.querySelector('#sp-plan-coaching-subj-modal');
+        if (coachingEl && !coachingEl.hasAttribute('hidden')) {
+          plannerCloseCoachingSubjModal_(root);
+          e.preventDefault();
+          return;
+        }
         const peekEl = root.querySelector('#sp-plan-day-peek-modal');
         if (peekEl && !peekEl.hasAttribute('hidden')) {
           closeDayPeekModal_();
@@ -8360,7 +8479,7 @@ function renderCalendar_(root, boot) {
    * @param {number} weekIndex
    */
   function openWeekCurModal_(weekIndex) {
-    ensureDemoMobileModals_();
+    ensurePlanMobileModals_();
     const m = root.querySelector('#sp-plan-week-modal');
     if (!m) return;
     const w = Number(weekIndex);
@@ -8393,7 +8512,7 @@ function renderCalendar_(root, boot) {
    * @param {string} dateYmd
    */
   function openDayPeekModal_(dateYmd) {
-    ensureDemoMobileModals_();
+    ensurePlanMobileModals_();
     const m = root.querySelector('#sp-plan-day-peek-modal');
     if (!m) return;
     st.selectedDate = String(dateYmd || '');
@@ -8402,7 +8521,7 @@ function renderCalendar_(root, boot) {
       title.textContent = plannerFormatYmdKoShort_(st.selectedDate) + ' · 오늘의 할 일';
     }
     const body = m.querySelector('#sp-plan-day-peek-body');
-    if (body) body.innerHTML = plannerPlanDemoDayPeekBodyHtml_(st, st.selectedDate);
+    if (body) body.innerHTML = plannerPlanDayPeekBodyHtml_(st, st.selectedDate);
     m.removeAttribute('hidden');
   }
 
@@ -9035,7 +9154,7 @@ function renderCalendar_(root, boot) {
         const dayBtn = t.closest('.sp-plan-day');
         const key = dayBtn && dayBtn.getAttribute ? dayBtn.getAttribute('data-ymd') || '' : '';
         if (key) {
-          if (plannerIsPlanDemoMobile_(root)) {
+          if (plannerIsPlanMobile_(root)) {
             openDayPeekModal_(key);
           } else {
             openDayModal_(key);
@@ -9051,7 +9170,7 @@ function renderCalendar_(root, boot) {
       if (btn && btn.getAttribute && !btn.hasAttribute('disabled')) {
         const key = btn.getAttribute('data-ymd') || '';
         if (key) {
-          if (plannerIsPlanDemoMobile_(root)) {
+          if (plannerIsPlanMobile_(root)) {
             openDayPeekModal_(key);
           } else {
             openDayModal_(key);
@@ -9223,10 +9342,10 @@ function renderCalendar_(root, boot) {
     }
   };
 
-  if (plannerIsPlanDemoRoot_(root) && !root.__spPlanDemoMobileMqWired) {
-    root.__spPlanDemoMobileMqWired = true;
+  if (!root.__spPlanMobileMqWired) {
+    root.__spPlanMobileMqWired = true;
     try {
-      const mq = window.matchMedia(PLAN_DEMO_MOBILE_MQ);
+      const mq = window.matchMedia(PLAN_MOBILE_MQ);
       mq.addEventListener('change', function () {
         closeWeekCurModal_();
         closeDayPeekModal_();
@@ -9237,6 +9356,7 @@ function renderCalendar_(root, boot) {
     }
   }
 
+  plannerApplyPlanMobileCalHint_(root);
   plannerApplyAdminVisibility_(root);
 }
 
@@ -9503,6 +9623,7 @@ function main() {
   wirePlannerMainTabsOnce_(el);
   wirePlannerManualRegOnce_(el);
   wirePlannerStudentProfileSaveOnce_(el);
+  wirePlannerCoachingSubjReadOnce_(el);
   wirePlannerPdfExportOnce_(el);
   wirePlannerPersonalTodosApplyOnce_(el);
   renderPlannerStudentProfile_(el, null);
