@@ -3623,6 +3623,10 @@ button.sp-stu-remark__item--open:hover {
 #solpath-plan-root .sp-plan-export-capture .sp-plan-month .sp-plan-day {
   height: auto;
   align-self: auto;
+  display: flex;
+  flex-direction: column;
+  cursor: default;
+  pointer-events: none;
 }
 
 /* PDF보내기 — 레거시 off-screen host(미사용) */

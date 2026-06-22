@@ -2366,6 +2366,25 @@ function plannerPdfExpandCoachingSubjectsIn_(clone, root) {
 }
 
 /**
+ * PDF — 달력 칸은 `<button.sp-plan-day>` 인데, sanitize에서 button 전부 제거 시 칸이 통째로 사라짐 → div로 치환.
+ * @param {HTMLElement} clone
+ */
+function plannerPdfUnbuttonCalendarDays_(clone) {
+  clone.querySelectorAll('button.sp-plan-day').forEach(function (btn) {
+    if (!(btn instanceof HTMLButtonElement)) return;
+    const div = document.createElement('div');
+    div.className = btn.className;
+    Array.from(btn.attributes).forEach(function (attr) {
+      const n = attr.name;
+      if (n === 'type' || n === 'disabled') return;
+      div.setAttribute(n, attr.value);
+    });
+    div.innerHTML = btn.innerHTML;
+    btn.parentNode.replaceChild(div, btn);
+  });
+}
+
+/**
  * PDF 캡처 clone — 관리·등록 UI 제거, hidden 해제.
  * @param {HTMLElement} clone
  * @param {HTMLElement} root
@@ -2394,6 +2413,7 @@ function plannerPdfSanitizePanelClone_(clone, root, which) {
       coaching.removeAttribute('aria-hidden');
     }
     plannerPdfExpandCoachingSubjectsIn_(clone, root);
+    rm('button');
   } else {
     const notice = clone.querySelector('#sp-plan-monthly-notice');
     if (notice) {
@@ -2407,8 +2427,10 @@ function plannerPdfSanitizePanelClone_(clone, root, which) {
     rm('.sp-plan-month__nav');
     rm('#sp-plan-month-loading');
     rm('#sp-plan-calendar-ctx-menu');
+    rm('.sp-plan-weekCurBtn');
+    plannerPdfUnbuttonCalendarDays_(clone);
+    rm('button');
   }
-  rm('button');
   plannerPdfReplaceFormControlsWithText_(clone);
 }
 
