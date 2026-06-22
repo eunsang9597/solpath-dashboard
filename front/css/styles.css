@@ -7066,49 +7066,108 @@ button.sp-stu-remark__item--open:hover {
 
 /* 6. (구) 행별 max-content + !important 그리드 — 제거됨; 월간 그리드는 #solpath-plan-root .sp-plan-month__dow / __weekRow 단일 정의 */
 
-/* 홍보 데모 — 문과/이과 전환 바 */
+/* 홍보 데모 — 문과/이과 수강생 전환 (세그먼트) */
 #solpath-plan-root .sp-plan-demoTrackBar {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: center;
-  gap: 0.45rem;
-  margin: 0 0 0.75rem;
-  padding: 0.45rem 0.5rem;
-  border-radius: 10px;
-  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
-  border: 1px solid #e2e8f0;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  gap: 0.3rem;
+  margin: 0 auto 0.85rem;
+  padding: 0.3rem;
+  max-width: 28rem;
+  width: 100%;
+  border-radius: 14px;
+  background: linear-gradient(145deg, #f3e8ff 0%, #ede9fe 48%, #e9d5ff 100%);
+  border: 1px solid #ddd6fe;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.65);
   box-sizing: border-box;
 }
 
 #solpath-plan-root .sp-plan-demoTrackBar__btn {
-  flex: 1 1 8.5rem;
+  flex: 1 1 0;
   min-width: 0;
-  max-width: 14rem;
   margin: 0;
-  padding: 0.5rem 0.85rem;
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
-  background: #fff;
-  color: #475569;
-  font-size: calc(0.78rem + var(--sp-text-bump));
-  font-weight: 700;
-  line-height: 1.25;
+  padding: 0.55rem 0.65rem 0.5rem;
+  border: 0;
+  border-radius: 11px;
+  background: transparent;
+  color: #6b7280;
+  font: inherit;
+  line-height: 1.2;
   cursor: pointer;
   box-sizing: border-box;
-  transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.12rem;
+  text-align: center;
+  transition:
+    background 0.16s ease,
+    color 0.16s ease,
+    box-shadow 0.16s ease,
+    transform 0.12s ease;
 }
 
-#solpath-plan-root .sp-plan-demoTrackBar__btn:hover {
-  border-color: #a78bfa;
+#solpath-plan-root .sp-plan-demoTrackBar__btnMain {
+  font-size: calc(0.8rem + var(--sp-text-bump));
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: inherit;
+}
+
+#solpath-plan-root .sp-plan-demoTrackBar__btnSub {
+  font-size: calc(0.66rem + var(--sp-text-bump));
+  font-weight: 600;
+  color: #94a3b8;
+  transition: color 0.16s ease;
+}
+
+#solpath-plan-root .sp-plan-demoTrackBar__btn:hover:not(.is-active) {
+  background: rgba(255, 255, 255, 0.45);
   color: #5b21b6;
 }
 
+#solpath-plan-root .sp-plan-demoTrackBar__btn:hover:not(.is-active) .sp-plan-demoTrackBar__btnSub {
+  color: #7c3aed;
+}
+
 #solpath-plan-root .sp-plan-demoTrackBar__btn.is-active {
-  border-color: #7c3aed;
-  background: #f5f3ff;
+  background: #ffffff;
   color: #4c1d95;
-  box-shadow: 0 0 0 1px rgba(124, 58, 237, 0.15);
+  box-shadow:
+    0 1px 2px rgba(76, 29, 149, 0.08),
+    0 4px 14px rgba(91, 33, 182, 0.14);
+  transform: translateY(-1px);
+}
+
+#solpath-plan-root .sp-plan-demoTrackBar__btn.is-active .sp-plan-demoTrackBar__btnSub {
+  color: #7c3aed;
+}
+
+#solpath-plan-root .sp-plan-demoTrackBar__btn:focus-visible {
+  outline: 2px solid #7c3aed;
+  outline-offset: 2px;
+}
+
+@media (max-width: 720px) {
+  #solpath-plan-root .sp-plan-demoTrackBar {
+    max-width: none;
+    padding: 0.28rem;
+    gap: 0.25rem;
+  }
+
+  #solpath-plan-root .sp-plan-demoTrackBar__btn {
+    padding: 0.5rem 0.4rem 0.45rem;
+  }
+
+  #solpath-plan-root .sp-plan-demoTrackBar__btnMain {
+    font-size: calc(0.76rem + var(--sp-text-bump));
+  }
+
+  #solpath-plan-root .sp-plan-demoTrackBar__btnSub {
+    font-size: calc(0.62rem + var(--sp-text-bump));
+  }
 }
 
 /* 홍보 데모 — JS plannerApplyPlanDemoChrome_ 와 함께 (이중 숨김) */

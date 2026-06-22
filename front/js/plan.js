@@ -233,10 +233,16 @@ function plannerMountDemoTrackBar_(root) {
   bar.id = 'sp-plan-demo-track-bar';
   bar.className = 'sp-plan-demoTrackBar';
   bar.setAttribute('role', 'tablist');
-  bar.setAttribute('aria-label', '데모 계열 선택');
+  bar.setAttribute('aria-label', '수강생 계열 선택');
   bar.innerHTML =
-    '<button type="button" class="sp-plan-demoTrackBar__btn" data-sp-demo-track="mun" role="tab" aria-selected="false">문과 데모</button>' +
-    '<button type="button" class="sp-plan-demoTrackBar__btn" data-sp-demo-track="sci" role="tab" aria-selected="false">이과 데모</button>';
+    '<button type="button" class="sp-plan-demoTrackBar__btn" data-sp-demo-track="mun" role="tab" aria-selected="false">' +
+    '<span class="sp-plan-demoTrackBar__btnMain">문과 수강생</span>' +
+    '<span class="sp-plan-demoTrackBar__btnSub">솔루션(문과)</span>' +
+    '</button>' +
+    '<button type="button" class="sp-plan-demoTrackBar__btn" data-sp-demo-track="sci" role="tab" aria-selected="false">' +
+    '<span class="sp-plan-demoTrackBar__btnMain">이과 수강생</span>' +
+    '<span class="sp-plan-demoTrackBar__btnSub">솔루션(이과)</span>' +
+    '</button>';
   const shell = root.querySelector('.sp-plan-rootinner');
   if (shell) {
     shell.insertBefore(bar, shell.firstChild);
