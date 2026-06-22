@@ -7134,67 +7134,89 @@ button.sp-stu-remark__item--open:hover {
     line-height: 1.45;
   }
 
+  /* 가로 스크롤은 슬롯 한 곳 — 7열을 뷰포트에 억지로 맞추지 않음 */
   #solpath-plan-root.is-plan-demo .sp-plan-calendar-slot {
+    align-items: flex-start;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
     border-radius: 10px;
     scroll-padding-inline: 0.35rem;
   }
 
   #solpath-plan-root.is-plan-demo .sp-plan-month {
-    --sp-plan-month-lead: 7.25rem;
-    --sp-plan-day-col-min: 3.25rem;
-    min-width: calc(var(--sp-plan-month-lead) + 7 * var(--sp-plan-day-col-min) + 0.75rem);
-    padding: 0.45rem 0.35rem;
-    gap: 0.4rem;
+    --sp-plan-month-lead: 10.5rem;
+    --sp-plan-day-col-min: 5rem;
+    width: max-content;
+    min-width: 100%;
+    max-width: none;
+    flex-shrink: 0;
+    padding: 0.5rem 0.4rem;
+    gap: 0.45rem;
+  }
+
+  #solpath-plan-root.is-plan-demo .sp-plan-month__dow,
+  #solpath-plan-root.is-plan-demo .sp-plan-month__weekRow {
+    width: max-content;
+    max-width: none;
+    grid-template-columns: var(--sp-plan-month-lead) repeat(7, var(--sp-plan-day-col-min));
+  }
+
+  #solpath-plan-root.is-plan-demo .sp-plan-month__grid {
+    width: max-content;
+    max-width: none;
   }
 
   #solpath-plan-root.is-plan-demo .sp-plan-month__dowCell {
-    font-size: calc(0.62rem + var(--sp-text-bump));
+    font-size: calc(0.65rem + var(--sp-text-bump));
     padding: 0.15rem 0.1rem;
   }
 
   #solpath-plan-root.is-plan-demo .sp-plan-month__weekLead {
-    gap: 0.22rem;
-    min-width: 0;
+    gap: 0.28rem;
+    width: var(--sp-plan-month-lead);
+    max-width: var(--sp-plan-month-lead);
   }
 
   #solpath-plan-root.is-plan-demo .sp-plan-month__weekMeta {
-    padding: 0.22rem 0.28rem;
+    padding: 0.28rem 0.32rem;
   }
 
   #solpath-plan-root.is-plan-demo .sp-plan-month__weekMeta-range,
   #solpath-plan-root.is-plan-demo .sp-plan-month__weekMeta-wk {
-    font-size: calc(0.58rem + var(--sp-text-bump));
+    font-size: calc(0.62rem + var(--sp-text-bump));
     line-height: 1.25;
   }
 
   #solpath-plan-root.is-plan-demo .sp-plan-month__weekLead .sp-plan-cur {
-    max-height: 5.75rem;
+    max-height: 6.5rem;
+    overflow-x: auto;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
   }
 
   #solpath-plan-root.is-plan-demo .sp-plan-cur__tbl {
-    font-size: calc(0.56rem + var(--sp-text-bump));
+    font-size: calc(0.62rem + var(--sp-text-bump));
   }
 
   #solpath-plan-root.is-plan-demo .sp-plan-cur__tbl tbody th {
-    width: 2.2rem;
-    padding: 0.12rem 0.1rem;
+    width: 2.5rem;
+    padding: 0.14rem 0.12rem;
   }
 
   #solpath-plan-root.is-plan-demo .sp-plan-month .sp-plan-day {
-    min-height: 4.35rem;
-    padding: 0.3rem 0.26rem 0.32rem;
-    gap: 0.16rem;
+    min-height: 5rem;
+    min-width: var(--sp-plan-day-col-min);
+    padding: 0.35rem 0.32rem 0.38rem;
+    gap: 0.2rem;
   }
 
   #solpath-plan-root.is-plan-demo .sp-plan-day__num {
-    font-size: calc(0.72rem + var(--sp-text-bump));
+    font-size: calc(0.78rem + var(--sp-text-bump));
   }
 
   #solpath-plan-root.is-plan-demo .sp-plan-month .sp-plan-curBadge {
-    font-size: calc(0.54rem + var(--sp-text-bump));
-    line-height: 1.2;
+    font-size: calc(0.6rem + var(--sp-text-bump));
+    line-height: 1.25;
   }
 
   #solpath-plan-root.is-plan-demo .sp-plan-month .sp-plan-dayCellSum .sp-plan-curBadge__text,
