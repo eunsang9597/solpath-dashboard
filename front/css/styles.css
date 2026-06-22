@@ -3175,15 +3175,26 @@ button.sp-stu-remark__item--open:hover {
   display: block;
 }
 
+#solpath-plan-root .sp-plan-mainTabsRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 0.75rem;
+  margin: 0 0 0.85rem;
+}
+
 #solpath-plan-root .sp-plan-mainTabs {
   display: flex;
   flex-wrap: wrap;
   gap: 0.35rem;
-  margin: 0 0 0.85rem;
+  margin: 0;
   padding: 0.2rem;
   border-radius: 10px;
   background: #f8fafc;
   border: 1px solid #e2e8f0;
+  flex: 1 1 12rem;
+  min-width: 0;
 }
 
 #solpath-plan-root .sp-plan-mainTabs__btn {
@@ -3543,7 +3554,8 @@ button.sp-stu-remark__item--open:hover {
   align-items: center;
   flex-wrap: wrap;
   gap: 0.5rem 0.75rem;
-  margin: 0.35rem 0 0.15rem;
+  margin: 0;
+  flex: 0 0 auto;
 }
 
 #solpath-plan-root .sp-plan-exportBar__msg {
@@ -3561,7 +3573,7 @@ button.sp-stu-remark__item--open:hover {
   color: #4a148c;
 }
 
-/* PDF — 학생 정보·달력만 캡처(본문 너비 clone, 화면 밖) */
+/* PDF — 학생 정보(1)·월간 플래너(2) clone(본문 너비, 화면 밖) */
 #solpath-plan-root .sp-plan-export-capture {
   position: fixed;
   left: -120vw;
@@ -3573,8 +3585,31 @@ button.sp-stu-remark__item--open:hover {
   overflow: visible;
   display: flex;
   flex-direction: column;
-  gap: 0.65rem;
+  gap: 0;
   padding: 0;
+}
+
+#solpath-plan-root .sp-plan-export-capture__page {
+  box-sizing: border-box;
+  background: #fff;
+}
+
+#solpath-plan-root .sp-plan-export-capture__page--monthly {
+  margin-top: 0.75rem;
+}
+
+#solpath-plan-root .sp-plan-pdf-printText {
+  display: block;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: calc(0.78rem + var(--sp-text-bump));
+  line-height: 1.45;
+  color: #334155;
+}
+
+#solpath-plan-root .sp-plan-export-capture .sp-plan-coaching__textarea,
+#solpath-plan-root .sp-plan-export-capture .sp-plan-monthlyNotice__body {
+  display: none !important;
 }
 
 #solpath-plan-root .sp-plan-export-capture .sp-plan-month__actions {
@@ -7175,6 +7210,7 @@ button.sp-stu-remark__item--open:hover {
 #solpath-plan-root.is-plan-demo .sp-plan-devbar,
 #solpath-plan-root.is-plan-demo #sp-plan-quick-reg,
 #solpath-plan-root.is-plan-demo #sp-plan-export-bar,
+#solpath-plan-root.is-plan-demo .sp-plan-mainTabsRow,
 #solpath-plan-root.is-plan-demo .sp-plan-month__nav,
 #solpath-plan-root.is-plan-demo .sp-plan-month__actions,
 #solpath-plan-root.is-plan-demo .sp-plan-mainTabs {

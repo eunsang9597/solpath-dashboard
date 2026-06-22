@@ -325,6 +325,11 @@ function wirePlannerDemoTrackOnce_(root) {
  * @param {HTMLElement} root
  */
 function plannerApplyPlanDemoSinglePageLayout_(root) {
+  const tabsRow = root.querySelector('.sp-plan-mainTabsRow');
+  if (tabsRow) {
+    tabsRow.setAttribute('hidden', 'hidden');
+    tabsRow.setAttribute('aria-hidden', 'true');
+  }
   const tabs = root.querySelector('.sp-plan-mainTabs');
   if (tabs) {
     tabs.setAttribute('hidden', 'hidden');
@@ -2320,15 +2325,102 @@ function plannerExportDownloadFilename_(root, ext) {
 }
 
 /**
- * PDF 캡처용 — 학생 정보 + 월간 달력만(배너·export바·할일등록 제외), 본문과 동일 너비 clone.
+ * PDF clone — 입력·버튼을 인쇄용 정적 텍스트로 바꿈.
+ * @param {HTMLElement} container
+ */
+function plannerPdfReplaceFormControlsWithText_(container) {
+  container.querySelectorAll('textarea').forEach(function (ta) {
+    if (!(ta instanceof HTMLTextAreaElement)) return;
+    const div = document.createElement('div');
+    div.className = 'sp-plan-pdf-printText';
+    div.textContent = ta.value;
+    ta.parentNode.replaceChild(div, ta);
+  });
+  container.querySelectorAll('input[type="text"]').forEach(function (inp) {
+    if (!(inp instanceof HTMLInputElement)) return;
+    const span = document.createElement('span');
+    span.className = 'sp-plan-pdf-printText';
+    span.textContent = inp.value;
+    inp.parentNode.replaceChild(span, inp);
+  });
+}
+
+/**
+ * PDF — 모바일 「전체 보기」 잘림 없이 과목별 본문 전체 표시.
+ * @param {HTMLElement} clone
  * @param {HTMLElement} root
- * @returns {HTMLElement}
+ */
+function plannerPdfExpandCoachingSubjectsIn_(clone, root) {
+  const list = root.__spPlanCoachingSubjReadList;
+  if (!Array.isArray(list) || !list.length) return;
+  const rows = clone.querySelectorAll('[data-sp-coaching-subj-open]');
+  rows.forEach(function (btn) {
+    if (!(btn instanceof HTMLElement)) return;
+    const idx = Number(btn.getAttribute('data-sp-coaching-subj-idx'));
+    const item = list[idx];
+    const td = btn.closest('td');
+    if (!td || !item) return;
+    td.className = 'sp-plan-coaching__subjBodyRead';
+    td.textContent = String(item.body != null ? item.body : '').trim() || '—';
+  });
+}
+
+/**
+ * PDF 캡처 clone — 관리·등록 UI 제거, hidden 해제.
+ * @param {HTMLElement} clone
+ * @param {HTMLElement} root
+ * @param {'student'|'monthly'} which
+ */
+function plannerPdfSanitizePanelClone_(clone, root, which) {
+  clone.removeAttribute('hidden');
+  clone.removeAttribute('aria-hidden');
+  clone.classList.remove('sp-plan-tabPanel');
+  const rm = function (sel) {
+    clone.querySelectorAll(sel).forEach(function (el) {
+      el.remove();
+    });
+  };
+  if (which === 'student') {
+    rm('#sp-plan-student-save-row');
+    rm('#sp-plan-student-manual-reg');
+    rm('.sp-plan-student__hint');
+    rm('#sp-plan-coaching-subject-add');
+    rm('.sp-plan-coaching__rowDel');
+    rm('.sp-plan-coaching__thAct');
+    rm('.sp-plan-coaching__subjAct');
+    const coaching = clone.querySelector('#sp-plan-coaching');
+    if (coaching) {
+      coaching.removeAttribute('hidden');
+      coaching.removeAttribute('aria-hidden');
+    }
+    plannerPdfExpandCoachingSubjectsIn_(clone, root);
+  } else {
+    const notice = clone.querySelector('#sp-plan-monthly-notice');
+    if (notice) {
+      notice.removeAttribute('hidden');
+      notice.removeAttribute('aria-hidden');
+    }
+    rm('.sp-plan-monthlyNotice__hint');
+    rm('#sp-plan-monthly-notice-empty');
+    rm('#sp-plan-quick-reg');
+    rm('.sp-plan-month__actions');
+    rm('.sp-plan-month__nav');
+    rm('#sp-plan-month-loading');
+    rm('#sp-plan-calendar-ctx-menu');
+  }
+  rm('button');
+  plannerPdfReplaceFormControlsWithText_(clone);
+}
+
+/**
+ * PDF 캡처용 — 1페이지 학생 정보·2페이지 월간 플래너(본문 너비 clone, 화면 밖).
+ * @param {HTMLElement} root
+ * @returns {{ host: HTMLElement, pageStudent: HTMLElement, pageMonthly: HTMLElement }}
  */
 function plannerBuildExportCaptureHost_(root) {
   const body = root.querySelector('.sp-plan-body');
   const panelStudent = root.querySelector('#sp-plan-tab-student');
-  const monthLabel = root.querySelector('#sp-plan-monthly-label');
-  const monthWrap = root.querySelector('#sp-plan-month-wrap');
+  const panelMonthly = root.querySelector('#sp-plan-tab-monthly');
   const host = document.createElement('div');
   host.className = 'sp-plan-export-capture';
   host.setAttribute('aria-hidden', 'true');
@@ -2337,27 +2429,24 @@ function plannerBuildExportCaptureHost_(root) {
     host.style.width = String(w) + 'px';
     host.style.maxWidth = String(w) + 'px';
   }
+  const pageStudent = document.createElement('div');
+  pageStudent.className = 'sp-plan-export-capture__page sp-plan-export-capture__page--student';
+  const pageMonthly = document.createElement('div');
+  pageMonthly.className = 'sp-plan-export-capture__page sp-plan-export-capture__page--monthly';
   if (panelStudent) {
     const studentClone = /** @type {HTMLElement} */ (panelStudent.cloneNode(true));
-    const coaching = studentClone.querySelector('#sp-plan-coaching');
-    if (coaching) coaching.remove();
-    const manual = studentClone.querySelector('#sp-plan-student-manual-reg');
-    if (manual) manual.remove();
-    const exportBar = studentClone.querySelector('#sp-plan-export-bar');
-    if (exportBar) exportBar.remove();
-    host.appendChild(studentClone);
+    plannerPdfSanitizePanelClone_(studentClone, root, 'student');
+    pageStudent.appendChild(studentClone);
   }
-  if (monthLabel) {
-    host.appendChild(monthLabel.cloneNode(true));
+  if (panelMonthly) {
+    const monthlyClone = /** @type {HTMLElement} */ (panelMonthly.cloneNode(true));
+    plannerPdfSanitizePanelClone_(monthlyClone, root, 'monthly');
+    pageMonthly.appendChild(monthlyClone);
   }
-  if (monthWrap) {
-    const cal = /** @type {HTMLElement} */ (monthWrap.cloneNode(true));
-    const actions = cal.querySelector('.sp-plan-month__actions');
-    if (actions) actions.remove();
-    host.appendChild(cal);
-  }
+  host.appendChild(pageStudent);
+  host.appendChild(pageMonthly);
   root.appendChild(host);
-  return host;
+  return { host: host, pageStudent: pageStudent, pageMonthly: pageMonthly };
 }
 
 /**
@@ -2386,13 +2475,12 @@ async function plannerCaptureElementCanvas_(el) {
 }
 
 /**
- * 캔버스 → A4 여러 장(한 장에 축소하지 않음, 가로만 맞춤).
+ * 캔버스 한 덩어리를 A4에 맞춰 이어 붙임(세로 넘치면 같은 섹션 내 추가 페이지).
+ * @param {object} pdf
  * @param {HTMLCanvasElement} canvas
- * @param {string} filename
+ * @param {boolean} newPageBefore 첫 장 앞에 빈 페이지를 넣을지(2번째 섹션 시작)
  */
-function plannerSaveCanvasMultiPagePdf_(canvas, filename) {
-  const jsPDF = globalThis.jspdf.jsPDF;
-  const pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
+function plannerPdfAppendCanvas_(pdf, canvas, newPageBefore) {
   const pageW = pdf.internal.pageSize.getWidth();
   const pageH = pdf.internal.pageSize.getHeight();
   const margin = 6;
@@ -2402,14 +2490,31 @@ function plannerSaveCanvasMultiPagePdf_(canvas, filename) {
   const imgH = (canvas.height * contentW) / canvas.width;
   let heightLeft = imgH;
   let position = margin;
-  pdf.addImage(imgData, 'JPEG', margin, position, contentW, imgH);
-  heightLeft -= contentH;
+  let slice = 0;
   while (heightLeft > 0) {
-    pdf.addPage();
-    position = margin - (imgH - heightLeft);
+    if (slice > 0 || newPageBefore) {
+      pdf.addPage();
+      newPageBefore = false;
+    }
     pdf.addImage(imgData, 'JPEG', margin, position, contentW, imgH);
     heightLeft -= contentH;
+    position = margin - (imgH - heightLeft);
+    slice++;
   }
+  return slice > 0;
+}
+
+/**
+ * 학생 정보(1섹션) → 월간 플래너(2섹션) 순서로 PDF 저장.
+ * @param {HTMLCanvasElement} canvasStudent
+ * @param {HTMLCanvasElement} canvasMonthly
+ * @param {string} filename
+ */
+function plannerSaveStudentMonthlyPdf_(canvasStudent, canvasMonthly, filename) {
+  const jsPDF = globalThis.jspdf.jsPDF;
+  const pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
+  const hasStudent = plannerPdfAppendCanvas_(pdf, canvasStudent, false);
+  plannerPdfAppendCanvas_(pdf, canvasMonthly, hasStudent);
   pdf.save(filename);
 }
 
@@ -2443,9 +2548,15 @@ async function plannerExportPdfClick_(root) {
   let captureHost = null;
   try {
     await plannerEnsurePdfLibs_();
-    captureHost = plannerBuildExportCaptureHost_(root);
-    const canvas = await plannerCaptureElementCanvas_(captureHost);
-    plannerSaveCanvasMultiPagePdf_(canvas, plannerExportDownloadFilename_(root, '.pdf'));
+    const capture = plannerBuildExportCaptureHost_(root);
+    captureHost = capture.host;
+    const canvasStudent = await plannerCaptureElementCanvas_(capture.pageStudent);
+    const canvasMonthly = await plannerCaptureElementCanvas_(capture.pageMonthly);
+    plannerSaveStudentMonthlyPdf_(
+      canvasStudent,
+      canvasMonthly,
+      plannerExportDownloadFilename_(root, '.pdf')
+    );
     if (msgEl) {
       msgEl.textContent = '저장했습니다.';
       window.setTimeout(function () {
@@ -3053,12 +3164,12 @@ function plannerCurriculumWeekLessonRangeFromQuickPlan_(st, weekDateKeys) {
       if (!plannerIsStudyCategoryCode_(subj)) return;
       const lessons = plannerLessonsFromStudyTitle_(String(t.title != null ? t.title : ''));
       lessons.forEach(function (L) {
-        if (!isFinite(L) || L <= 0) return;
-        if (!out[subj]) out[subj] = { min: L, max: L };
-        else {
-          if (L < out[subj].min) out[subj].min = L;
-          if (L > out[subj].max) out[subj].max = L;
-        }
+      if (!isFinite(L) || L <= 0) return;
+      if (!out[subj]) out[subj] = { min: L, max: L };
+      else {
+        if (L < out[subj].min) out[subj].min = L;
+        if (L > out[subj].max) out[subj].max = L;
+      }
       });
     });
   });
@@ -3493,10 +3604,16 @@ const PLAN_APP_SHELL_START = `<div class="app-shell app-shell--plan">
 const PLAN_APP_MAIN_AND_CLOSE = `<main class="app-main sp-plan-app-main app-shell app-shell--plan sp-plan-shell-body" id="sp-plan-app-main" hidden>
     <p class="sp-plan-banner" id="sp-plan-banner" hidden></p>
     <div class="panel panel--hero sp-plan-body">
-      <nav class="sp-plan-mainTabs" role="tablist" aria-label="플래너 구역">
-        <button type="button" class="sp-plan-mainTabs__btn is-active" id="sp-plan-tab-btn-student" role="tab" aria-selected="true" aria-controls="sp-plan-tab-student">학생 정보</button>
-        <button type="button" class="sp-plan-mainTabs__btn" id="sp-plan-tab-btn-monthly" role="tab" aria-selected="false" aria-controls="sp-plan-tab-monthly">월간 플래너</button>
-      </nav>
+      <div class="sp-plan-mainTabsRow">
+        <nav class="sp-plan-mainTabs" role="tablist" aria-label="플래너 구역">
+          <button type="button" class="sp-plan-mainTabs__btn is-active" id="sp-plan-tab-btn-student" role="tab" aria-selected="true" aria-controls="sp-plan-tab-student">학생 정보</button>
+          <button type="button" class="sp-plan-mainTabs__btn" id="sp-plan-tab-btn-monthly" role="tab" aria-selected="false" aria-controls="sp-plan-tab-monthly">월간 플래너</button>
+        </nav>
+        <div class="sp-plan-exportBar" id="sp-plan-export-bar">
+          <button type="button" class="btn btn--ghost sp-plan-exportBar__btn" id="sp-plan-pdf-export" title="학생 정보(1페이지)와 월간 플래너(2페이지)를 PDF로 저장합니다">PDF로 저장</button>
+          <span class="sp-plan-exportBar__msg" id="sp-plan-pdf-export-msg" hidden aria-live="polite"></span>
+        </div>
+      </div>
       <div class="sp-plan-tabPanel" id="sp-plan-tab-student" role="tabpanel" aria-labelledby="sp-plan-tab-btn-student">
       <section class="sp-plan-student" id="sp-plan-student-info" aria-labelledby="sp-plan-student-info-title">
         <h2 class="sp-plan-student__title" id="sp-plan-student-info-title">학생 정보</h2>
@@ -3527,13 +3644,9 @@ const PLAN_APP_MAIN_AND_CLOSE = `<main class="app-main sp-plan-app-main app-shel
                 <tbody id="sp-plan-coaching-subjects-body"></tbody>
               </table>
             </div>
-          </div>
-        </section>
+        </div>
       </section>
-      <div class="sp-plan-exportBar" id="sp-plan-export-bar">
-        <button type="button" class="btn btn--ghost sp-plan-exportBar__btn" id="sp-plan-pdf-export" title="학생 정보와 월간 달력만 캡처해 PDF로 저장합니다(여러 페이지)">PDF로 저장</button>
-        <span class="sp-plan-exportBar__msg" id="sp-plan-pdf-export-msg" hidden aria-live="polite"></span>
-      </div>
+      </section>
       </div>
       <div class="sp-plan-tabPanel" id="sp-plan-tab-monthly" role="tabpanel" aria-labelledby="sp-plan-tab-btn-monthly" hidden aria-hidden="true">
       <section class="sp-plan-monthlyNotice" id="sp-plan-monthly-notice" hidden aria-hidden="true" aria-labelledby="sp-plan-monthly-notice-title">
@@ -3544,7 +3657,7 @@ const PLAN_APP_MAIN_AND_CLOSE = `<main class="app-main sp-plan-app-main app-shel
       </section>
       <div class="sp-plan-monthly-title" id="sp-plan-monthly-label">월간 학습 달력</div>
       <div class="sp-plan-calendar-slot" id="sp-plan-calendar-slot" role="region" aria-labelledby="sp-plan-monthly-label"></div>
-      </div>
+    </div>
     </div>
   </main>`;
 
@@ -6684,32 +6797,32 @@ function plannerLessonsFromStudyTitle_(title) {
  * @returns {string}
  */
 function plannerLessonsToOutline_(nums) {
-  const u = nums
-    .slice()
-    .sort(function (a, b) {
-      return a - b;
-    })
-    .filter(function (v, i, a) {
-      return i === 0 || v !== a[i - 1];
-    });
-  if (!u.length) return '';
-  const parts = [];
-  let runStart = u[0];
-  let prev = u[0];
-  for (let i = 1; i <= u.length; i++) {
-    const cur = u[i];
-    if (i === u.length || cur !== prev + 1) {
-      parts.push(runStart === prev ? String(runStart) : runStart + '~' + prev);
-      if (i < u.length) {
-        runStart = cur;
+    const u = nums
+      .slice()
+      .sort(function (a, b) {
+        return a - b;
+      })
+      .filter(function (v, i, a) {
+        return i === 0 || v !== a[i - 1];
+      });
+    if (!u.length) return '';
+    const parts = [];
+    let runStart = u[0];
+    let prev = u[0];
+    for (let i = 1; i <= u.length; i++) {
+      const cur = u[i];
+      if (i === u.length || cur !== prev + 1) {
+        parts.push(runStart === prev ? String(runStart) : runStart + '~' + prev);
+        if (i < u.length) {
+          runStart = cur;
+          prev = cur;
+        }
+      } else {
         prev = cur;
       }
-    } else {
-      prev = cur;
     }
+    return parts.join(', ');
   }
-  return parts.join(', ');
-}
 
 /**
  * 달력 칸 todo 칩 1개 (과목색 `sp-plan-curBadge`).
@@ -8029,15 +8142,15 @@ function plannerDayTimelineHtml_(st, dateYmd) {
       cells +=
         '<button type="button" tabindex="-1" class="' +
         cls +
-        '" data-slot="' +
-        esc(k) +
+      '" data-slot="' +
+      esc(k) +
         '"' +
         (tid ? ' data-todo-id="' + esc(tid) + '"' : '') +
         (chunkLbl ? ' data-bar-chunk="' + esc(chunkLbl) + '"' : '') +
         (blocked ? ' disabled aria-disabled="true"' : '') +
         ' aria-pressed="' +
-        (tid ? 'true' : 'false') +
-        '" aria-label="' +
+      (tid ? 'true' : 'false') +
+      '" aria-label="' +
         esc(al) +
         '"></button>';
     }
@@ -8594,20 +8707,20 @@ function renderCalendar_(root, boot) {
           esc(subjN > 0 ? '주간 교재 · ' + String(subjN) + '과목' : '주간 교재 보기') +
           '</button></div>';
       } else {
-        html +=
-          '<div class="sp-plan-month__weekLead">' +
-          '<div class="sp-plan-month__weekMeta" aria-label="주간 구간">' +
-          '<div class="sp-plan-month__weekMeta-range">' +
-          mdShort(sun) +
-          ' – ' +
-          mdShort(sat) +
-          '</div>' +
+      html +=
+        '<div class="sp-plan-month__weekLead">' +
+        '<div class="sp-plan-month__weekMeta" aria-label="주간 구간">' +
+        '<div class="sp-plan-month__weekMeta-range">' +
+        mdShort(sun) +
+        ' – ' +
+        mdShort(sat) +
+        '</div>' +
           (wkMetaKo[w]
             ? '<div class="sp-plan-month__weekMeta-wk">' + esc(wkMetaKo[w]) + '</div>'
             : '') +
-          '</div>' +
+        '</div>' +
           plannerCurriculumWeekTableHtml_(curPayload) +
-          '</div>';
+        '</div>';
       }
 
       for (let di = 0; di < 7; di++) {
@@ -9463,7 +9576,7 @@ function renderCalendar_(root, boot) {
           if (plannerIsPlanMobile_(root)) {
             openDayPeekModal_(key);
           } else {
-            openDayModal_(key);
+          openDayModal_(key);
           }
         }
       }
@@ -9787,27 +9900,27 @@ function wireGate_(root) {
 
     setGateLoading_(true, '등록 여부 확인 중…');
     try {
-      const res = await plannerGasCall_({
-        action: 'plannerMatch',
-        phoneSegments: segs,
-        name: name
-      });
-      if (!res || !res.ok) {
-        const m = res && res.error && res.error.message != null ? String(res.error.message) : '확인에 실패했습니다.';
-        showErr(m);
-        return;
-      }
+    const res = await plannerGasCall_({
+      action: 'plannerMatch',
+      phoneSegments: segs,
+      name: name
+    });
+    if (!res || !res.ok) {
+      const m = res && res.error && res.error.message != null ? String(res.error.message) : '확인에 실패했습니다.';
+      showErr(m);
+      return;
+    }
       const data = /** @type {{ outcome?: string, needName?: boolean, link_key?: string | null, memberCode?: string | null }} */ (
         res.data || {}
       );
-      const oc = String(data.outcome || '');
-      if (oc === 'need_name') {
-        if (nameInput) {
-          nameInput.focus();
-        }
-        showErr('같은 번호로 등록된 분이 여러 명입니다. 이름을 입력한 뒤 다시 확인을 눌러 주세요.');
-        return;
+    const oc = String(data.outcome || '');
+    if (oc === 'need_name') {
+      if (nameInput) {
+        nameInput.focus();
       }
+      showErr('같은 번호로 등록된 분이 여러 명입니다. 이름을 입력한 뒤 다시 확인을 눌러 주세요.');
+      return;
+    }
       const linkKey =
         data.link_key != null && String(data.link_key).trim()
           ? String(data.link_key).trim()
@@ -9817,9 +9930,9 @@ function wireGate_(root) {
       setGateLoading_(true, '플래너 불러오는 중…');
       if (oc === 'matched' && linkKey) {
         await runBootstrap(linkKey, segs, name);
-        return;
-      }
-      await runBootstrap('', segs, name);
+      return;
+    }
+    await runBootstrap('', segs, name);
     } finally {
       setGateLoading_(false);
     }
