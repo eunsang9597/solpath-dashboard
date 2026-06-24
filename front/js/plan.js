@@ -1937,7 +1937,7 @@ function plannerRefreshMonthlyNotice_(root) {
   const ymKey = plannerYearMonthFromDate_(vm);
   const titleEl = block.querySelector('#sp-plan-monthly-notice-title');
   if (titleEl) {
-    titleEl.textContent = String(vm.getMonth() + 1) + '월 학습계획표 주요 안내';
+    titleEl.textContent = String(vm.getMonth() + 1) + '월 상담기록';
   }
   const monthly =
     root.__spPlanMonthlyNoticesInitial && typeof root.__spPlanMonthlyNoticesInitial === 'object'
@@ -3672,7 +3672,7 @@ const PLAN_APP_MAIN_AND_CLOSE = `<main class="app-main sp-plan-app-main app-shel
       </div>
       <div class="sp-plan-tabPanel" id="sp-plan-tab-monthly" role="tabpanel" aria-labelledby="sp-plan-tab-btn-monthly" hidden aria-hidden="true">
       <section class="sp-plan-monthlyNotice" id="sp-plan-monthly-notice" hidden aria-hidden="true" aria-labelledby="sp-plan-monthly-notice-title">
-        <h2 class="sp-plan-monthlyNotice__title" id="sp-plan-monthly-notice-title">월 학습계획표 주요 안내</h2>
+        <h2 class="sp-plan-monthlyNotice__title" id="sp-plan-monthly-notice-title">월 상담기록</h2>
         <p class="sp-plan-monthlyNotice__hint">달력과 같은 달 기준입니다. 내용을 입력한 뒤 「프로필·코칭 저장」을 눌러 주세요.</p>
         <textarea class="sp-plan-monthlyNotice__body" id="sp-plan-monthly-notice-body" rows="12" maxlength="16000" spellcheck="true" placeholder="이 달 학습계획·수강기간·인증 방법 등"></textarea>
         <p class="sp-plan-monthlyNotice__empty" id="sp-plan-monthly-notice-empty" hidden>이 달에 등록된 안내가 없습니다.</p>
