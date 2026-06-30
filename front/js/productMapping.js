@@ -3,7 +3,7 @@
  */
 import { GAS_BASE_URL, GAS_MODE } from './config.js';
 
-const CAT_ORDER = ['unmapped', 'solpass', 'solutine', 'challenge', 'textbook', 'jasoseo'];
+const CAT_ORDER = ['unmapped', 'solpass', 'solutine', 'challenge', 'textbook', 'jasoseo', 'toeic_rc', 'toeic_lc'];
 /** 미분류(unmapped) 제외 — 솔패스~자소서(한 행 래핑) */
 const CAT_ROW4 = CAT_ORDER.filter(function (c) {
   return c !== 'unmapped';
@@ -14,7 +14,9 @@ const CAT_LABEL = {
   solutine: '솔루틴',
   challenge: '챌린지',
   textbook: '교재',
-  jasoseo: '자소서'
+  jasoseo: '자소서',
+  toeic_rc: '토익RC',
+  toeic_lc: '토익LC'
 };
 const LIFE_LABEL = { active: '진행', archived: '만료', test: '테스트', legacy: '(구)상품' };
 /** @type {Record<string, true>} */

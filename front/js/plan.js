@@ -3223,6 +3223,8 @@ function plannerSubjectCodeFromSubjectField_(subjectRaw) {
   if (sl === 'logic' || s === '논리') return 'logic';
   if (sl === 'read' || s === '독해') return 'read';
   if (sl === 'math' || s === '수학') return 'math';
+  if (sl === 'toeic_rc' || /^토익\s*rc$/i.test(s)) return 'toeic_rc';
+  if (sl === 'toeic_lc' || /^토익\s*lc$/i.test(s)) return 'toeic_lc';
   if (sl === 'vocab' || s === '어휘') return 'vocab';
   if (sl === 'misc' || s === '기타') return 'misc';
   return '';
@@ -3245,6 +3247,8 @@ function plannerSubjectCodeFromCatalogCourse_(course) {
   if (/\blogic\b|논리/.test(blob)) return 'logic';
   if (/\bread\b|독해/.test(blob)) return 'read';
   if (/\bmath\b|수학/.test(blob)) return 'math';
+  if (/\btoeic[_\s-]?rc\b|토익\s*rc/i.test(blob)) return 'toeic_rc';
+  if (/\btoeic[_\s-]?lc\b|토익\s*lc/i.test(blob)) return 'toeic_lc';
   if (/\bvocab\b|어휘/.test(blob)) return 'vocab';
   if (/\bmisc\b|기타/.test(blob)) return 'misc';
   return 'misc';
@@ -3955,6 +3959,8 @@ const PLANNER_STUDY_SUBJECT_DEFS = [
   { code: 'logic', label: '논리', short: '논' },
   { code: 'read', label: '독해', short: '독' },
   { code: 'math', label: '수학', short: '수' },
+  { code: 'toeic_rc', label: '토익RC', short: 'RC' },
+  { code: 'toeic_lc', label: '토익LC', short: 'LC' },
   { code: 'misc', label: '기타', short: '기' }
 ];
 

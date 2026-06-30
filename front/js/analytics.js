@@ -29,7 +29,9 @@ const AN_CATEGORY_KEY_LABEL = {
   solutine: '솔루틴',
   challenge: '챌린지',
   textbook: '교재',
-  jasoseo: '자소서'
+  jasoseo: '자소서',
+  toeic_rc: '토익RC',
+  toeic_lc: '토익LC'
 };
 
 /** 보기 범위 셀렉트에 넣는 대분류(전체 제외) — 상품군 미정·교재·자소서 제외 */
@@ -1975,7 +1977,7 @@ export function initAnalytics(mount) {
         }
         oneCatRow_(order[ci2]);
       }
-    } else if (scp0 === 'textbook' || scp0 === 'jasoseo') {
+    } else if (scp0 === 'textbook' || scp0 === 'jasoseo' || scp0 === 'toeic_rc' || scp0 === 'toeic_lc') {
       oneCatRow_(scp0);
     } else {
       const pset = /** @type {Record<string, boolean>} */ ({});
