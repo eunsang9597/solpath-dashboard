@@ -1,6 +1,6 @@
 /**
  * 플래너 임웹 전용 — 전화 확인 후 공통·개인 일정 표시 (드라이브 링크 없음).
- * GAS: 전 action `doPost` + JSON 본문(커스텀 headers 없음, `redirect: follow`).
+ * GAS: `plannerBootstrap`(코어) + `plannerCurriculum`(분리·캐시) — 전 action `doPost` JSON 본문.
  * 스니펫에서 먼저 `window.__SOLPATH__ = { gasBaseUrl: "…/exec", … }` 를 둔다.
  */
 function spReadPlanInjected_() {
@@ -1191,6 +1191,112 @@ function plannerNormalizeCurriculumFromBootstrap_(raw) {
   };
 }
 
+const PLANNER_CURRICULUM_CACHE_KEY = 'sp_plan_curriculum_v1';
+
+/**
+ * @returns {{ version: string, curriculum: { courses: object[], lectures: object[] } } | null}
+ */
+function plannerCurriculumCacheRead_() {
+  try {
+    const raw = sessionStorage.getItem(PLANNER_CURRICULUM_CACHE_KEY);
+    if (!raw) return null;
+    const o = JSON.parse(raw);
+    if (!o || typeof o !== 'object') return null;
+    const version = String(o.version != null ? o.version : '').trim();
+    if (!version.length) return null;
+    return {
+      version: version,
+      curriculum: plannerNormalizeCurriculumFromBootstrap_(o.curriculum)
+    };
+  } catch (_e) {
+    return null;
+  }
+}
+
+/**
+ * @param {string} version
+ * @param {unknown} curriculum
+ */
+function plannerCurriculumCacheWrite_(version, curriculum) {
+  try {
+    sessionStorage.setItem(
+      PLANNER_CURRICULUM_CACHE_KEY,
+      JSON.stringify({
+        version: version,
+        curriculum: curriculum
+      })
+    );
+  } catch (_e) {
+    /* quota */
+  }
+}
+
+/**
+ * @param {HTMLElement} root
+ * @param {unknown} curriculum
+ */
+function plannerApplyCurriculumToRoot_(root, curriculum) {
+  const st = root.__spPlanState;
+  if (!st || typeof st !== 'object') return;
+  st.plannerCurriculum = plannerNormalizeCurriculumFromBootstrap_(curriculum);
+  const slotMerge = root.querySelector('#sp-plan-calendar-slot');
+  if (slotMerge && st.manualRegMode === 'curriculum') {
+    plannerCurriculumRefreshCascade_(slotMerge, st, 'all');
+  }
+  if (typeof root.__spPlanRerenderMonth === 'function') {
+    root.__spPlanRerenderMonth();
+  }
+}
+
+/**
+ * bootstrap `curriculum_version` + sessionStorage — 커리큘럼은 bootstrap 본문과 분리.
+ * @param {HTMLElement} root
+ * @param {string} [serverVersion]
+ * @returns {Promise<void>}
+ */
+function plannerEnsureCurriculumLoaded_(root, serverVersion) {
+  if (plannerIsPlanDemoRoot_(root)) {
+    return Promise.resolve();
+  }
+  const wantVer = String(serverVersion != null ? serverVersion : '').trim();
+  const cached = plannerCurriculumCacheRead_();
+  if (cached && (!wantVer.length || cached.version === wantVer)) {
+    plannerApplyCurriculumToRoot_(root, cached.curriculum);
+    return Promise.resolve();
+  }
+  const rid = (root.__spPlannerCurriculumFetchId = (root.__spPlannerCurriculumFetchId || 0) + 1);
+  return plannerGasCall_({ action: 'plannerCurriculum' })
+    .then(function (res) {
+      if (root.__spPlannerCurriculumFetchId !== rid) return;
+      if (!res || !res.ok) return;
+      const d = /** @type {{ version?: string, curriculum?: unknown }} */ (res.data || {});
+      const version = String(d.version != null ? d.version : '').trim();
+      const curriculum = d.curriculum;
+      if (!version.length || !curriculum || typeof curriculum !== 'object') return;
+      plannerCurriculumCacheWrite_(version, curriculum);
+      plannerApplyCurriculumToRoot_(root, curriculum);
+    })
+    .catch(function () {
+      /* 달력·todo는 bootstrap만으로 동작 */
+    });
+}
+
+/**
+ * @param {HTMLElement} root
+ * @param {unknown} boot
+ */
+function plannerInitCurriculumOnCalendar_(root, boot) {
+  const st = root.__spPlanState;
+  if (!st || typeof st !== 'object') return;
+  const b = boot && typeof boot === 'object' ? /** @type {Record<string, unknown>} */ (boot) : {};
+  if (b.curriculum != null) {
+    st.plannerCurriculum = plannerNormalizeCurriculumFromBootstrap_(b.curriculum);
+    return;
+  }
+  const cached = plannerCurriculumCacheRead_();
+  st.plannerCurriculum = cached ? cached.curriculum : { courses: [], lectures: [] };
+}
+
 /**
  * 게이트 통과 후 저장된 연락처로 `viewMonth` 해당 달 bootstrap만 다시 읽기 (§8.5 구역 C).
  * @param {HTMLElement} root
@@ -1228,7 +1334,7 @@ function plannerRefetchBootstrapForViewMonth_(root) {
     .then(function (boot) {
       if (root.__spPlannerMonthFetchId !== rid) return;
       if (!boot || !boot.ok) return;
-      const d = /** @type {{ role?: string, common?: object[], personal?: object[] | null, student_profile?: Record<string, unknown>, curriculum?: unknown }} */ (
+      const d = /** @type {{ role?: string, common?: object[], personal?: object[] | null, student_profile?: Record<string, unknown>, curriculum_version?: string }} */ (
         boot.data || {}
       );
       plannerMergeBootstrapMonthData_(root, {
@@ -1236,7 +1342,7 @@ function plannerRefetchBootstrapForViewMonth_(root) {
         common: d.common || [],
         personal: d.personal != null ? d.personal : null,
         student_profile: d.student_profile,
-        curriculum: d.curriculum
+        curriculum_version: d.curriculum_version != null ? String(d.curriculum_version) : ''
       });
     })
     .finally(function () {
@@ -1249,7 +1355,7 @@ function plannerRefetchBootstrapForViewMonth_(root) {
 /**
  * 월 이동 재조회 결과만 상태·달력 격자에 반영 (`renderCalendar_` 전체 생략 — 등록 폼 유지).
  * @param {HTMLElement} root
- * @param {{ role: string, common: object[], personal: object[] | null, student_profile?: Record<string, unknown>, curriculum?: unknown }} pack
+ * @param {{ role: string, common: object[], personal: object[] | null, student_profile?: Record<string, unknown>, curriculum?: unknown, curriculum_version?: string }} pack
  */
 function plannerMergeBootstrapMonthData_(root, pack) {
   const st = root.__spPlanState;
@@ -1259,7 +1365,9 @@ function plannerMergeBootstrapMonthData_(root, pack) {
   if (st.planGuestUnlockMock) {
     st.role = 'member';
   }
-  st.plannerCurriculum = plannerNormalizeCurriculumFromBootstrap_(pack.curriculum);
+  if (pack.curriculum != null) {
+    st.plannerCurriculum = plannerNormalizeCurriculumFromBootstrap_(pack.curriculum);
+  }
   const common = plannerNormalizeCommonEventsFromApi_(pack.common);
   const personal = pack.personal != null && Array.isArray(pack.personal) ? pack.personal : [];
   st.plannerCommonEvents = common;
@@ -1294,6 +1402,10 @@ function plannerMergeBootstrapMonthData_(root, pack) {
   plannerRefreshPostPreview_(root);
   if (typeof root.__spPlanRefreshOpenDayModal === 'function') {
     root.__spPlanRefreshOpenDayModal();
+  }
+  const cv = pack.curriculum_version != null ? String(pack.curriculum_version).trim() : '';
+  if (cv.length) {
+    void plannerEnsureCurriculumLoaded_(root, cv);
   }
 }
 
@@ -1455,7 +1567,7 @@ async function plannerGasPostAction_(url, bodyObj) {
 }
 
 /**
- * 플래너 GAS — 전부 `doPost` JSON 본문.
+ * 플래너 GAS — `doPost` JSON 본문 (`plannerBootstrap` 코어 + `plannerCurriculum` 분리).
  * @param {Record<string, unknown>} payload
  * @return {Promise<Record<string, unknown>>}
  */
@@ -1499,6 +1611,9 @@ async function plannerGasCall_(payload) {
       body.year_month = ym;
     }
     return plannerGasPostAction_(url, body);
+  }
+  if (action === 'plannerCurriculum') {
+    return plannerGasPostAction_(url, { action: action });
   }
   if (action === 'plannerAdminVerify') {
     return plannerGasPostAction_(url, {
@@ -2688,7 +2803,7 @@ async function plannerPersonalTodosApplyClick_(root, opts) {
     year_month: ym
   });
   if (boot && boot.ok && boot.data) {
-    const d = /** @type {{ role?: string, common?: object[], personal?: object[] | null, student_profile?: Record<string, unknown>, curriculum?: unknown }} */ (
+    const d = /** @type {{ role?: string, common?: object[], personal?: object[] | null, student_profile?: Record<string, unknown>, curriculum_version?: string }} */ (
       boot.data || {}
     );
     plannerMergeBootstrapMonthData_(root, {
@@ -2696,7 +2811,7 @@ async function plannerPersonalTodosApplyClick_(root, opts) {
       common: d.common || [],
       personal: d.personal != null ? d.personal : null,
       student_profile: d.student_profile,
-      curriculum: d.curriculum
+      curriculum_version: d.curriculum_version != null ? String(d.curriculum_version) : ''
     });
   }
   if (msgEl) {
@@ -8604,7 +8719,7 @@ function renderCalendar_(root, boot) {
   st.byDate = byDate;
   st.apiHadCalendarRows = apiHadCalendarRows;
   st.plannerCommonEvents = common;
-  st.plannerCurriculum = plannerNormalizeCurriculumFromBootstrap_(boot && boot.curriculum);
+  plannerInitCurriculumOnCalendar_(root, boot);
   if (st.modalBrushTodoId == null) st.modalBrushTodoId = '';
   plannerEnsureMonthTodos_(st);
   if (!st.plannerQuickPostBody || typeof st.plannerQuickPostBody !== 'object') {
@@ -9896,7 +10011,7 @@ function wireGate_(root) {
       showErr(m);
       return;
     }
-    const d = /** @type {{ role?: string, common?: object[], personal?: object[] | null, student_profile?: Record<string, unknown>, curriculum?: unknown }} */ (
+    const d = /** @type {{ role?: string, common?: object[], personal?: object[] | null, student_profile?: Record<string, unknown>, curriculum_version?: string }} */ (
       boot.data || {}
     );
     gate.setAttribute('hidden', 'hidden');
@@ -9905,10 +10020,10 @@ function wireGate_(root) {
     renderCalendar_(root, {
       role: d.role || 'guest',
       common: d.common || [],
-      personal: d.personal != null ? d.personal : null,
-      curriculum: d.curriculum
+      personal: d.personal != null ? d.personal : null
     });
     renderPlannerStudentProfile_(root, d.student_profile);
+    void plannerEnsureCurriculumLoaded_(root, d.curriculum_version != null ? String(d.curriculum_version) : '');
   }
 
   btn.addEventListener('click', async function () {
