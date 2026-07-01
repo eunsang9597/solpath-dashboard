@@ -732,11 +732,12 @@ function plannerApplyAdminVisibility_(root) {
 }
 
 /**
- * 월 이동 시 bootstrap 재조회 로딩 표시.
+ * 월 이동·커리큘럼 await 시 달력 로딩 표시.
  * @param {HTMLElement} root
  * @param {boolean} on
+ * @param {string} [statusText]
  */
-function plannerSetMonthFetchLoading_(root, on) {
+function plannerSetMonthFetchLoading_(root, on, statusText) {
   const wrap = root.querySelector('#sp-plan-month-wrap');
   if (!wrap) return;
   let el = wrap.querySelector('#sp-plan-month-loading');
@@ -750,6 +751,13 @@ function plannerSetMonthFetchLoading_(root, on) {
       '<div class="sp-plan-month__loadingBox" aria-hidden="true"><span class="sp-plan-month__loadingSpinner"></span></div>' +
       '<span class="sp-plan-month__loadingText">일정 불러오는 중…</span>';
     wrap.appendChild(el);
+  }
+  const msg = String(statusText != null ? statusText : '').trim();
+  const textEl = el.querySelector('.sp-plan-month__loadingText');
+  if (textEl && msg.length) {
+    textEl.textContent = msg;
+  } else if (textEl && !on) {
+    textEl.textContent = '일정 불러오는 중…';
   }
   wrap.classList.toggle('is-month-fetching', Boolean(on));
   if (on) {
@@ -1232,6 +1240,61 @@ function plannerCurriculumCacheWrite_(version, curriculum) {
 }
 
 /**
+ * `plannerCurriculum` — 캐시 우선, 없으면 GAS fetch.
+ * @param {string} [serverVersion]
+ * @returns {Promise<{ version: string, curriculum: { courses: object[], lectures: object[] } } | null>}
+ */
+function plannerFetchCurriculumPack_(serverVersion) {
+  const wantVer = String(serverVersion != null ? serverVersion : '').trim();
+  const cached = plannerCurriculumCacheRead_();
+  if (cached && (!wantVer.length || cached.version === wantVer)) {
+    return Promise.resolve({ version: cached.version, curriculum: cached.curriculum });
+  }
+  return plannerGasCall_({ action: 'plannerCurriculum' })
+    .then(function (res) {
+      if (!res || !res.ok) return null;
+      const d = /** @type {{ version?: string, curriculum?: unknown }} */ (res.data || {});
+      const version = String(d.version != null ? d.version : '').trim();
+      const curriculum = d.curriculum;
+      if (!version.length || !curriculum || typeof curriculum !== 'object') return null;
+      const norm = plannerNormalizeCurriculumFromBootstrap_(curriculum);
+      plannerCurriculumCacheWrite_(version, curriculum);
+      return { version: version, curriculum: norm };
+    })
+    .catch(function () {
+      return null;
+    });
+}
+
+/**
+ * 커리큘럼 로드 후 빠른등록·개별등록·열린 일정등록 모달 셀렉트 갱신.
+ * @param {HTMLElement} root
+ */
+function plannerRefreshCurriculumSelectsInRoot_(root) {
+  const st = root.__spPlanState;
+  if (!st || typeof st !== 'object') return;
+  const slot = root.querySelector('#sp-plan-calendar-slot');
+  if (slot) {
+    plannerQuickCurriculumRefreshCascade_(slot, st, 'all');
+    const panelCurr = slot.querySelector('#sp-plan-manual-curriculum');
+    if (panelCurr && !panelCurr.hasAttribute('hidden')) {
+      plannerCurriculumRefreshCascade_(slot, st, 'all', 'panel');
+    } else if (st.manualRegMode === 'curriculum') {
+      plannerCurriculumRefreshCascade_(slot, st, 'all', 'panel');
+    }
+  }
+  const calReg = root.querySelector('#sp-plan-cal-reg-modal');
+  if (calReg && !calReg.hasAttribute('hidden')) {
+    const calCurr = calReg.querySelector('#sp-calreg-manual-curriculum');
+    if (calCurr && !calCurr.hasAttribute('hidden')) {
+      plannerCurriculumRefreshCascade_(calReg, st, 'all', 'calreg');
+    } else if (st.manualRegMode === 'curriculum') {
+      plannerCurriculumRefreshCascade_(calReg, st, 'all', 'calreg');
+    }
+  }
+}
+
+/**
  * @param {HTMLElement} root
  * @param {unknown} curriculum
  */
@@ -1239,13 +1302,7 @@ function plannerApplyCurriculumToRoot_(root, curriculum) {
   const st = root.__spPlanState;
   if (!st || typeof st !== 'object') return;
   st.plannerCurriculum = plannerNormalizeCurriculumFromBootstrap_(curriculum);
-  const slotMerge = root.querySelector('#sp-plan-calendar-slot');
-  if (slotMerge && st.manualRegMode === 'curriculum') {
-    plannerCurriculumRefreshCascade_(slotMerge, st, 'all');
-  }
-  if (typeof root.__spPlanRerenderMonth === 'function') {
-    root.__spPlanRerenderMonth();
-  }
+  plannerRefreshCurriculumSelectsInRoot_(root);
 }
 
 /**
@@ -1258,27 +1315,11 @@ function plannerEnsureCurriculumLoaded_(root, serverVersion) {
   if (plannerIsPlanDemoRoot_(root)) {
     return Promise.resolve();
   }
-  const wantVer = String(serverVersion != null ? serverVersion : '').trim();
-  const cached = plannerCurriculumCacheRead_();
-  if (cached && (!wantVer.length || cached.version === wantVer)) {
-    plannerApplyCurriculumToRoot_(root, cached.curriculum);
-    return Promise.resolve();
-  }
   const rid = (root.__spPlannerCurriculumFetchId = (root.__spPlannerCurriculumFetchId || 0) + 1);
-  return plannerGasCall_({ action: 'plannerCurriculum' })
-    .then(function (res) {
-      if (root.__spPlannerCurriculumFetchId !== rid) return;
-      if (!res || !res.ok) return;
-      const d = /** @type {{ version?: string, curriculum?: unknown }} */ (res.data || {});
-      const version = String(d.version != null ? d.version : '').trim();
-      const curriculum = d.curriculum;
-      if (!version.length || !curriculum || typeof curriculum !== 'object') return;
-      plannerCurriculumCacheWrite_(version, curriculum);
-      plannerApplyCurriculumToRoot_(root, curriculum);
-    })
-    .catch(function () {
-      /* 달력·todo는 bootstrap만으로 동작 */
-    });
+  return plannerFetchCurriculumPack_(serverVersion).then(function (pack) {
+    if (!pack || root.__spPlannerCurriculumFetchId !== rid) return;
+    plannerApplyCurriculumToRoot_(root, pack.curriculum);
+  });
 }
 
 /**
@@ -1323,7 +1364,7 @@ function plannerRefetchBootstrapForViewMonth_(root) {
   }
   const view = st.viewMonth instanceof Date && !isNaN(st.viewMonth.getTime()) ? st.viewMonth : new Date();
   const rid = (root.__spPlannerMonthFetchId = (root.__spPlannerMonthFetchId || 0) + 1);
-  plannerSetMonthFetchLoading_(root, true);
+  plannerSetMonthFetchLoading_(root, true, '일정 불러오는 중…');
   return plannerGasCall_({
     action: 'plannerBootstrap',
     phoneSegments: segs,
@@ -1337,12 +1378,24 @@ function plannerRefetchBootstrapForViewMonth_(root) {
       const d = /** @type {{ role?: string, common?: object[], personal?: object[] | null, student_profile?: Record<string, unknown>, curriculum_version?: string }} */ (
         boot.data || {}
       );
-      plannerMergeBootstrapMonthData_(root, {
-        role: d.role || 'guest',
-        common: d.common || [],
-        personal: d.personal != null ? d.personal : null,
-        student_profile: d.student_profile,
-        curriculum_version: d.curriculum_version != null ? String(d.curriculum_version) : ''
+      const cv = d.curriculum_version != null ? String(d.curriculum_version).trim() : '';
+      if (cv.length) {
+        plannerSetMonthFetchLoading_(root, true, '커리큘럼 불러오는 중…');
+      }
+      return plannerFetchCurriculumPack_(cv).then(function (curPack) {
+        if (root.__spPlannerMonthFetchId !== rid) return;
+        /** @type {Record<string, unknown>} */
+        const mergePack = {
+          role: d.role || 'guest',
+          common: d.common || [],
+          personal: d.personal != null ? d.personal : null,
+          student_profile: d.student_profile,
+          curriculum_version: cv
+        };
+        if (curPack) {
+          mergePack.curriculum = curPack.curriculum;
+        }
+        plannerMergeBootstrapMonthData_(root, /** @type {Parameters<typeof plannerMergeBootstrapMonthData_>[1]} */ (mergePack));
       });
     })
     .finally(function () {
@@ -1392,20 +1445,13 @@ function plannerMergeBootstrapMonthData_(root, pack) {
   }
   renderPlannerStudentProfile_(root, pack.student_profile);
   plannerApplyBootstrapPersonal_(st, pack.personal, st.role);
-  const slotMerge = root.querySelector('#sp-plan-calendar-slot');
-  if (slotMerge && st.manualRegMode === 'curriculum') {
-    plannerCurriculumRefreshCascade_(slotMerge, st, 'all');
-  }
   if (typeof root.__spPlanRerenderMonth === 'function') {
     root.__spPlanRerenderMonth();
   }
+  plannerRefreshCurriculumSelectsInRoot_(root);
   plannerRefreshPostPreview_(root);
   if (typeof root.__spPlanRefreshOpenDayModal === 'function') {
     root.__spPlanRefreshOpenDayModal();
-  }
-  const cv = pack.curriculum_version != null ? String(pack.curriculum_version).trim() : '';
-  if (cv.length) {
-    void plannerEnsureCurriculumLoaded_(root, cv);
   }
 }
 
@@ -10309,16 +10355,24 @@ function wireGate_(root) {
     const d = /** @type {{ role?: string, common?: object[], personal?: object[] | null, student_profile?: Record<string, unknown>, curriculum_version?: string }} */ (
       boot.data || {}
     );
+    const cv = d.curriculum_version != null ? String(d.curriculum_version).trim() : '';
+    setGateLoading_(true, '커리큘럼 불러오는 중…');
+    const curPack = await plannerFetchCurriculumPack_(cv);
+    setGateLoading_(false);
     gate.setAttribute('hidden', 'hidden');
     gate.setAttribute('aria-hidden', 'true');
     plannerRevealPlanMain_(root);
-    renderCalendar_(root, {
+    /** @type {{ role: string, common: object[], personal: object[] | null, curriculum?: unknown }} */
+    const bootRender = {
       role: d.role || 'guest',
       common: d.common || [],
       personal: d.personal != null ? d.personal : null
-    });
+    };
+    if (curPack) {
+      bootRender.curriculum = curPack.curriculum;
+    }
+    renderCalendar_(root, bootRender);
     renderPlannerStudentProfile_(root, d.student_profile);
-    void plannerEnsureCurriculumLoaded_(root, d.curriculum_version != null ? String(d.curriculum_version) : '');
   }
 
   btn.addEventListener('click', async function () {
