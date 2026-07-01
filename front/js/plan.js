@@ -2269,20 +2269,25 @@ function wirePlannerMainTabsOnce_(root) {
 
 /**
  * @param {HTMLElement} root
+ * @param {{ msgEl?: HTMLElement|null, partOfDual?: boolean }} [opts]
+ * @returns {Promise<boolean>}
  */
-async function plannerStudentProfileSaveClick_(root) {
-  const msgEl = root.querySelector('#sp-plan-student-save-msg');
+async function plannerStudentProfileSaveClick_(root, opts) {
+  const partOfDual = Boolean(opts && opts.partOfDual);
+  const msgEl =
+    (opts && opts.msgEl) ||
+    root.querySelector('#sp-plan-student-save-msg');
   const ctx = root.__spPlannerBootstrapCtx;
   const st = root.__spPlanState;
   if (!ctx || !st || !plannerStudentProfileCanEdit_(root)) {
-    if (msgEl) {
+    if (msgEl && !partOfDual) {
       msgEl.textContent = '저장할 수 없습니다.';
       msgEl.removeAttribute('hidden');
     }
-    return;
+    return false;
   }
   const payload = plannerCollectStudentProfilePayloadForSave_(root);
-  if (msgEl) {
+  if (msgEl && !partOfDual) {
     msgEl.textContent = '저장 중…';
     msgEl.removeAttribute('hidden');
   }
@@ -2294,9 +2299,11 @@ async function plannerStudentProfileSaveClick_(root) {
     student_profile: payload
   });
   if (!res || !res.ok) {
-    const m = res && res.error && res.error.message != null ? String(res.error.message) : '저장에 실패했습니다.';
-    if (msgEl) msgEl.textContent = m;
-    return;
+    if (msgEl && !partOfDual) {
+      const m = res && res.error && res.error.message != null ? String(res.error.message) : '저장에 실패했습니다.';
+      msgEl.textContent = m;
+    }
+    return false;
   }
   const ymDate = st.viewMonth instanceof Date && !isNaN(st.viewMonth.getTime()) ? st.viewMonth : new Date();
   const boot = await plannerGasCall_({
@@ -2310,14 +2317,105 @@ async function plannerStudentProfileSaveClick_(root) {
     const d = /** @type {{ student_profile?: Record<string, unknown> }} */ (boot.data);
     renderPlannerStudentProfile_(root, d.student_profile);
     renderPlannerCoachingBlocks_(root, d.student_profile);
-    if (msgEl) {
+    if (msgEl && !partOfDual) {
       msgEl.textContent = '저장했습니다.';
       window.setTimeout(function () {
         msgEl.setAttribute('hidden', 'hidden');
       }, 2200);
     }
-  } else if (msgEl) {
+    return true;
+  }
+  if (msgEl && !partOfDual) {
     msgEl.textContent = '저장은 반영되었을 수 있습니다. 달력 월을 한 번 바꿔 새로고침해 보세요.';
+  }
+  return true;
+}
+
+/**
+ * 관리자 모드 — 프로필·코칭 저장과 일정 저장을 한 번에(순서: 프로필 → 일정).
+ * @param {HTMLElement} root
+ * @param {{ msgEl?: HTMLElement|null, requireAdmin?: boolean, fromProfile?: boolean }} [opts]
+ */
+async function plannerAdminDualSaveClick_(root, opts) {
+  opts = opts || {};
+  const isAdmin = Boolean(root.__spPlanAdminMode);
+  if (!isAdmin) {
+    if (opts.fromProfile) {
+      void plannerStudentProfileSaveClick_(root, { msgEl: opts.msgEl });
+      return;
+    }
+    void plannerPersonalTodosApplyClick_(root, opts);
+    return;
+  }
+
+  const msgEl =
+    opts.msgEl ||
+    root.querySelector('#sp-plan-student-save-msg') ||
+    root.querySelector('#sp-plan-todos-apply-msg') ||
+    root.querySelector('#sp-plan-month-apply-msg') ||
+    root.querySelector('#sp-plan-day-apply-msg');
+
+  if (root.__spPlanAdminDualSaveInFlight) {
+    if (msgEl) {
+      msgEl.textContent = '저장 중입니다. 잠시만 기다려 주세요.';
+      msgEl.removeAttribute('hidden');
+    }
+    return;
+  }
+  root.__spPlanAdminDualSaveInFlight = true;
+  try {
+    if (msgEl) {
+      msgEl.textContent = '저장 중…';
+      msgEl.removeAttribute('hidden');
+    }
+
+    let profileOk = true;
+    const profileSkipped = !plannerStudentProfileCanEdit_(root);
+    if (!profileSkipped) {
+      profileOk = await plannerStudentProfileSaveClick_(root, { partOfDual: true });
+    }
+
+    const todosOk = await plannerPersonalTodosApplyClick_(root, {
+      msgEl: msgEl,
+      requireAdmin: opts.requireAdmin,
+      partOfDual: true,
+      skipInFlightCheck: true
+    });
+
+    if (!msgEl) return;
+
+    if (profileSkipped) {
+      if (todosOk) {
+        msgEl.textContent = '저장했습니다.';
+        window.setTimeout(function () {
+          msgEl.setAttribute('hidden', 'hidden');
+        }, 2200);
+      } else {
+        msgEl.textContent =
+          '일정 저장에 실패했습니다. 화면 데이터는 그대로입니다. 다시 저장해 주세요.';
+      }
+      return;
+    }
+
+    if (profileOk && todosOk) {
+      msgEl.textContent = '프로필·코칭·일정을 저장했습니다.';
+      window.setTimeout(function () {
+        msgEl.setAttribute('hidden', 'hidden');
+      }, 2200);
+      return;
+    }
+    if (profileOk && !todosOk) {
+      msgEl.textContent =
+        '프로필·코칭은 저장됐으나 일정 저장에 실패했습니다. 화면 데이터는 그대로입니다. 다시 저장해 주세요.';
+      return;
+    }
+    if (!profileOk && todosOk) {
+      msgEl.textContent = '일정은 저장됐으나 프로필·코칭 저장에 실패했습니다. 다시 저장해 주세요.';
+      return;
+    }
+    msgEl.textContent = '저장에 실패했습니다. 다시 저장해 주세요.';
+  } finally {
+    root.__spPlanAdminDualSaveInFlight = false;
   }
 }
 
@@ -2330,7 +2428,7 @@ function wirePlannerStudentProfileSaveOnce_(root) {
     const btn = t.id === 'sp-plan-student-save' ? t : t.closest ? t.closest('#sp-plan-student-save') : null;
     if (!btn) return;
     e.preventDefault();
-    void plannerStudentProfileSaveClick_(root);
+    void plannerAdminDualSaveClick_(root, { fromProfile: true, msgEl: root.querySelector('#sp-plan-student-save-msg') });
   });
 }
 
@@ -2942,9 +3040,10 @@ async function plannerPersonalTodosApplyBatched_(callPayload, msgEl) {
 /**
  * `plannerPersonalTodosApply` — 현재 보는 달(`viewMonth`)의 todo 페이로드를 학생 월 시트에 덮어쓴다.
  * @param {HTMLElement} root
- * @param {{ msgEl?: HTMLElement|null }} [opts]
+ * @param {{ msgEl?: HTMLElement|null, requireAdmin?: boolean, partOfDual?: boolean, skipInFlightCheck?: boolean }} [opts]
  */
 async function plannerPersonalTodosApplyClick_(root, opts) {
+  const partOfDual = Boolean(opts && opts.partOfDual);
   const msgEl =
     (opts && opts.msgEl) ||
     root.querySelector('#sp-plan-todos-apply-msg') ||
@@ -2954,25 +3053,27 @@ async function plannerPersonalTodosApplyClick_(root, opts) {
   const st = root.__spPlanState;
   const memberUi = st && (st.role === 'member' || st.planGuestUnlockMock);
   if (opts && opts.requireAdmin && !plannerPlanAdminBulkScheduleAllowed_(root)) {
-    if (msgEl) {
+    if (msgEl && !partOfDual) {
       msgEl.textContent = '관리자 모드에서만 할 수 있습니다.';
       msgEl.removeAttribute('hidden');
     }
     return false;
   }
   if (!ctx || !st || !memberUi) {
-    if (msgEl) {
+    if (msgEl && !partOfDual) {
       msgEl.textContent = '회원 확인 후에만 저장할 수 있습니다.';
       msgEl.removeAttribute('hidden');
     }
     return false;
   }
-  if (root.__spPlanTodosApplyInFlight) {
-    if (msgEl) {
-      msgEl.textContent = '저장 중입니다. 잠시만 기다려 주세요.';
-      msgEl.removeAttribute('hidden');
+  if (!opts || !opts.skipInFlightCheck) {
+    if (root.__spPlanTodosApplyInFlight || root.__spPlanAdminDualSaveInFlight) {
+      if (msgEl && !partOfDual) {
+        msgEl.textContent = '저장 중입니다. 잠시만 기다려 주세요.';
+        msgEl.removeAttribute('hidden');
+      }
+      return false;
     }
-    return false;
   }
   root.__spPlanTodosApplyInFlight = true;
   try {
@@ -2982,7 +3083,7 @@ async function plannerPersonalTodosApplyClick_(root, opts) {
     const ym = plannerYearMonthFromDate_(ymDate);
     const todos =
       st.plannerQuickPostBody && Array.isArray(st.plannerQuickPostBody.todos) ? st.plannerQuickPostBody.todos : [];
-    if (msgEl) {
+    if (msgEl && !partOfDual) {
       msgEl.textContent = '저장 중…';
       msgEl.removeAttribute('hidden');
     }
@@ -2997,7 +3098,7 @@ async function plannerPersonalTodosApplyClick_(root, opts) {
       msgEl
     );
     if (!applyRes.ok) {
-      if (msgEl) {
+      if (msgEl && !partOfDual) {
         msgEl.textContent =
           (applyRes.error || '저장에 실패했습니다.') + ' 화면 데이터는 그대로입니다. 다시 저장해 주세요.';
       }
@@ -3005,7 +3106,7 @@ async function plannerPersonalTodosApplyClick_(root, opts) {
     }
     plannerMarkViewMonthTodosSaved_(st, ymDate);
     plannerRefreshUiAfterTodosApply_(root);
-    if (msgEl) {
+    if (msgEl && !partOfDual) {
       msgEl.textContent = '저장했습니다.';
       window.setTimeout(function () {
         msgEl.setAttribute('hidden', 'hidden');
@@ -3037,7 +3138,7 @@ function wirePlannerPersonalTodosApplyOnce_(root) {
       else msgEl = root.querySelector('#sp-plan-todos-apply-msg');
       const requireAdmin =
         saveBtn.id === 'sp-plan-month-save' || saveBtn.id === 'sp-plan-todos-apply';
-      void plannerPersonalTodosApplyClick_(root, { msgEl: msgEl, requireAdmin: requireAdmin });
+      void plannerAdminDualSaveClick_(root, { msgEl: msgEl, requireAdmin: requireAdmin });
       return;
     }
     const clearBtn =
@@ -3986,7 +4087,7 @@ const PLAN_APP_MAIN_AND_CLOSE = `<main class="app-main sp-plan-app-main app-shel
       <div class="sp-plan-tabPanel" id="sp-plan-tab-monthly" role="tabpanel" aria-labelledby="sp-plan-tab-btn-monthly" hidden aria-hidden="true">
       <section class="sp-plan-monthlyNotice" id="sp-plan-monthly-notice" hidden aria-hidden="true" aria-labelledby="sp-plan-monthly-notice-title">
         <h2 class="sp-plan-monthlyNotice__title" id="sp-plan-monthly-notice-title">월 상담기록</h2>
-        <p class="sp-plan-monthlyNotice__hint">달력과 같은 달 기준입니다. 내용을 입력한 뒤 「프로필·코칭 저장」을 눌러 주세요.</p>
+        <p class="sp-plan-monthlyNotice__hint">달력과 같은 달 기준입니다. 관리자 모드에서는 「프로필·코칭 저장」 또는 「일정 저장하기」 중 아무 버튼이나 누르면 프로필·코칭·일정이 함께 저장됩니다.</p>
         <textarea class="sp-plan-monthlyNotice__body" id="sp-plan-monthly-notice-body" rows="12" maxlength="16000" spellcheck="true" placeholder="이 달 학습계획·수강기간·인증 방법 등"></textarea>
         <p class="sp-plan-monthlyNotice__empty" id="sp-plan-monthly-notice-empty" hidden>이 달에 등록된 안내가 없습니다.</p>
       </section>
