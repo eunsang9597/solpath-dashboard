@@ -1410,62 +1410,67 @@ function plannerMergeBootstrapMonthData_(root, pack) {
 }
 
 const PLANNER_GAS_POST_TIMEOUT_MS = 360000;
+/** todo apply POST 분할 — 행 단위 */
+const PLANNER_TODO_APPLY_BATCH_SIZE = 80;
+/** apply fetch 재시도 횟수(추가 시도) — 총 1 + N 회 */
+const PLANNER_GAS_APPLY_MAX_RETRY = 2;
 
 /**
- * GAS JSONP는 `{ error: { message } }` 와 `{ error: 'X', message: '…' }` 를 섞어 쓴다. 플래너 UI는 여기서 통일한다.
- * @param {unknown} data
- * @return {Record<string, unknown>}
+ * 분할 apply 세션 id — GAS Cache 버퍼·멱등 재시도용.
+ * @returns {string}
  */
-function plannerGasNormalizeResult_(data) {
-  if (data == null || typeof data !== 'object') {
-    return {
-      ok: false,
-      error: { code: 'INVALID_RESPONSE', message: '서버 응답이 비어 있거나 JSON이 아닙니다. Executions·Network에서 script 응답을 확인하세요.' }
-    };
-  }
-  const o = /** @type {Record<string, unknown>} */ (data);
-  if (o.ok === true) {
-    return o;
-  }
-  const err = o.error;
-  let msg = '';
-  let code = '';
-  if (err != null && typeof err === 'object' && 'message' in err && (/** @type {{ message?: unknown }} */ (err).message != null)) {
-    msg = String(/** @type {{ message?: unknown }} */ (err).message);
-    code =
-      'code' in err && (/** @type {{ code?: unknown }} */ (err).code != null)
-        ? String(/** @type {{ code?: unknown }} */ (err).code)
-        : '';
-  } else if (typeof err === 'string') {
-    code = err;
-    msg = o.message != null ? String(o.message) : err;
-  } else if (o.message != null) {
-    msg = String(o.message);
-  }
-  if (!msg.length) {
-    if (err === 'UNKNOWN_ACTION' || code === 'UNKNOWN_ACTION') {
-      msg =
-        '배포된 Web App에 이 action이 없습니다. clasp push 후 **새 버전으로 배포**했는지 확인하세요. (UNKNOWN_ACTION)';
-    } else {
-      try {
-        msg = JSON.stringify(o).slice(0, 900);
-      } catch (_e) {
-        msg = 'ok=false 이지만 상세 메시지를 꺼내지 못했습니다.';
-      }
+function plannerNewApplySessionId_() {
+  try {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+      return crypto.randomUUID();
     }
-  }
-  return { ok: false, error: { code: code || 'GAS_ERROR', message: msg } };
+  } catch (_e) {}
+  return 'as_' + String(Date.now()) + '_' + Math.random().toString(36).slice(2, 12);
 }
 
 /**
- * GAS Web App POST — 본문만 `JSON.stringify` (커스텀 헤더 없음 → OPTIONS 프리플라이트 없음).
- * `redirect: "follow"` — exec 302 → googleusercontent 최종 JSON 응답.
- * @see https://stackoverflow.com/questions/53433938/how-do-i-allow-a-cors-requests-in-my-google-script
+ * @param {number} ms
+ * @returns {Promise<void>}
+ */
+function plannerGasSleepMs_(ms) {
+  return new Promise(function (resolve) {
+    window.setTimeout(resolve, ms);
+  });
+}
+
+/**
+ * @param {Record<string, unknown>|null|undefined} result
+ * @returns {boolean}
+ */
+function plannerGasPostResultShouldRetry_(result) {
+  if (!result || typeof result !== 'object') {
+    return true;
+  }
+  const err = result.error;
+  if (!err || typeof err !== 'object') {
+    return false;
+  }
+  const code = String(/** @type {{ code?: unknown }} */ (err).code != null ? /** @type {{ code?: unknown }} */ (err).code : '');
+  if (code === 'NETWORK') {
+    return true;
+  }
+  if (code === 'HTTP_404' || code === 'HTTP_502' || code === 'HTTP_503' || code === 'HTTP_504') {
+    return true;
+  }
+  if (code === 'INVALID_RESPONSE') {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * GAS Web App POST — 1회 시도.
  * @param {string} url
  * @param {Record<string, unknown>} bodyObj
+ * @param {number} [timeoutMs]
  * @return {Promise<unknown>}
  */
-async function plannerGasJsonPost_(url, bodyObj, timeoutMs) {
+async function plannerGasJsonPostOnce_(url, bodyObj, timeoutMs) {
   const lim = timeoutMs != null ? timeoutMs : PLANNER_GAS_POST_TIMEOUT_MS;
   const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
   const timer =
@@ -1518,6 +1523,89 @@ async function plannerGasJsonPost_(url, bodyObj, timeoutMs) {
 }
 
 /**
+ * GAS Web App POST — `maxRetry`>0 이면 간헐 404·NETWORK 등에서 재시도.
+ * @param {string} url
+ * @param {Record<string, unknown>} bodyObj
+ * @param {number} [timeoutMs]
+ * @param {number} [maxRetry]
+ * @return {Promise<unknown>}
+ */
+async function plannerGasJsonPost_(url, bodyObj, timeoutMs, maxRetry) {
+  const retries = maxRetry != null && maxRetry > 0 ? Math.floor(maxRetry) : 0;
+  let last = null;
+  let attempt;
+  for (attempt = 0; attempt <= retries; attempt++) {
+    if (attempt > 0) {
+      await plannerGasSleepMs_(800 * attempt);
+    }
+    try {
+      last = await plannerGasJsonPostOnce_(url, bodyObj, timeoutMs);
+    } catch (e) {
+      if (attempt >= retries) {
+        throw e;
+      }
+      last = {
+        ok: false,
+        error: {
+          code: 'NETWORK',
+          message: e && typeof e === 'object' && 'message' in e ? String(/** @type {{ message?: string }} */ (e).message) : String(e)
+        }
+      };
+    }
+    if (attempt >= retries || !plannerGasPostResultShouldRetry_(/** @type {Record<string, unknown>} */ (last))) {
+      return last;
+    }
+  }
+  return last;
+}
+
+/**
+ * GAS JSONP는 `{ error: { message } }` 와 `{ error: 'X', message: '…' }` 를 섞어 쓴다. 플래너 UI는 여기서 통일한다.
+ * @param {unknown} data
+ * @return {Record<string, unknown>}
+ */
+function plannerGasNormalizeResult_(data) {
+  if (data == null || typeof data !== 'object') {
+    return {
+      ok: false,
+      error: { code: 'INVALID_RESPONSE', message: '서버 응답이 비어 있거나 JSON이 아닙니다. Executions·Network에서 script 응답을 확인하세요.' }
+    };
+  }
+  const o = /** @type {Record<string, unknown>} */ (data);
+  if (o.ok === true) {
+    return o;
+  }
+  const err = o.error;
+  let msg = '';
+  let code = '';
+  if (err != null && typeof err === 'object' && 'message' in err && (/** @type {{ message?: unknown }} */ (err).message != null)) {
+    msg = String(/** @type {{ message?: unknown }} */ (err).message);
+    code =
+      'code' in err && (/** @type {{ code?: unknown }} */ (err).code != null)
+        ? String(/** @type {{ code?: unknown }} */ (err).code)
+        : '';
+  } else if (typeof err === 'string') {
+    code = err;
+    msg = o.message != null ? String(o.message) : err;
+  } else if (o.message != null) {
+    msg = String(o.message);
+  }
+  if (!msg.length) {
+    if (err === 'UNKNOWN_ACTION' || code === 'UNKNOWN_ACTION') {
+      msg =
+        '배포된 Web App에 이 action이 없습니다. clasp push 후 **새 버전으로 배포**했는지 확인하세요. (UNKNOWN_ACTION)';
+    } else {
+      try {
+        msg = JSON.stringify(o).slice(0, 900);
+      } catch (_e) {
+        msg = 'ok=false 이지만 상세 메시지를 꺼내지 못했습니다.';
+      }
+    }
+  }
+  return { ok: false, error: { code: code || 'GAS_ERROR', message: msg } };
+}
+
+/**
  * @param {Record<string, unknown>} payload
  * @returns {string[]}
  */
@@ -1548,11 +1636,13 @@ function plannerLinkKeyFromPayload_(payload) {
  * `HttpOpenSync.js` `doPost` — JSON 본문 `action` + 필드 (`phoneSegments` 배열, `todos` 배열 등).
  * @param {string} url
  * @param {Record<string, unknown>} bodyObj
+ * @param {{ maxRetry?: number }} [opts]
  * @return {Promise<Record<string, unknown>>}
  */
-async function plannerGasPostAction_(url, bodyObj) {
+async function plannerGasPostAction_(url, bodyObj, opts) {
+  const maxRetry = opts && opts.maxRetry != null ? opts.maxRetry : 0;
   try {
-    const raw = await plannerGasJsonPost_(url, bodyObj, PLANNER_GAS_POST_TIMEOUT_MS);
+    const raw = await plannerGasJsonPost_(url, bodyObj, PLANNER_GAS_POST_TIMEOUT_MS, maxRetry);
     return plannerGasNormalizeResult_(raw);
   } catch (e) {
     const m = e && typeof e === 'object' && 'message' in e ? String(/** @type {{ message?: string }} */ (e).message) : String(e);
@@ -1638,7 +1728,7 @@ async function plannerGasCall_(payload) {
   if (action === 'plannerPersonalTodosApply') {
     const ym = String(payload.year_month != null ? payload.year_month : payload.yearMonth != null ? payload.yearMonth : '').trim();
     const todos = Array.isArray(payload.todos) ? payload.todos : [];
-    return plannerGasPostAction_(url, {
+    const body = {
       action: action,
       phoneSegments: plannerPhoneSegmentsFromPayload_(payload),
       name: String(payload.name != null ? payload.name : ''),
@@ -1646,7 +1736,17 @@ async function plannerGasCall_(payload) {
       link_key: plannerLinkKeyFromPayload_(payload),
       year_month: ym,
       todos: todos
-    });
+    };
+    if (payload.batch_index != null) {
+      body.batch_index = payload.batch_index;
+    }
+    if (payload.batch_total != null) {
+      body.batch_total = payload.batch_total;
+    }
+    if (payload.apply_session_id != null) {
+      body.apply_session_id = payload.apply_session_id;
+    }
+    return plannerGasPostAction_(url, body, { maxRetry: PLANNER_GAS_APPLY_MAX_RETRY });
   }
   return { ok: false, error: { code: 'BAD_ACTION', message: '지원하지 않는 action: ' + action } };
 }
@@ -2745,6 +2845,101 @@ function plannerPrepareClientStateBeforeApply_(root) {
 }
 
 /**
+ * @param {object[]} arr
+ * @param {number} size
+ * @returns {object[][]}
+ */
+function plannerChunkTodosForApply_(arr, size) {
+  const list = Array.isArray(arr) ? arr : [];
+  const n = size > 0 ? Math.floor(size) : PLANNER_TODO_APPLY_BATCH_SIZE;
+  /** @type {object[][]} */
+  const out = [];
+  let i;
+  for (i = 0; i < list.length; i += n) {
+    out.push(list.slice(i, i + n));
+  }
+  if (!out.length) {
+    out.push([]);
+  }
+  return out;
+}
+
+/**
+ * 저장 성공 후 클라 `monthTodos` — bootstrap 없이 서버 반영 표시.
+ * @param {object} st
+ * @param {Date} viewMonth
+ */
+function plannerMarkViewMonthTodosSaved_(st, viewMonth) {
+  if (!st || typeof st !== 'object') return;
+  const pfx = plannerMonthYmdPrefix_(viewMonth);
+  plannerEnsureMonthTodos_(st);
+  st.monthTodos.forEach(function (r) {
+    if (!r || typeof r !== 'object') return;
+    if (String(r.date || '').trim().indexOf(pfx) !== 0) return;
+    r._fromServer = true;
+  });
+  plannerRebuildQuickPostPayload_(st);
+}
+
+/**
+ * todo apply 후 UI만 갱신(bootstrap 생략).
+ * @param {HTMLElement} root
+ */
+function plannerRefreshUiAfterTodosApply_(root) {
+  plannerRefreshPostPreview_(root);
+  if (typeof root.__spPlanRerenderMonth === 'function') {
+    root.__spPlanRerenderMonth();
+  }
+  if (typeof root.__spPlanRefreshOpenDayModal === 'function') {
+    root.__spPlanRefreshOpenDayModal();
+  }
+}
+
+/**
+ * `plannerPersonalTodosApply` — 해당 월 todo를 batch POST로 저장.
+ * @param {Record<string, unknown>} callPayload `plannerGasCall_` 인자
+ * @param {HTMLElement|null} msgEl
+ * @returns {Promise<{ ok: boolean, written: number, error?: string }>}
+ */
+async function plannerPersonalTodosApplyBatched_(callPayload, msgEl) {
+  const todos = Array.isArray(callPayload.todos) ? /** @type {object[]} */ (callPayload.todos) : [];
+  const chunks = plannerChunkTodosForApply_(todos, PLANNER_TODO_APPLY_BATCH_SIZE);
+  const batchTotal = chunks.length;
+  const applySessionId = batchTotal > 1 ? plannerNewApplySessionId_() : '';
+  let writtenTotal = 0;
+  let bi;
+  for (bi = 0; bi < batchTotal; bi++) {
+    if (msgEl) {
+      msgEl.textContent =
+        batchTotal > 1 ? '저장 중… (' + String(bi + 1) + '/' + String(batchTotal) + ')' : '저장 중…';
+      msgEl.removeAttribute('hidden');
+    }
+    /** @type {Record<string, unknown>} */
+    const batchPayload = {
+      action: 'plannerPersonalTodosApply',
+      phoneSegments: callPayload.phoneSegments,
+      name: callPayload.name,
+      memberCode: callPayload.memberCode,
+      year_month: callPayload.year_month,
+      todos: chunks[bi],
+      batch_index: bi,
+      batch_total: batchTotal
+    };
+    if (applySessionId.length) {
+      batchPayload.apply_session_id = applySessionId;
+    }
+    const res = await plannerGasCall_(batchPayload);
+    if (!res || !res.ok) {
+      const m = res && res.error && res.error.message != null ? String(res.error.message) : '저장에 실패했습니다.';
+      return { ok: false, written: writtenTotal, error: m };
+    }
+    const d = /** @type {{ written?: number }} */ (res.data || {});
+    writtenTotal += Number(d.written) || 0;
+  }
+  return { ok: true, written: writtenTotal };
+}
+
+/**
  * `plannerPersonalTodosApply` — 현재 보는 달(`viewMonth`)의 todo 페이로드를 학생 월 시트에 덮어쓴다.
  * @param {HTMLElement} root
  * @param {{ msgEl?: HTMLElement|null }} [opts]
@@ -2772,55 +2967,54 @@ async function plannerPersonalTodosApplyClick_(root, opts) {
     }
     return false;
   }
-  plannerPrepareClientStateBeforeApply_(root);
-  plannerRebuildQuickPostPayload_(st);
-  const ymDate = st.viewMonth instanceof Date && !isNaN(st.viewMonth.getTime()) ? st.viewMonth : new Date();
-  const ym = plannerYearMonthFromDate_(ymDate);
-  const todos =
-    st.plannerQuickPostBody && Array.isArray(st.plannerQuickPostBody.todos) ? st.plannerQuickPostBody.todos : [];
-  if (msgEl) {
-    msgEl.textContent = '저장 중…';
-    msgEl.removeAttribute('hidden');
-  }
-  const res = await plannerGasCall_({
-    action: 'plannerPersonalTodosApply',
-    phoneSegments: ctx.phoneSegments,
-    name: ctx.name || '',
-    memberCode: ctx.memberCode || '',
-    year_month: ym,
-    todos: todos
-  });
-  if (!res || !res.ok) {
-    const m = res && res.error && res.error.message != null ? String(res.error.message) : '저장에 실패했습니다.';
-    if (msgEl) msgEl.textContent = m;
+  if (root.__spPlanTodosApplyInFlight) {
+    if (msgEl) {
+      msgEl.textContent = '저장 중입니다. 잠시만 기다려 주세요.';
+      msgEl.removeAttribute('hidden');
+    }
     return false;
   }
-  const boot = await plannerGasCall_({
-    action: 'plannerBootstrap',
-    phoneSegments: ctx.phoneSegments,
-    name: ctx.name || '',
-    memberCode: ctx.memberCode || '',
-    year_month: ym
-  });
-  if (boot && boot.ok && boot.data) {
-    const d = /** @type {{ role?: string, common?: object[], personal?: object[] | null, student_profile?: Record<string, unknown>, curriculum_version?: string }} */ (
-      boot.data || {}
+  root.__spPlanTodosApplyInFlight = true;
+  try {
+    plannerPrepareClientStateBeforeApply_(root);
+    plannerRebuildQuickPostPayload_(st);
+    const ymDate = st.viewMonth instanceof Date && !isNaN(st.viewMonth.getTime()) ? st.viewMonth : new Date();
+    const ym = plannerYearMonthFromDate_(ymDate);
+    const todos =
+      st.plannerQuickPostBody && Array.isArray(st.plannerQuickPostBody.todos) ? st.plannerQuickPostBody.todos : [];
+    if (msgEl) {
+      msgEl.textContent = '저장 중…';
+      msgEl.removeAttribute('hidden');
+    }
+    const applyRes = await plannerPersonalTodosApplyBatched_(
+      {
+        phoneSegments: ctx.phoneSegments,
+        name: ctx.name || '',
+        memberCode: ctx.memberCode || '',
+        year_month: ym,
+        todos: todos
+      },
+      msgEl
     );
-    plannerMergeBootstrapMonthData_(root, {
-      role: d.role || 'guest',
-      common: d.common || [],
-      personal: d.personal != null ? d.personal : null,
-      student_profile: d.student_profile,
-      curriculum_version: d.curriculum_version != null ? String(d.curriculum_version) : ''
-    });
+    if (!applyRes.ok) {
+      if (msgEl) {
+        msgEl.textContent =
+          (applyRes.error || '저장에 실패했습니다.') + ' 화면 데이터는 그대로입니다. 다시 저장해 주세요.';
+      }
+      return false;
+    }
+    plannerMarkViewMonthTodosSaved_(st, ymDate);
+    plannerRefreshUiAfterTodosApply_(root);
+    if (msgEl) {
+      msgEl.textContent = '저장했습니다.';
+      window.setTimeout(function () {
+        msgEl.setAttribute('hidden', 'hidden');
+      }, 2200);
+    }
+    return true;
+  } finally {
+    root.__spPlanTodosApplyInFlight = false;
   }
-  if (msgEl) {
-    msgEl.textContent = '저장했습니다.';
-    window.setTimeout(function () {
-      msgEl.setAttribute('hidden', 'hidden');
-    }, 2200);
-  }
-  return true;
 }
 
 function wirePlannerPersonalTodosApplyOnce_(root) {
