@@ -3391,6 +3391,12 @@ async function plannerClearMonthScheduleClick_(root) {
     return;
   }
   const vm = st.viewMonth instanceof Date && !isNaN(st.viewMonth.getTime()) ? st.viewMonth : new Date();
+  const ymLabel = String(vm.getFullYear()) + '년 ' + String(vm.getMonth() + 1) + '월';
+  const confirmed = window.confirm(
+    ymLabel +
+      ' 일정을 전부 삭제할까요?\n\n이 달 할 일·타임라인·메모가 모두 지워지고 서버에도 반영됩니다. 이 동작은 되돌리기 어렵습니다.'
+  );
+  if (!confirmed) return;
   const snap = plannerSnapshotViewMonthPlannerState_(st, vm);
   plannerClearAllTodosForViewMonth_(st, vm);
   plannerRefreshPostPreview_(root);
