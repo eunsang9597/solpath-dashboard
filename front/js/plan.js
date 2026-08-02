@@ -1,6 +1,7 @@
 /**
  * 플래너 임웹 전용 — 전화 확인 후 공통·개인 일정 표시 (드라이브 링크 없음).
- * GAS: `plannerBootstrap`(코어) + `plannerCurriculum`(분리·캐시) — 전 action `doPost` JSON 본문.
+ * GAS: 조회(match/bootstrap/curriculum)는 관리자와 동일 **GET JSONP**.
+ * todo 저장(apply)만 `doPost` JSON — URL 길이 한도 때문에 JSONP 불가.
  * 스니펫에서 먼저 `window.__SOLPATH__ = { gasBaseUrl: "…/exec", … }` 를 둔다.
  */
 function spReadPlanInjected_() {
@@ -1458,8 +1459,33 @@ function plannerMergeBootstrapMonthData_(root, pack) {
 const PLANNER_GAS_POST_TIMEOUT_MS = 360000;
 /** todo apply POST 분할 — 행 단위 */
 const PLANNER_TODO_APPLY_BATCH_SIZE = 80;
-/** apply fetch 재시도 횟수(추가 시도) — 총 1 + N 회 */
+/** apply(POST)만 — GAS ContentService 302 뒤 간헐 실패 시 추가 시도(총 1+N). 조회는 JSONP. */
 const PLANNER_GAS_APPLY_MAX_RETRY = 2;
+
+/**
+ * HTTP 실패·비JSON 본문이 HTML이면 게이트에 구글 페이지 원문을 그대로 안 보여 줌.
+ * @param {number} status
+ * @param {string} text
+ * @returns {string}
+ */
+function plannerGasHttpErrorMessage_(status, text) {
+  const raw = String(text != null ? text : '');
+  const looksHtml = /^\s*</.test(raw) || /<!DOCTYPE/i.test(raw) || /<html[\s>]/i.test(raw);
+  if (status === 401) {
+    return 'GAS Web App 401 — 배포「액세스: 누구나(익명)」+ Execute as Me + **새 버전** URL을 gasBaseUrl에 넣었는지 확인하세요. (Google 계정 필요/옛 배포 URL이면 401+CORS로 보입니다.)';
+  }
+  if (looksHtml && (status === 404 || status === 502 || status === 503 || status === 504)) {
+    return (
+      '서버 연결이 일시적으로 실패했습니다(HTTP ' +
+      String(status) +
+      '). 잠시 후 「확인」을 다시 눌러 주세요.'
+    );
+  }
+  if (looksHtml) {
+    return '서버 응답이 올바르지 않습니다(HTTP ' + String(status) + '). 잠시 후 다시 시도해 주세요.';
+  }
+  return 'HTTP ' + String(status) + (raw.length ? ': ' + raw.slice(0, 280) : '');
+}
 
 /**
  * 분할 apply 세션 id — GAS Cache 버퍼·멱등 재시도용.
@@ -1531,6 +1557,7 @@ async function plannerGasJsonPostOnce_(url, bodyObj, timeoutMs) {
       method: 'POST',
       redirect: 'follow',
       mode: 'cors',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify(bodyObj),
       credentials: 'omit',
       signal: ctrl ? ctrl.signal : undefined
@@ -1538,25 +1565,20 @@ async function plannerGasJsonPostOnce_(url, bodyObj, timeoutMs) {
     const text = await res.text();
     if (!res.ok) {
       const code = res.status === 401 ? 'UNAUTHORIZED' : 'HTTP_' + String(res.status);
-      let msg =
-        'HTTP ' +
-        String(res.status) +
-        (text.length ? ': ' + text.slice(0, 280) : '');
-      if (res.status === 401) {
-        msg =
-          'GAS Web App 401 — 배포「액세스: 누구나(익명)」+ Execute as Me + **새 버전** URL을 gasBaseUrl에 넣었는지 확인하세요. (Google 계정 필요/옛 배포 URL이면 401+CORS로 보입니다.)';
-      }
-      return { ok: false, error: { code: code, message: msg } };
+      return { ok: false, error: { code: code, message: plannerGasHttpErrorMessage_(res.status, text) } };
     }
     let data;
     try {
       data = JSON.parse(text);
     } catch (_e) {
+      const looksHtml = /^\s*</.test(text) || /<!DOCTYPE/i.test(text) || /<html[\s>]/i.test(text);
       return {
         ok: false,
         error: {
           code: 'INVALID_RESPONSE',
-          message: 'JSON 파싱 실패(HTTP ' + String(res.status) + '): ' + text.slice(0, 400)
+          message: looksHtml
+            ? '서버 연결이 일시적으로 실패했습니다. 잠시 후 「확인」을 다시 눌러 주세요.'
+            : 'JSON 파싱 실패(HTTP ' + String(res.status) + '): ' + text.slice(0, 400)
         }
       };
     }
@@ -1703,7 +1725,32 @@ async function plannerGasPostAction_(url, bodyObj, opts) {
 }
 
 /**
- * 플래너 GAS — `doPost` JSON 본문 (`plannerBootstrap` 코어 + `plannerCurriculum` 분리).
+ * 조회용 — `fetch` POST가 아니라 GET JSONP (대시보드·문서 §CORS 정본).
+ * GAS ContentService는 `/exec` → googleusercontent 302가 필수인데, 브라우저 POST+follow가
+ * 그 한 번짜리 URL에서 HTML 404를 간헐적으로 받는 게 게이트 `HTTP 404: <!DOCTYPE…docs.goo` 원인.
+ * @param {string} url
+ * @param {string} action
+ * @param {Record<string, string>|null} extraParams
+ * @returns {Promise<Record<string, unknown>>}
+ */
+async function plannerGasJsonpAction_(url, action, extraParams) {
+  try {
+    const raw = await plannerGasJsonpWithParams_(url, action, extraParams, PLANNER_GAS_POST_TIMEOUT_MS);
+    return plannerGasNormalizeResult_(raw);
+  } catch (e) {
+    const m = e && typeof e === 'object' && 'message' in e ? String(/** @type {{ message?: string }} */ (e).message) : String(e);
+    return {
+      ok: false,
+      error: {
+        code: 'NETWORK',
+        message: m === 'script error' ? '서버 스크립트 로드에 실패했습니다. 잠시 후 다시 시도해 주세요.' : m
+      }
+    };
+  }
+}
+
+/**
+ * 플래너 GAS — 조회는 JSONP, 큰 본문(apply·프로필)만 POST.
  * @param {Record<string, unknown>} payload
  * @return {Promise<Record<string, unknown>>}
  */
@@ -1735,25 +1782,25 @@ async function plannerGasCall_(payload) {
     return plannerGasPostAction_(url, { action: action });
   }
   if (action === 'plannerMatch' || action === 'plannerBootstrap') {
-    const body = {
-      action: action,
-      phoneSegments: plannerPhoneSegmentsFromPayload_(payload),
-      name: String(payload.name != null ? payload.name : ''),
-      memberCode: plannerLinkKeyFromPayload_(payload),
-      link_key: plannerLinkKeyFromPayload_(payload)
+    const segs = plannerPhoneSegmentsFromPayload_(payload);
+    /** @type {Record<string, string>} */
+    const q = {
+      p0: segs[0] || '',
+      p1: segs[1] || '',
+      p2: segs[2] || '',
+      n: String(payload.name != null ? payload.name : '')
     };
+    const lk = plannerLinkKeyFromPayload_(payload);
+    if (lk.length) q.m = lk;
     const ym = String(payload.year_month != null ? payload.year_month : payload.yearMonth != null ? payload.yearMonth : '').trim();
-    if (ym.length) {
-      body.year_month = ym;
-    }
-    return plannerGasPostAction_(url, body);
+    if (ym.length) q.year_month = ym;
+    return plannerGasJsonpAction_(url, action, q);
   }
   if (action === 'plannerCurriculum') {
-    return plannerGasPostAction_(url, { action: action });
+    return plannerGasJsonpAction_(url, action, null);
   }
   if (action === 'plannerAdminVerify') {
-    return plannerGasPostAction_(url, {
-      action: action,
+    return plannerGasJsonpAction_(url, action, {
       admin_secret: String(payload.admin_secret != null ? payload.admin_secret : '').trim()
     });
   }
@@ -10419,17 +10466,18 @@ function wireGate_(root) {
       showErr('같은 번호로 등록된 분이 여러 명입니다. 이름을 입력한 뒤 다시 확인을 눌러 주세요.');
       return;
     }
-      const linkKey =
-        data.link_key != null && String(data.link_key).trim()
-          ? String(data.link_key).trim()
-          : data.memberCode != null && String(data.memberCode).trim()
-            ? String(data.memberCode).trim()
-            : '';
-      setGateLoading_(true, '플래너 불러오는 중…');
-      if (oc === 'matched' && linkKey) {
-        await runBootstrap(linkKey, segs, name);
+    const linkKey =
+      data.link_key != null && String(data.link_key).trim()
+        ? String(data.link_key).trim()
+        : data.memberCode != null && String(data.memberCode).trim()
+          ? String(data.memberCode).trim()
+          : '';
+    setGateLoading_(true, '플래너 불러오는 중…');
+    if (oc === 'matched' && linkKey) {
+      await runBootstrap(linkKey, segs, name);
       return;
     }
+    // no_match 등 — 공통 일정만 보는 guest
     await runBootstrap('', segs, name);
     } finally {
       setGateLoading_(false);
