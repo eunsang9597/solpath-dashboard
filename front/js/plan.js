@@ -1365,6 +1365,11 @@ function plannerRefetchBootstrapForViewMonth_(root) {
   }
   const view = st.viewMonth instanceof Date && !isNaN(st.viewMonth.getTime()) ? st.viewMonth : new Date();
   const rid = (root.__spPlannerMonthFetchId = (root.__spPlannerMonthFetchId || 0) + 1);
+  const msgEl = root.querySelector('#sp-plan-month-apply-msg');
+  if (msgEl) {
+    msgEl.textContent = '';
+    msgEl.setAttribute('hidden', 'hidden');
+  }
   plannerSetMonthFetchLoading_(root, true, '일정 불러오는 중…');
   return plannerGasCall_({
     action: 'plannerBootstrap',
@@ -1375,29 +1380,38 @@ function plannerRefetchBootstrapForViewMonth_(root) {
   })
     .then(function (boot) {
       if (root.__spPlannerMonthFetchId !== rid) return;
-      if (!boot || !boot.ok) return;
+      if (!boot || !boot.ok) {
+        const m =
+          boot && boot.error && boot.error.message != null
+            ? String(boot.error.message)
+            : '일정을 불러오지 못했습니다. 잠시 후 다시 달을 옮겨 보세요.';
+        if (msgEl) {
+          msgEl.textContent = m;
+          msgEl.removeAttribute('hidden');
+        }
+        return;
+      }
       const d = /** @type {{ role?: string, common?: object[], personal?: object[] | null, student_profile?: Record<string, unknown>, curriculum_version?: string }} */ (
         boot.data || {}
       );
       const cv = d.curriculum_version != null ? String(d.curriculum_version).trim() : '';
-      if (cv.length) {
-        plannerSetMonthFetchLoading_(root, true, '커리큘럼 불러오는 중…');
+      /** @type {Record<string, unknown>} */
+      const mergePack = {
+        role: d.role || 'guest',
+        common: d.common || [],
+        personal: d.personal != null ? d.personal : null,
+        student_profile: d.student_profile,
+        curriculum_version: cv
+      };
+      // 월 이동: 캐시 hit면 즉시 붙이고, miss여도 일정 merge를 커리큘럼 fetch에 묶지 않음
+      const cached = plannerCurriculumCacheRead_();
+      if (cached && (!cv.length || cached.version === cv)) {
+        mergePack.curriculum = cached.curriculum;
       }
-      return plannerFetchCurriculumPack_(cv).then(function (curPack) {
-        if (root.__spPlannerMonthFetchId !== rid) return;
-        /** @type {Record<string, unknown>} */
-        const mergePack = {
-          role: d.role || 'guest',
-          common: d.common || [],
-          personal: d.personal != null ? d.personal : null,
-          student_profile: d.student_profile,
-          curriculum_version: cv
-        };
-        if (curPack) {
-          mergePack.curriculum = curPack.curriculum;
-        }
-        plannerMergeBootstrapMonthData_(root, /** @type {Parameters<typeof plannerMergeBootstrapMonthData_>[1]} */ (mergePack));
-      });
+      plannerMergeBootstrapMonthData_(root, /** @type {Parameters<typeof plannerMergeBootstrapMonthData_>[1]} */ (mergePack));
+      if (cv.length && !(cached && cached.version === cv)) {
+        void plannerEnsureCurriculumLoaded_(root, cv);
+      }
     })
     .finally(function () {
       if (root.__spPlannerMonthFetchId === rid) {
