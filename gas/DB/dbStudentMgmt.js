@@ -191,6 +191,16 @@ function dbStuIsAllowedCategory_(cat) {
 }
 
 /**
+ * 수강생 DB·일자별 인원 등 집계에서 제외하는 상품 분류(교재·자소서·토익 등).
+ * @param {string} cat
+ * @return {boolean}
+ */
+function dbStuIsExcludedProductCategory_(cat) {
+  var c = cat != null ? String(cat).trim().toLowerCase() : '';
+  return !c.length || c === 'unmapped' || c === 'textbook' || c === 'jasoseo' || c === 'toeic_rc' || c === 'toeic_lc';
+}
+
+/**
  * @return {GoogleAppsScript.Spreadsheet.Spreadsheet|null}
  */
 function dbStuOpen_() {
@@ -1187,7 +1197,7 @@ function dbStuMemberProductDisplayByLatestOrder_(eVals, eIdx) {
       continue;
     }
     var cat = String(r[eIdx.internal_category] != null ? r[eIdx.internal_category] : '').trim().toLowerCase();
-    if (!cat.length || cat === 'jasoseo' || cat === 'textbook' || cat === 'unmapped') {
+    if (dbStuIsExcludedProductCategory_(cat)) {
       continue;
     }
     if (!dbStuIsAllowedCategory_(cat)) {
@@ -1394,7 +1404,7 @@ function dbStuPmEligibleForDailyReportYmd_(pm, ymd) {
     return false;
   }
   var cat = String(pm.internal_category != null ? pm.internal_category : '').trim().toLowerCase();
-  if (!cat.length || cat === 'unmapped' || cat === 'textbook' || cat === 'jasoseo') {
+  if (dbStuIsExcludedProductCategory_(cat)) {
     return false;
   }
   var life = String(pm.lifecycle != null ? pm.lifecycle : '').trim().toLowerCase();
@@ -1480,7 +1490,7 @@ function dbStudentMgmtDailyPeopleReport_(payload) {
       continue;
     }
     var catMin = String(rMin[eIdx.internal_category] != null ? rMin[eIdx.internal_category] : '').trim().toLowerCase();
-    if (!catMin.length || catMin === 'unmapped' || catMin === 'textbook' || catMin === 'jasoseo') {
+    if (dbStuIsExcludedProductCategory_(catMin)) {
       continue;
     }
     if (dbStuOrderEventRowExcludedForDailyAttendance_(rMin, eIdx)) {
@@ -1514,7 +1524,7 @@ function dbStudentMgmtDailyPeopleReport_(payload) {
       continue;
     }
     var cat = String(r[eIdx.internal_category] != null ? r[eIdx.internal_category] : '').trim().toLowerCase();
-    if (!cat.length || cat === 'unmapped' || cat === 'textbook' || cat === 'jasoseo') {
+    if (dbStuIsExcludedProductCategory_(cat)) {
       continue;
     }
     if (dbStuOrderEventRowExcludedForDailyAttendance_(r, eIdx)) {
@@ -1707,7 +1717,7 @@ function dbStudentMgmtDailyPeopleProductMembers_(payload) {
       continue;
     }
     var cat = String(r[eIdx.internal_category] != null ? r[eIdx.internal_category] : '').trim().toLowerCase();
-    if (!cat.length || cat === 'unmapped' || cat === 'textbook' || cat === 'jasoseo') {
+    if (dbStuIsExcludedProductCategory_(cat)) {
       continue;
     }
     if (dbStuOrderEventRowExcludedForDailyAttendance_(r, eIdx)) {
@@ -1894,7 +1904,7 @@ function dbStudentMgmtRenewalStatusReport_(payload) {
     var mc = String(r[eIdx.member_code] != null ? r[eIdx.member_code] : '').trim();
     if (!mc.length) continue;
     var cat = String(r[eIdx.internal_category] != null ? r[eIdx.internal_category] : '').trim().toLowerCase();
-    if (!cat.length || cat === 'unmapped' || cat === 'textbook' || cat === 'jasoseo') continue;
+    if (dbStuIsExcludedProductCategory_(cat)) continue;
     if (dbStuOrderEventRowExcludedForDailyAttendance_(r, eIdx)) continue;
     var pkeyEv = dbPmRowKey_(r[eIdx.prod_no]);
     var pmEv = pkeyEv && pmMap[pkeyEv] ? pmMap[pkeyEv] : null;
@@ -2097,7 +2107,7 @@ function dbStudentMgmtRenewalStatusProductMembers_(payload) {
     var mc = String(r[eIdx.member_code] != null ? r[eIdx.member_code] : '').trim();
     if (!mc.length) continue;
     var cat = String(r[eIdx.internal_category] != null ? r[eIdx.internal_category] : '').trim().toLowerCase();
-    if (!cat.length || cat === 'unmapped' || cat === 'textbook' || cat === 'jasoseo') continue;
+    if (dbStuIsExcludedProductCategory_(cat)) continue;
     if (dbStuOrderEventRowExcludedForDailyAttendance_(r, eIdx)) continue;
     var pkeyEv = dbPmRowKey_(r[eIdx.prod_no]);
     var pmEv = pkeyEv && pmMap[pkeyEv] ? pmMap[pkeyEv] : null;
@@ -2861,7 +2871,7 @@ function dbStudentMgmtMemberList_() {
         continue;
       }
       var cat0 = String(r0[eIdx.internal_category] != null ? r0[eIdx.internal_category] : '').trim().toLowerCase();
-      if (!cat0.length || cat0 === 'jasoseo' || cat0 === 'textbook' || cat0 === 'unmapped') {
+      if (dbStuIsExcludedProductCategory_(cat0)) {
         continue;
       }
       var ot0 = String(r0[eIdx.order_time] != null ? r0[eIdx.order_time] : '').trim();
@@ -2882,7 +2892,7 @@ function dbStudentMgmtMemberList_() {
         continue;
       }
       var cat = String(r[eIdx.internal_category] != null ? r[eIdx.internal_category] : '').trim().toLowerCase();
-      if (!cat.length || cat === 'jasoseo' || cat === 'textbook' || cat === 'unmapped') {
+      if (dbStuIsExcludedProductCategory_(cat)) {
         continue;
       }
       var lk = mc + '\t' + cat;

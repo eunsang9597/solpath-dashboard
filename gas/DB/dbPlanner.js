@@ -378,11 +378,69 @@ function dbPlannerFixRegistryPhonesFromMaster_() {
 }
 
 /**
- * 원천 마스터 `order_items` + `product_mapping`에서 **솔패스** 구매 이력이 있는 회원만 모아 `planner_registry`를 덮어쓴다.
- * `planner_month_ranges_json`: rebuild 시 **첫 솔패스 주문 시각(서울 월)** ~ **당월** 1구간 JSON을 자동 채움. 상품 **수강 시작 시각**과 맞추려면 이후 `product_mapping` 등과 교체·수기 보정.
+ * registry 시트 2행~ 전체 행(헤더 너비) 읽기.
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} ss
+ * @param {string} sheetName
+ * @return {Array<Array>}
+ */
+function dbPlannerReadRegistryRowArraysFromSheet_(ss, sheetName) {
+  var sh = ss.getSheetByName(String(sheetName || DB_SHEET_PLANNER_REGISTRY));
+  if (!sh || sh.getLastRow() < 2) {
+    return [];
+  }
+  var nCol = DB_PLANNER_REGISTRY_HEADERS.length;
+  var numRows = sh.getLastRow() - 2 + 1;
+  return sh.getRange(2, 1, numRows, nCol).getValues();
+}
+
+/**
+ * rebuild로 새로 쓰는 registry 행에 기존 프로필·월 구간(수기)을 복원한다.
+ * @param {Array} newRow
+ * @param {Array} existingRow
+ * @return {Array}
+ */
+function dbPlannerRegistryMergeProfileFromExisting_(newRow, existingRow) {
+  if (!existingRow || !existingRow.length) {
+    return newRow;
+  }
+  var h = DB_PLANNER_REGISTRY_HEADERS;
+  var profileKeys = [
+    'track',
+    'admission_type',
+    'prev_university',
+    'prev_major_gpa',
+    'goal_university',
+    'goal_department',
+    'study_status',
+    'plan_features',
+    'subject_guides_json',
+    'monthly_plan_notices_json'
+  ];
+  var ki;
+  for (ki = 0; ki < profileKeys.length; ki++) {
+    var ix = h.indexOf(profileKeys[ki]);
+    if (ix >= 0 && ix < newRow.length && ix < existingRow.length) {
+      newRow[ix] = existingRow[ix];
+    }
+  }
+  var ixRanges = h.indexOf('planner_month_ranges_json');
+  if (ixRanges >= 0 && ixRanges < existingRow.length) {
+    var prevRanges = String(existingRow[ixRanges] != null ? existingRow[ixRanges] : '').trim();
+    if (prevRanges.length && prevRanges !== '[]') {
+      newRow[ixRanges] = existingRow[ixRanges];
+    }
+  }
+  return newRow;
+}
+
+/**
+ * 원천 마스터 `order_items` + `product_mapping`에서 **솔패스** 구매 이력이 있는 회원으로 `planner_registry`를 갱신한다.
+ * rebuild 전 `planner_registry` 2행~ 스냅샷을 읽어, 주문에서 다시 쓰는 행에는 **프로필·코칭 열**(track~monthly_plan_notices_json)과
+ * 비어 있지 않은 `planner_month_ranges_json`을 유지한다. 주문 집계에 없던 **수기 행**은 그대로 남긴다.
+ * `planner_month_ranges_json`이 비어 있거나 `[]`이면 첫 솔패스 주문 시각(서울 월)~당월 구간을 자동 채운다.
  * 제외 규칙은 `dbStudentMgmtRebuildFromMaster_`와 동일(구매자 이름·`dbAnOrderLineSkipForAnalytics_` 등), 단 **internal_category === solpass** 인 라인만 집계한다.
  *
- * @return {{ ok: true, data: { written: number, skippedLines: number, skippedNoPhone: number } }|{ ok: false, error: { code: string, message: string } }}
+ * @return {{ ok: true, data: { written: number, preservedRegistryRows: number, skippedLines: number, skippedNoPhone: number } }|{ ok: false, error: { code: string, message: string } }}
  */
 function dbPlannerRebuildRegistryFromMaster_() {
   var master;
@@ -523,14 +581,30 @@ function dbPlannerRebuildRegistryFromMaster_() {
     }
   }
 
+  var nCol = DB_PLANNER_REGISTRY_HEADERS.length;
+  var existingRows = dbPlannerReadRegistryRowArraysFromSheet_(ssPl, DB_SHEET_PLANNER_REGISTRY);
+  /** @type {Object<string, Array>} */
+  var existingByMc = {};
+  var eri;
+  for (eri = 0; eri < existingRows.length; eri++) {
+    var er = existingRows[eri] || [];
+    var mcE = String(er[0] != null ? er[0] : '').trim();
+    if (mcE.length) {
+      existingByMc[mcE] = er;
+    }
+  }
+
   var nowIso = Utilities.formatDate(new Date(), 'Asia/Seoul', "yyyy-MM-dd'T'HH:mm:ss");
   var out = [];
+  /** @type {Object<string, boolean>} */
+  var rebuiltMc = {};
   var skippedNoPhone = 0;
   var codes = Object.keys(firstSol);
   codes.sort();
   var ci;
   for (ci = 0; ci < codes.length; ci++) {
     var mc = codes[ci];
+    var prev = existingByMc[mc];
     var phone = '';
     var disp = '';
     var uid = '';
@@ -543,12 +617,23 @@ function dbPlannerRebuildRegistryFromMaster_() {
     if (!disp.length && ordererNameByMemberCode[mc]) {
       disp = String(ordererNameByMemberCode[mc]).trim();
     }
+    if (prev) {
+      if (!phone.length) {
+        phone = String(prev[2] != null ? prev[2] : '').trim();
+      }
+      if (!disp.length) {
+        disp = String(prev[3] != null ? prev[3] : '').trim();
+      }
+      if (!uid.length) {
+        uid = String(prev[1] != null ? prev[1] : '').trim();
+      }
+    }
     if (!phone.length) {
       skippedNoPhone++;
       continue;
     }
     var monthRangesJson = dbPlannerDefaultMonthRangesJsonFromOrderTime_(firstSol[mc].ts);
-    out.push([
+    var row = [
       String(mc),
       String(uid),
       String(phone),
@@ -566,11 +651,36 @@ function dbPlannerRebuildRegistryFromMaster_() {
       String(firstSol[mc].item || ''),
       monthRangesJson,
       String(nowIso)
-    ]);
+    ];
+    if (prev) {
+      row = dbPlannerRegistryMergeProfileFromExisting_(row, prev);
+    }
+    out.push(row);
+    rebuiltMc[mc] = true;
   }
 
+  var preservedRegistryRows = 0;
+  var extraMc = Object.keys(existingByMc);
+  extraMc.sort();
+  var xi;
+  for (xi = 0; xi < extraMc.length; xi++) {
+    var mcX = extraMc[xi];
+    if (rebuiltMc[mcX]) {
+      continue;
+    }
+    var exRow = existingByMc[mcX];
+    var kept = exRow.slice(0, nCol);
+    while (kept.length < nCol) {
+      kept.push('');
+    }
+    out.push(kept);
+    preservedRegistryRows++;
+  }
+  out.sort(function (a, b) {
+    return String(a[0] != null ? a[0] : '').localeCompare(String(b[0] != null ? b[0] : ''));
+  });
+
   var shReg = dbGetOrCreateSheetWithHeaders_(ssPl, DB_SHEET_PLANNER_REGISTRY, DB_PLANNER_REGISTRY_HEADERS);
-  var nCol = DB_PLANNER_REGISTRY_HEADERS.length;
   dbClearDataRows2Plus_(shReg, nCol);
   if (out.length) {
     dbSetValuesFromRow2_(shReg, out, nCol);
@@ -583,6 +693,7 @@ function dbPlannerRebuildRegistryFromMaster_() {
     ok: true,
     data: {
       written: out.length,
+      preservedRegistryRows: preservedRegistryRows,
       skippedLines: skipped,
       skippedNoPhone: skippedNoPhone,
       provisioned: prov.provisioned,
@@ -1337,7 +1448,6 @@ function dbPlannerReadCurriculumLectures_(ss) {
   if (!sh || sh.getLastRow() < 2) {
     return [];
   }
-  dbPlannerFixCurriculumLectureDurationColumn_(sh);
   var headers = DB_PLANNER_CURRICULUM_LECTURE_HEADERS;
   var nCols = headers.length;
   var lr = sh.getLastRow();
@@ -1384,6 +1494,71 @@ function dbPlannerReadCurriculumLectures_(ss) {
     return (Number(a.lecture_no) || 0) - (Number(b.lecture_no) || 0);
   });
   return out;
+}
+
+/**
+ * 커리큘럼 캐시 무효화용 — 강좌·강의 데이터 행 수 (`courses:lectures`).
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} ss
+ * @return {string}
+ */
+function dbPlannerCurriculumVersion_(ss) {
+  var shC = ss.getSheetByName(DB_SHEET_PLANNER_CURRICULUM_COURSES);
+  var shL = ss.getSheetByName(DB_SHEET_PLANNER_CURRICULUM_LECTURES);
+  var cr = 0;
+  var lr = 0;
+  if (shC && shC.getLastRow() >= 2) {
+    cr = shC.getLastRow() - 1;
+  }
+  if (shL && shL.getLastRow() >= 2) {
+    lr = shL.getLastRow() - 1;
+  }
+  return String(cr) + ':' + String(lr);
+}
+
+/**
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} ss
+ * @return {{ courses: Object[], lectures: Object[] }}
+ */
+function dbPlannerReadCurriculum_(ss) {
+  return {
+    courses: dbPlannerReadCurriculumCourses_(ss),
+    lectures: dbPlannerReadCurriculumLectures_(ss)
+  };
+}
+
+/**
+ * 마스터 `planner_curriculum_lectures.duration` 열 보정 — init·수동 실행용(read 경로에서는 호출하지 않음).
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} ss
+ */
+function dbPlannerFixCurriculumLectureDurationOnMaster_(ss) {
+  var sh = ss.getSheetByName(DB_SHEET_PLANNER_CURRICULUM_LECTURES);
+  if (sh) {
+    dbPlannerFixCurriculumLectureDurationColumn_(sh);
+  }
+}
+
+/**
+ * 플래너 UI — 커리큘럼 카탈로그만 (bootstrap과 분리 · sessionStorage 캐시용).
+ * @param {Object} [_body]
+ * @return {Object}
+ */
+function dbPlannerCurriculum_(body) {
+  body = body || {};
+  var ss = dbPlannerOpenMaster_();
+  if (!ss) {
+    return {
+      ok: false,
+      error: { code: 'PLANNER_NOT_CONFIGURED', message: '플래너 마스터가 연결되지 않았습니다.' }
+    };
+  }
+  var version = dbPlannerCurriculumVersion_(ss);
+  return {
+    ok: true,
+    data: {
+      version: version,
+      curriculum: dbPlannerReadCurriculum_(ss)
+    }
+  };
 }
 
 /**
@@ -1582,7 +1757,6 @@ function dbPlannerMatch_(body) {
       error: { code: 'PLANNER_NOT_CONFIGURED', message: '플래너 마스터가 아직 연결되지 않았습니다. initPlannerMasterSheets 후 SHEETS_PLANNER_MASTER_ID를 확인하세요.' }
     };
   }
-  dbPlannerFixRegistryPhoneColumnOnMaster_(ss);
   if (!phone.length) {
     return { ok: true, data: { outcome: 'bad_phone', needName: false, memberCode: null, displayName: null } };
   }
@@ -1885,7 +2059,8 @@ function dbPlannerRegistryManualCreate_(body) {
 }
 
 /**
- * 플래너 UI — registry 프로필 열만 덮어쓰기 (낙관적·본문 `student_profile` 그대로 반영).
+ * 플래너 UI — 본문에 **들어 있는 프로필 키만** registry에 반영.
+ * 월 상담기록은 `monthly_plan_notices_patch`(달 → 본문)만 받아 기존 칸에 merge — 보내지 않은 달은 건드리지 않는다.
  * @param {Object} body
  * @return {Object}
  */
@@ -1896,7 +2071,8 @@ function dbPlannerRegistryProfileSave_(body) {
   var linkKeyReq = String(
     body.linkKey != null ? body.linkKey : body.link_key != null ? body.link_key : body.memberCode != null ? body.memberCode : ''
   ).trim();
-  var profIn = body.student_profile;
+  var profIn = body.student_profile && typeof body.student_profile === 'object' ? body.student_profile : null;
+  var monthlyPatch = dbPlannerParseJsonObjectArg_(body.monthly_plan_notices_patch);
   var ss = dbPlannerOpenMaster_();
   if (!ss) {
     return {
@@ -1907,10 +2083,12 @@ function dbPlannerRegistryProfileSave_(body) {
   if (!phone.length || !linkKeyReq.length) {
     return { ok: false, error: { code: 'BAD_REQUEST', message: '전화·link_key가 필요합니다.' } };
   }
-  if (!profIn || typeof profIn !== 'object') {
-    return { ok: false, error: { code: 'BAD_REQUEST', message: 'student_profile이 필요합니다.' } };
+  if (!profIn && !(monthlyPatch && Object.keys(monthlyPatch).length)) {
+    return {
+      ok: false,
+      error: { code: 'BAD_REQUEST', message: 'student_profile 또는 monthly_plan_notices_patch가 필요합니다.' }
+    };
   }
-  dbPlannerFixRegistryPhoneColumnOnMaster_(ss);
   var reg = dbPlannerRegistryMatchForPhoneAndLink_(ss, linkKeyReq, phone);
   var hits = reg.hits;
   var pickedHit = reg.picked;
@@ -1938,23 +2116,126 @@ function dbPlannerRegistryProfileSave_(body) {
     'goal_department',
     'study_status',
     'plan_features',
-    'subject_guides_json',
-    'monthly_plan_notices_json'
+    'subject_guides_json'
   ];
+  var monCol = 0;
+  var mergedMonthly = null;
+  if (monthlyPatch && Object.keys(monthlyPatch).length) {
+    monCol = headers.indexOf('monthly_plan_notices_json') + 1;
+    if (monCol > 0) {
+      mergedMonthly = dbPlannerMergeMonthlyNoticesCell_(sh.getRange(rowIx, monCol).getValue(), monthlyPatch);
+      if (mergedMonthly == null) {
+        return {
+          ok: false,
+          error: {
+            code: 'PLANNER_MONTHLY_NOTICES_CORRUPT',
+            message: '기존 월 상담기록(JSON)을 읽지 못해 아무것도 저장하지 않았습니다. 시트 값을 확인해 주세요.'
+          }
+        };
+      }
+    }
+  }
+  var written = 0;
   var ki;
   for (ki = 0; ki < keys.length; ki++) {
     var key = keys[ki];
+    if (!profIn || !Object.prototype.hasOwnProperty.call(profIn, key)) {
+      continue;
+    }
     var col = headers.indexOf(key) + 1;
     if (col < 1) {
       continue;
     }
     var v = profIn[key] != null ? String(profIn[key]) : '';
-    if (key === 'subject_guides_json' || key === 'monthly_plan_notices_json') {
+    if (key === 'subject_guides_json') {
       v = dbPlannerNormalizeRegistryJsonObjectCell_(v);
     }
-    sh.getRange(rowIx, col).setValue(v);
+    if (dbPlannerWriteRegistryCellIfChanged_(sh, rowIx, col, v)) {
+      written++;
+    }
   }
-  return { ok: true, data: {} };
+  if (mergedMonthly != null && monCol > 0) {
+    if (dbPlannerWriteRegistryCellIfChanged_(sh, rowIx, monCol, mergedMonthly)) {
+      written++;
+    }
+  }
+  return { ok: true, data: { written: written } };
+}
+
+/**
+ * 값이 같으면 쓰지 않는다 (같은 값 재기록으로 시트 버전 기록이 늘어나는 것 방지).
+ * @param {Object} sheet
+ * @param {number} rowIx
+ * @param {number} col
+ * @param {string} value
+ * @return {boolean} 실제로 쓴 경우 `true`
+ */
+function dbPlannerWriteRegistryCellIfChanged_(sheet, rowIx, col, value) {
+  var cell = sheet.getRange(rowIx, col);
+  var prev = cell.getValue();
+  if (String(prev != null ? prev : '') === String(value != null ? value : '')) {
+    return false;
+  }
+  cell.setValue(value);
+  return true;
+}
+
+/**
+ * 기존 `monthly_plan_notices_json` + 이번에 고친 달만 merge. 요청에 없는 달은 그대로 둔다.
+ * 기존 값이 있는데 객체 JSON이 아니면 `null` — 다른 달을 잃지 않도록 저장하지 않는다.
+ * @param {*} rawCell
+ * @param {Object} patch `yyyy-MM` → 본문
+ * @return {string|null}
+ */
+function dbPlannerMergeMonthlyNoticesCell_(rawCell, patch) {
+  var base = {};
+  var s = String(rawCell != null ? rawCell : '').trim();
+  if (s.length) {
+    var parsed = null;
+    try {
+      parsed = JSON.parse(s);
+    } catch (e) {
+      return null;
+    }
+    if (!parsed || typeof parsed !== 'object' || Object.prototype.toString.call(parsed) === '[object Array]') {
+      return null;
+    }
+    base = parsed;
+  }
+  var ks = Object.keys(patch);
+  var i;
+  for (i = 0; i < ks.length; i++) {
+    var ym = String(ks[i] != null ? ks[i] : '').trim();
+    if (!ym.length) {
+      continue;
+    }
+    base[ym] = patch[ks[i]] != null ? String(patch[ks[i]]) : '';
+  }
+  return JSON.stringify(base);
+}
+
+/**
+ * 객체 또는 JSON 문자열 인자 → 객체 (배열·파싱 실패는 `null`).
+ * @param {*} raw
+ * @return {Object|null}
+ */
+function dbPlannerParseJsonObjectArg_(raw) {
+  if (raw && typeof raw === 'object' && Object.prototype.toString.call(raw) !== '[object Array]') {
+    return raw;
+  }
+  var s = String(raw != null ? raw : '').trim();
+  if (!s.length) {
+    return null;
+  }
+  try {
+    var o = JSON.parse(s);
+    if (!o || typeof o !== 'object' || Object.prototype.toString.call(o) === '[object Array]') {
+      return null;
+    }
+    return o;
+  } catch (e) {
+    return null;
+  }
 }
 
 /**
@@ -2044,33 +2325,79 @@ function dbPlannerCurriculumLectureIdSet_(ss) {
 }
 
 /**
- * 마스터에 없는 `lecture_id`는 빈 칸으로 정리(apply 시).
- * @param {Array} row
- * @param {Object<string, boolean>} lectureIds
- * @return {Array}
+ * `CacheService` — curriculum `version` 키당 lecture_id 집합 (apply sanitize용).
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} ss
+ * @return {Object<string, boolean>}
  */
-function dbPlannerPersonalTodoRowSanitizeLecture_(row, lectureIds) {
-  if (!row || !row.length) {
-    return row;
+function dbPlannerCurriculumLectureIdSetCached_(ss) {
+  var version = dbPlannerCurriculumVersion_(ss);
+  var cache = CacheService.getScriptCache();
+  var cacheKey = 'pl_lec_ids_v1_' + version;
+  var hit = cache.get(cacheKey);
+  if (hit != null && String(hit).length) {
+    try {
+      var parsed = JSON.parse(String(hit));
+      if (Object.prototype.toString.call(parsed) === '[object Array]') {
+        /** @type {Object<string, boolean>} */
+        var setHit = {};
+        var hi;
+        for (hi = 0; hi < parsed.length; hi++) {
+          var id0 = String(parsed[hi] != null ? parsed[hi] : '').trim();
+          if (id0.length) {
+            setHit[id0] = true;
+          }
+        }
+        return setHit;
+      }
+    } catch (cacheErr) {
+      Logger.log('dbPlannerCurriculumLectureIdSetCached_: cache parse failed');
+    }
   }
-  var lec = String(row[4] != null ? row[4] : '').trim();
-  if (!lec.length) {
-    return row;
+  var set = dbPlannerCurriculumLectureIdSet_(ss);
+  /** @type {string[]} */
+  var ids = [];
+  var k;
+  for (k in set) {
+    if (set.hasOwnProperty(k) && set[k]) {
+      ids.push(String(k));
+    }
   }
-  if (lectureIds && lectureIds[lec]) {
-    return row;
+  try {
+    cache.put(cacheKey, JSON.stringify(ids), 21600);
+  } catch (putErr) {
+    Logger.log('dbPlannerCurriculumLectureIdSetCached_: cache put failed');
   }
-  var out = row.slice();
-  out[4] = '';
-  return out;
+  return set;
 }
 
 /**
- * 학생 월 탭을 페이로드 `todos` 중 `date`가 해당 `year_month` 인 행만으로 **전체 덮어쓰기**.
- * @param {Object} body
- * @return {Object}
+ * @param {Object[]} todosRaw
+ * @return {boolean}
  */
-function dbPlannerPersonalTodosApply_(body) {
+function dbPlannerPayloadTodosHaveLectureId_(todosRaw) {
+  if (!todosRaw || Object.prototype.toString.call(todosRaw) !== '[object Array]') {
+    return false;
+  }
+  var i;
+  for (i = 0; i < todosRaw.length; i++) {
+    var o = todosRaw[i];
+    if (!o || typeof o !== 'object') {
+      continue;
+    }
+    var lec = String(o.lecture_id != null ? o.lecture_id : '').trim();
+    if (lec.length) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * apply 요청 검증 — registry·학생 파일.
+ * @param {Object} body
+ * @return {{ ok: true, ss: GoogleAppsScript.Spreadsheet.Spreadsheet, sid: string, ymNorm: string }|{ ok: false, error: { code: string, message: string } }}
+ */
+function dbPlannerPersonalTodosApplyContext_(body) {
   body = body || {};
   var phone = dbPlannerPhoneFromSegments_(body.phoneSegments);
   var nameIn = String(body.name != null ? body.name : '').trim();
@@ -2078,7 +2405,6 @@ function dbPlannerPersonalTodosApply_(body) {
     body.linkKey != null ? body.linkKey : body.link_key != null ? body.link_key : body.memberCode != null ? body.memberCode : ''
   ).trim();
   var ymNorm = dbPlannerNormalizeYearMonthFromBody_(body);
-  var todosRaw = body.todos;
   var ss = dbPlannerOpenMaster_();
   if (!ss) {
     return {
@@ -2092,10 +2418,6 @@ function dbPlannerPersonalTodosApply_(body) {
   if (!ymNorm.length) {
     return { ok: false, error: { code: 'BAD_REQUEST', message: 'year_month(yyyy-MM)가 필요합니다.' } };
   }
-  if (!todosRaw || Object.prototype.toString.call(todosRaw) !== '[object Array]') {
-    return { ok: false, error: { code: 'BAD_REQUEST', message: 'todos 배열이 필요합니다.' } };
-  }
-  dbPlannerFixRegistryPhoneColumnOnMaster_(ss);
   var reg = dbPlannerRegistryMatchForPhoneAndLink_(ss, linkKeyReq, phone);
   var hits = reg.hits;
   var pickedHit = reg.picked;
@@ -2111,15 +2433,29 @@ function dbPlannerPersonalTodosApply_(body) {
   if (!sid.length || !dbDriveSpreadsheetIdIsUsableNow_(sid)) {
     return { ok: false, error: { code: 'PLANNER_NO_STUDENT_FILE', message: '학생 플래너 파일이 없습니다.' } };
   }
+  return { ok: true, ss: ss, sid: sid, ymNorm: ymNorm };
+}
+
+/**
+ * @param {Object[]} todosRaw
+ * @param {string} ymNorm
+ * @param {string} todayYmd
+ * @param {Object<string, boolean>|null} lectureIdSet
+ * @return {Array[]}
+ */
+function dbPlannerPersonalTodosMatrixFromPayload_(todosRaw, ymNorm, todayYmd, lectureIdSet) {
   var prefix = ymNorm + '-';
-  var todayYmd = Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM-dd');
-  var lectureIdSet = dbPlannerCurriculumLectureIdSet_(ss);
   /** @type {Array[]} */
   var matrix = [];
+  if (!todosRaw || Object.prototype.toString.call(todosRaw) !== '[object Array]') {
+    return matrix;
+  }
   var i;
   for (i = 0; i < todosRaw.length; i++) {
     var row = dbPlannerPersonalTodoRowFromPayload_(todosRaw[i], todayYmd);
-    row = dbPlannerPersonalTodoRowSanitizeLecture_(row, lectureIdSet);
+    if (lectureIdSet) {
+      row = dbPlannerPersonalTodoRowSanitizeLecture_(row, lectureIdSet);
+    }
     var dCell = String(row[2] != null ? row[2] : '').trim();
     if (!dCell.length || dCell.indexOf(prefix) !== 0) {
       continue;
@@ -2141,14 +2477,270 @@ function dbPlannerPersonalTodosApply_(body) {
     var tb = String(b[0] != null ? b[0] : '');
     return ta < tb ? -1 : ta > tb ? 1 : 0;
   });
-  try {
-    var ssSt = SpreadsheetApp.openById(sid);
-    var tabName = dbPlannerPersonalTodosSheetNameFromYearMonthStr_(ymNorm);
-    var sh = dbGetOrCreateSheetWithHeaders_(ssSt, tabName, DB_PLANNER_PERSONAL_TODO_HEADERS);
-    var nCols = DB_PLANNER_PERSONAL_TODO_HEADERS.length;
+  return matrix;
+}
+
+/**
+ * @param {string} sid
+ * @param {string} ymNorm
+ * @param {Array[]} matrix
+ * @param {'replace'|'append'} mode
+ */
+function dbPlannerPersonalTodosWriteMatrix_(sid, ymNorm, matrix, mode) {
+  var ssSt = SpreadsheetApp.openById(sid);
+  var tabName = dbPlannerPersonalTodosSheetNameFromYearMonthStr_(ymNorm);
+  var sh = dbGetOrCreateSheetWithHeaders_(ssSt, tabName, DB_PLANNER_PERSONAL_TODO_HEADERS);
+  var nCols = DB_PLANNER_PERSONAL_TODO_HEADERS.length;
+  if (mode === 'replace') {
     dbClearDataRows2Plus_(sh, nCols);
     if (matrix.length) {
       dbSetValuesFromRow2_(sh, matrix, nCols);
+    }
+    return;
+  }
+  if (matrix.length) {
+    dbAppendValuesFromRow2_(sh, matrix, nCols);
+  }
+}
+
+/**
+ * 마스터에 없는 `lecture_id`는 빈 칸으로 정리(apply 시).
+ * @param {Array} row
+ * @param {Object<string, boolean>} lectureIds
+ * @return {Array}
+ */
+function dbPlannerPersonalTodoRowSanitizeLecture_(row, lectureIds) {
+  if (!row || !row.length) {
+    return row;
+  }
+  var lec = String(row[4] != null ? row[4] : '').trim();
+  if (!lec.length) {
+    return row;
+  }
+  if (lectureIds && lectureIds[lec]) {
+    return row;
+  }
+  var out = row.slice();
+  out[4] = '';
+  return out;
+}
+
+/** 분할 apply 버퍼 Cache TTL(초) — 마지막 batch 전까지 시트 미변경 */
+var PLANNER_APPLY_BUF_CACHE_SEC = 1800;
+
+/**
+ * @param {string} sid
+ * @param {string} ymNorm
+ * @param {string} sessionId
+ * @return {string}
+ */
+function dbPlannerApplyBufferMetaKey_(sid, ymNorm, sessionId) {
+  return 'pl_abm_' + sid + '_' + ymNorm + '_' + sessionId;
+}
+
+/**
+ * @param {string} sid
+ * @param {string} ymNorm
+ * @param {string} sessionId
+ * @param {number} batchIndex
+ * @return {string}
+ */
+function dbPlannerApplyBufferChunkKey_(sid, ymNorm, sessionId, batchIndex) {
+  return 'pl_abc_' + sid + '_' + ymNorm + '_' + sessionId + '_' + String(batchIndex);
+}
+
+/**
+ * @param {string} sid
+ * @param {string} ymNorm
+ * @param {string} sessionId
+ * @return {string}
+ */
+function dbPlannerApplyBufferDoneKey_(sid, ymNorm, sessionId) {
+  return 'pl_abd_' + sid + '_' + ymNorm + '_' + sessionId;
+}
+
+/**
+ * 분할 POST — chunk는 Cache에만 쌓고 **마지막 batch**에서 한 번 replace(중간 실패 시 시트 유지).
+ * 동일 `apply_session_id`+`batch_index` 재전송은 멱등(중복 append 없음).
+ * @param {{ sid: string, ymNorm: string }} ctx
+ * @param {string} sessionId
+ * @param {Array[]} matrix
+ * @param {number} batchIndex
+ * @param {number} batchTotal
+ * @return {Object}
+ */
+function dbPlannerPersonalTodosApplyBuffered_(ctx, sessionId, matrix, batchIndex, batchTotal) {
+  var cache = CacheService.getScriptCache();
+  var doneKey = dbPlannerApplyBufferDoneKey_(ctx.sid, ctx.ymNorm, sessionId);
+  var doneRaw = cache.get(doneKey);
+  if (doneRaw) {
+    try {
+      var doneObj = JSON.parse(doneRaw);
+      return {
+        ok: true,
+        data: {
+          written: doneObj.written != null ? doneObj.written : matrix.length,
+          year_month: ctx.ymNorm,
+          batch_index: batchIndex,
+          batch_total: batchTotal,
+          apply_session_id: sessionId,
+          committed: true,
+          idempotent: true
+        }
+      };
+    } catch (eDone) {}
+  }
+
+  var chunkKey = dbPlannerApplyBufferChunkKey_(ctx.sid, ctx.ymNorm, sessionId, batchIndex);
+  var metaKey = dbPlannerApplyBufferMetaKey_(ctx.sid, ctx.ymNorm, sessionId);
+  try {
+    cache.put(chunkKey, JSON.stringify(matrix), PLANNER_APPLY_BUF_CACHE_SEC);
+  } catch (eChunk) {
+    return {
+      ok: false,
+      error: {
+        code: 'PLANNER_WRITE_FAILED',
+        message:
+          '분할 저장 버퍼에 실패했습니다(용량 초과 가능). 다시 저장하거나 todo 수를 줄여 주세요. ' +
+          (eChunk && eChunk.message != null ? String(eChunk.message) : String(eChunk))
+      }
+    };
+  }
+
+  var metaRaw = cache.get(metaKey);
+  /** @type {{ batch_total: number, received: Object<string, boolean> }} */
+  var meta = { batch_total: batchTotal, received: {} };
+  if (metaRaw) {
+    try {
+      meta = JSON.parse(metaRaw);
+      if (!meta.received || typeof meta.received !== 'object') {
+        meta.received = {};
+      }
+    } catch (eMeta) {
+      meta = { batch_total: batchTotal, received: {} };
+    }
+  }
+  meta.batch_total = batchTotal;
+  meta.received[String(batchIndex)] = true;
+  cache.put(metaKey, JSON.stringify(meta), PLANNER_APPLY_BUF_CACHE_SEC);
+
+  if (batchIndex !== batchTotal - 1) {
+    return {
+      ok: true,
+      data: {
+        written: matrix.length,
+        year_month: ctx.ymNorm,
+        batch_index: batchIndex,
+        batch_total: batchTotal,
+        apply_session_id: sessionId,
+        buffered: true
+      }
+    };
+  }
+
+  var merged = [];
+  var i;
+  for (i = 0; i < batchTotal; i++) {
+    var cr = cache.get(dbPlannerApplyBufferChunkKey_(ctx.sid, ctx.ymNorm, sessionId, i));
+    if (!cr) {
+      return {
+        ok: false,
+        error: {
+          code: 'PLANNER_WRITE_FAILED',
+          message: '분할 저장 chunk ' + String(i + 1) + '/' + String(batchTotal) + '가 없습니다. 처음부터 다시 저장해 주세요.'
+        }
+      };
+    }
+    try {
+      var part = JSON.parse(cr);
+      if (part && Object.prototype.toString.call(part) === '[object Array]') {
+        merged = merged.concat(part);
+      }
+    } catch (eParse) {
+      return {
+        ok: false,
+        error: {
+          code: 'PLANNER_WRITE_FAILED',
+          message: '분할 저장 chunk 파싱 실패: ' + (eParse && eParse.message != null ? String(eParse.message) : String(eParse))
+        }
+      };
+    }
+  }
+
+  try {
+    dbPlannerPersonalTodosWriteMatrix_(ctx.sid, ctx.ymNorm, merged, 'replace');
+  } catch (eW) {
+    return {
+      ok: false,
+      error: { code: 'PLANNER_WRITE_FAILED', message: eW && eW.message != null ? String(eW.message) : String(eW) }
+    };
+  }
+
+  for (i = 0; i < batchTotal; i++) {
+    cache.remove(dbPlannerApplyBufferChunkKey_(ctx.sid, ctx.ymNorm, sessionId, i));
+  }
+  cache.remove(metaKey);
+  cache.put(doneKey, JSON.stringify({ written: merged.length }), PLANNER_APPLY_BUF_CACHE_SEC);
+
+  return {
+    ok: true,
+    data: {
+      written: merged.length,
+      year_month: ctx.ymNorm,
+      batch_index: batchIndex,
+      batch_total: batchTotal,
+      apply_session_id: sessionId,
+      committed: true
+    }
+  };
+}
+
+/**
+ * 학생 월 탭을 페이로드 `todos` 중 `date`가 해당 `year_month` 인 행만으로 **전체 덮어쓰기**.
+ * `batch_total`>1 — Cache 버퍼 후 마지막 batch에서 replace(`apply_session_id` 필수).
+ * `batch_total`===1 — 즉시 replace(재시도 멱등).
+ * @param {Object} body
+ * @return {Object}
+ */
+function dbPlannerPersonalTodosApply_(body) {
+  body = body || {};
+  var todosRaw = body.todos;
+  if (!todosRaw || Object.prototype.toString.call(todosRaw) !== '[object Array]') {
+    return { ok: false, error: { code: 'BAD_REQUEST', message: 'todos 배열이 필요합니다.' } };
+  }
+  var ctx = dbPlannerPersonalTodosApplyContext_(body);
+  if (!ctx.ok) {
+    return ctx;
+  }
+  var batchTotalRaw = body.batch_total != null ? Number(body.batch_total) : 1;
+  var batchIndexRaw = body.batch_index != null ? Number(body.batch_index) : 0;
+  var batchTotal = isFinite(batchTotalRaw) && batchTotalRaw >= 1 ? Math.floor(batchTotalRaw) : 1;
+  var batchIndex = isFinite(batchIndexRaw) && batchIndexRaw >= 0 ? Math.floor(batchIndexRaw) : 0;
+  if (batchIndex >= batchTotal) {
+    return { ok: false, error: { code: 'BAD_REQUEST', message: 'batch_index가 batch_total 범위를 벗어났습니다.' } };
+  }
+  var sessionId = String(
+    body.apply_session_id != null
+      ? body.apply_session_id
+      : body.applySessionId != null
+        ? body.applySessionId
+        : ''
+  ).trim();
+  if (batchTotal > 1 && !sessionId.length) {
+    return { ok: false, error: { code: 'BAD_REQUEST', message: '분할 저장에는 apply_session_id가 필요합니다.' } };
+  }
+  var todayYmd = Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM-dd');
+  /** @type {Object<string, boolean>|null} */
+  var lectureIdSet = null;
+  if (dbPlannerPayloadTodosHaveLectureId_(todosRaw)) {
+    lectureIdSet = dbPlannerCurriculumLectureIdSetCached_(ctx.ss);
+  }
+  var matrix = dbPlannerPersonalTodosMatrixFromPayload_(todosRaw, ctx.ymNorm, todayYmd, lectureIdSet);
+  try {
+    if (batchTotal <= 1) {
+      dbPlannerPersonalTodosWriteMatrix_(ctx.sid, ctx.ymNorm, matrix, 'replace');
+    } else {
+      return dbPlannerPersonalTodosApplyBuffered_(ctx, sessionId, matrix, batchIndex, batchTotal);
     }
   } catch (eW) {
     return {
@@ -2156,7 +2748,15 @@ function dbPlannerPersonalTodosApply_(body) {
       error: { code: 'PLANNER_WRITE_FAILED', message: eW && eW.message != null ? String(eW.message) : String(eW) }
     };
   }
-  return { ok: true, data: { written: matrix.length, year_month: ymNorm } };
+  return {
+    ok: true,
+    data: {
+      written: matrix.length,
+      year_month: ctx.ymNorm,
+      batch_index: batchIndex,
+      batch_total: batchTotal
+    }
+  };
 }
 
 /**
@@ -2180,16 +2780,12 @@ function dbPlannerBootstrap_(body) {
   if (!phone.length) {
     return { ok: false, error: { code: 'BAD_REQUEST', message: 'phoneSegments가 올바르지 않습니다.' } };
   }
-  dbPlannerFixRegistryPhoneColumnOnMaster_(ss);
   var common = dbPlannerReadCommonEvents_(ss);
-  var curriculum = {
-    courses: dbPlannerReadCurriculumCourses_(ss),
-    lectures: dbPlannerReadCurriculumLectures_(ss)
-  };
+  var curriculumVersion = dbPlannerCurriculumVersion_(ss);
   if (!linkKeyReq.length) {
     return {
       ok: true,
-      data: { role: 'guest', common: common, personal: null, student_profile: null, curriculum: curriculum }
+      data: { role: 'guest', common: common, personal: null, student_profile: null, curriculum_version: curriculumVersion }
     };
   }
   var reg = dbPlannerRegistryMatchForPhoneAndLink_(ss, linkKeyReq, phone);
@@ -2214,7 +2810,7 @@ function dbPlannerBootstrap_(body) {
       common: common,
       personal: personal,
       student_profile: student_profile,
-      curriculum: curriculum
+      curriculum_version: curriculumVersion
     }
   };
 }
@@ -2242,6 +2838,7 @@ function dbInitPlannerMasterSheets_() {
           dbPlannerDeleteLegacyMemberRecordsSheet_(ss0);
           dbDeleteOrphanDefaultSheetIfAny_(ss0);
           dbPlannerFixRegistryPhoneColumnOnMaster_(ss0);
+          dbPlannerFixCurriculumLectureDurationOnMaster_(ss0);
           return {
             id: existing,
             url: 'https://docs.google.com/spreadsheets/d/' + existing + '/edit',
@@ -2286,6 +2883,7 @@ function dbInitPlannerMasterSheets_() {
         p.setProperty(DB_PROP_SHEETS_PLANNER_MASTER_ID, reusedId);
         dbDeleteOrphanDefaultSheetIfAny_(ssReuse);
         dbPlannerFixRegistryPhoneColumnOnMaster_(ssReuse);
+        dbPlannerFixCurriculumLectureDurationOnMaster_(ssReuse);
         return {
           id: reusedId,
           url: 'https://docs.google.com/spreadsheets/d/' + reusedId + '/edit',

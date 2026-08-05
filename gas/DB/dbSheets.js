@@ -150,3 +150,30 @@ function dbSetValuesFromRow2_(sheet, values, nCols) {
   }
   sheet.getRange(2, 1, n, nCols).setValues(norm);
 }
+
+/**
+ * 2행 다음(또는 2행)부터 행 append.
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet
+ * @param {any[][]|null|undefined} values
+ * @param {number} nCols
+ */
+function dbAppendValuesFromRow2_(sheet, values, nCols) {
+  if (!values || !values.length) {
+    return;
+  }
+  var lr = sheet.getLastRow();
+  var startRow = lr < 2 ? 2 : lr + 1;
+  var n = values.length;
+  var norm = [];
+  var i;
+  var c;
+  for (i = 0; i < n; i++) {
+    var row = values[i] || [];
+    var line = [];
+    for (c = 0; c < nCols; c++) {
+      line.push(c < row.length ? row[c] : '');
+    }
+    norm.push(line);
+  }
+  sheet.getRange(startRow, 1, n, nCols).setValues(norm);
+}

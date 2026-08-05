@@ -33,6 +33,11 @@ function run_Planner_RebuildRegistry() {
   return dbPlannerRebuildRegistryFromMaster_();
 }
 
+/** `planner_registry.phone_normalized` 열 — 앞자리 0·텍스트 서식 보정(수기 시트 복구용). */
+function run_Planner_FixRegistryPhones() {
+  return dbPlannerFixRegistryPhonesFromMaster_();
+}
+
 /** 제작용: 연결된 학생 플래너 파일 전부 휴지통 + 마스터 레지스트리·방문기록·링크 본문 삭제. */
 function run_Planner_DevFullReset() {
   return dbPlannerDevFullReset_();

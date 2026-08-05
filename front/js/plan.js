@@ -801,6 +801,8 @@ function plannerRevealPlanMain_(root) {
  */
 function plannerSetAdminMode_(root, on) {
   root.__spPlanAdminMode = Boolean(on);
+  // 모드 전환 = 편집 세션 경계. 저장하지 않은 편집 표시를 남기면 조회 화면이 서버 값으로 못 돌아간다.
+  plannerClearProfileDirty_(root);
   try {
     sessionStorage.setItem(PLAN_SESSION_ADMIN_KEY, root.__spPlanAdminMode ? '1' : '0');
   } catch (_e) {

@@ -128,6 +128,11 @@ function openSyncAllowedActions_() {
     'analyticsTableExportFromStaging',
     'plannerMatch',
     'plannerBootstrap',
+    'plannerCurriculum',
+    'plannerAdminVerify',
+    'plannerRegistryProfileSave',
+    'plannerRegistryManualCreate',
+    'plannerPersonalTodosApply',
     'initPlannerMasterSheets',
     'plannerRegistryRebuild',
     'plannerDevFullReset'
@@ -145,11 +150,26 @@ function openSyncRouteAction_(action, e) {
     return { ok: true, data: { name: 'openSync', version: 15, actions: openSyncAllowedActions_() } };
   }
   /** 플래너(임웹): 관리자와 동일하게 JSONP `GET ?format=jsonp&callback=…&action=…` — `fetch` POST는 GAS TextOutput CORS로 막힐 수 있음. POST(doPost)도 유지. */
+  if (action === 'plannerAdminVerify') {
+    return dbPlannerAdminVerify_(e);
+  }
   if (action === 'plannerMatch') {
     return dbPlannerMatch_(openSyncPlannerBodyFromGetParams_(e));
   }
   if (action === 'plannerBootstrap') {
     return dbPlannerBootstrap_(openSyncPlannerBodyFromGetParams_(e));
+  }
+  if (action === 'plannerCurriculum') {
+    return dbPlannerCurriculum_(openSyncPlannerBodyFromGetParams_(e));
+  }
+  if (action === 'plannerRegistryProfileSave') {
+    return dbPlannerRegistryProfileSave_(openSyncPlannerBodyFromGetParams_(e));
+  }
+  if (action === 'plannerRegistryManualCreate') {
+    return dbPlannerRegistryManualCreate_(openSyncPlannerBodyFromGetParams_(e));
+  }
+  if (action === 'plannerPersonalTodosApply') {
+    return dbPlannerPersonalTodosApply_(openSyncPlannerPersonalTodosBodyFromGet_(e));
   }
   if (action === 'plannerRegistryRebuild') {
     return dbPlannerRebuildRegistryFromMaster_();
@@ -638,10 +658,13 @@ function openSyncParseFormUrlEncoded_(body) {
  * JSONP GET 전용 — `e.parameter` 에서 플래너 본문 조립 (`doPost` JSON과 동일 필드).
  * - `p0` `p1` `p2`: 휴대전화 세 칸(숫자만 권장, 서버에서 비숫자 제거)
  * - `n`: 이름(선택)
- * - `m`: `plannerBootstrap` 시 memberCode
+ * - `m`: `plannerBootstrap` 시 `link_key` (레거시 쿼리명 유지)
+ * - `year_month` 또는 `ym`: 선택, `yyyy-MM` → 학생 월 탭 스텁 read
+ * - `student_profile`: JSON 문자열 (`plannerRegistryProfileSave`) — URL 길이 제한에 유의
+ * - `todos`: JSON 배열 문자열 (`plannerPersonalTodosApply`) — URL 길이 제한에 유의
  *
  * @param {Object} e
- * @return {{ phoneSegments: string[], name: string, memberCode: string }}
+ * @return {{ phoneSegments: string[], name: string, linkKey: string, memberCode: string, year_month?: string, student_profile?: Object, todos?: Object[] }}
  */
 function openSyncPlannerBodyFromGetParams_(e) {
   e = e || {};
@@ -649,11 +672,61 @@ function openSyncPlannerBodyFromGetParams_(e) {
   var p0 = String(p.p0 != null ? p.p0 : '').replace(/\D/g, '');
   var p1 = String(p.p1 != null ? p.p1 : '').replace(/\D/g, '');
   var p2 = String(p.p2 != null ? p.p2 : '').replace(/\D/g, '');
-  return {
+  var linkKey = String(p.m != null ? p.m : p.linkKey != null ? p.linkKey : '').trim();
+  var ymRaw = String(p.ym != null ? p.ym : p.year_month != null ? p.year_month : '').trim();
+  var spRaw = String(p.student_profile != null ? p.student_profile : '').trim();
+  /** @type {{ phoneSegments: string[], name: string, linkKey: string, memberCode: string, year_month?: string, student_profile?: Object }} */
+  var out = {
     phoneSegments: [p0, p1, p2],
     name: String(p.n != null ? p.n : ''),
-    memberCode: String(p.m != null ? p.m : '').trim()
+    linkKey: linkKey,
+    memberCode: linkKey
   };
+  if (ymRaw.length) {
+    var ymNorm = dbPlannerNormalizeYearMonthFromBody_({ year_month: ymRaw });
+    if (ymNorm.length) {
+      out.year_month = ymNorm;
+    }
+  }
+  if (spRaw.length) {
+    try {
+      out.student_profile = JSON.parse(spRaw);
+    } catch (spErr) {
+      Logger.log('openSyncPlannerBodyFromGetParams_: student_profile JSON.parse failed');
+    }
+  }
+  var mpnRaw = String(p.monthly_plan_notices_patch != null ? p.monthly_plan_notices_patch : '').trim();
+  if (mpnRaw.length) {
+    out.monthly_plan_notices_patch = mpnRaw;
+  }
+  return out;
+}
+
+/**
+ * JSONP GET — `plannerPersonalTodosApply` 본문 (`todos` JSON 문자열).
+ * @param {Object} e
+ * @return {{ phoneSegments: string[], name: string, linkKey: string, memberCode: string, link_key: string, year_month?: string, todos: Object[] }}
+ */
+function openSyncPlannerPersonalTodosBodyFromGet_(e) {
+  var out = openSyncPlannerBodyFromGetParams_(e);
+  e = e || {};
+  var p = e.parameter || {};
+  var todosRaw = String(p.todos != null ? p.todos : '').trim();
+  /** @type {Object[]} */
+  var todos = [];
+  if (todosRaw.length) {
+    try {
+      var parsed = JSON.parse(todosRaw);
+      if (Object.prototype.toString.call(parsed) === '[object Array]') {
+        todos = parsed;
+      }
+    } catch (todosErr) {
+      Logger.log('openSyncPlannerPersonalTodosBodyFromGet_: todos JSON.parse failed');
+    }
+  }
+  out.todos = todos;
+  out.link_key = out.linkKey;
+  return out;
 }
 
 /**
@@ -685,11 +758,26 @@ function doPost(e) {
       }
     }
   }
+  if (jBody && jBody.action === 'plannerAdminVerify') {
+    return openSyncTextOutputJson_(dbPlannerAdminVerify_(jBody));
+  }
   if (jBody && jBody.action === 'plannerMatch') {
     return openSyncTextOutputJson_(dbPlannerMatch_(jBody));
   }
   if (jBody && jBody.action === 'plannerBootstrap') {
     return openSyncTextOutputJson_(dbPlannerBootstrap_(jBody));
+  }
+  if (jBody && jBody.action === 'plannerCurriculum') {
+    return openSyncTextOutputJson_(dbPlannerCurriculum_(jBody));
+  }
+  if (jBody && jBody.action === 'plannerRegistryProfileSave') {
+    return openSyncTextOutputJson_(dbPlannerRegistryProfileSave_(jBody));
+  }
+  if (jBody && jBody.action === 'plannerRegistryManualCreate') {
+    return openSyncTextOutputJson_(dbPlannerRegistryManualCreate_(jBody));
+  }
+  if (jBody && jBody.action === 'plannerPersonalTodosApply') {
+    return openSyncTextOutputJson_(dbPlannerPersonalTodosApply_(jBody));
   }
   if (jBody && jBody.action === 'initPlannerMasterSheets') {
     var rPl0 = dbInitPlannerMasterSheets_();

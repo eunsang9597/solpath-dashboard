@@ -3,12 +3,24 @@
  */
 
 /** @type {string[]} */
-var _DB_PM_CATEGORIES = ['unmapped', 'solpass', 'solutine', 'challenge', 'textbook', 'jasoseo'];
+var _DB_PM_CATEGORIES = ['unmapped', 'solpass', 'solutine', 'challenge', 'textbook', 'jasoseo', 'toeic_rc', 'toeic_lc'];
 /** @type {string[]} */
 var _DB_PM_LIFECYCLES = ['active', 'archived', 'test', 'legacy'];
 /** SPEC/스키마 기본값 — 빈 셀 아님 (internal_category, lifecycle, notes 빈문자) */
 var _DB_PM_DEFAULT_INTERNAL = 'unmapped';
 var _DB_PM_DEFAULT_LIFECYCLE = 'active';
+
+/**
+ * @return {Object<string, number>}
+ */
+function dbPmEmptyCounts_() {
+  var counts = {};
+  var i;
+  for (i = 0; i < _DB_PM_CATEGORIES.length; i++) {
+    counts[_DB_PM_CATEGORIES[i]] = 0;
+  }
+  return counts;
+}
 
 /**
  * @param {string} v
@@ -350,11 +362,11 @@ function dbProductMappingList_() {
 
   var ps = master.getSheetByName(DB_SHEET_PRODUCTS);
   if (!ps) {
-    return { ok: true, data: { rows: [], counts: { unmapped: 0, solpass: 0, solutine: 0, challenge: 0, textbook: 0 } } };
+    return { ok: true, data: { rows: [], counts: dbPmEmptyCounts_() } };
   }
   var lr = ps.getLastRow();
   if (lr < 2) {
-    return { ok: true, data: { rows: [], counts: { unmapped: 0, solpass: 0, solutine: 0, challenge: 0, textbook: 0 } } };
+    return { ok: true, data: { rows: [], counts: dbPmEmptyCounts_() } };
   }
   var nColsP = DB_PRODUCTS_HEADERS.length;
   var pVals = ps.getRange(2, 1, lr - 1, nColsP).getValues();
@@ -409,7 +421,7 @@ function dbProductMappingList_() {
     });
   }
 
-  var counts = { unmapped: 0, solpass: 0, solutine: 0, challenge: 0, textbook: 0, jasoseo: 0 };
+  var counts = dbPmEmptyCounts_();
   for (r = 0; r < rows.length; r++) {
     var c = rows[r].internal_category;
     if (counts.hasOwnProperty(c)) {

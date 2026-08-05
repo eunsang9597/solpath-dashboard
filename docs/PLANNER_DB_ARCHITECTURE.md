@@ -290,15 +290,14 @@
 
 `plannerBootstrap.data.student_profile` = 위 프로필 열 + API에서 만든 `phone_display` (구현 예정).
 
-### 10.1.1 `plannerRegistryRebuild` · 학생 파일 이름 (기록만)
+### 10.1.1 `plannerRegistryRebuild` · 학생 파일 이름
 
-| | 현재 코드 | 변경 예정 |
-|--|-----------|-----------|
-| registry 적재 | `member_code`, `phone`, `display_name`(←`members.name`), `first_solpass…` | + **`imweb_uid`←`members.uid`** (member_code로 members 행 조회) |
-| Drive 파일명 | `솔루션편입_플래너_학생_{member_code}` (`dbPlannerCreateStudentPlannerSpreadsheet_`) | **`솔루션편입_플래너_학생_{display_name}({imweb_uid})`** (파일명 sanitize). 코드만으로 사람 식별하기 어렵던 부분 개선 |
-| 식별 기준 | 파일명·눈에 보이는 값이 member_code 위주 | 시트·Drive에서 **이름(아이디)** |
-
-구현·헤더 마이그레이션 전까지 기존 5컬럼·member_code 파일명 유지.
+| 항목 | 규칙 |
+|------|------|
+| Drive 파일명 (신규 생성) | **`솔루션편입_플래너_학생_{display_name}({imweb_uid})`** — `dbPlannerStudentFileTitleSuffix_` · `/\:*?"<>|` 제거 |
+| `imweb_uid` 없음 | 괄호 안에 **`member_code`**, 그것도 없으면 **`link_key`** |
+| `display_name` 없음 | 이름 자리에 **`link_key`** (수기·미동기화 행) |
+| 기존 파일 | `planner_student_links`에 ID가 있으면 **재사용**(Drive 제목 자동 변경 없음). 깨진 링크·신규만 새 이름으로 생성 |
 
 ### 10.1.2 시트 입력·서식 (운영 · GAS)
 
