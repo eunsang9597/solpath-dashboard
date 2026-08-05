@@ -1823,13 +1823,18 @@ async function plannerGasCall_(payload) {
       payload.student_profile != null && typeof payload.student_profile === 'object'
         ? payload.student_profile
         : {};
+    const monthlyPatch =
+      payload.monthly_plan_notices_patch != null && typeof payload.monthly_plan_notices_patch === 'object'
+        ? payload.monthly_plan_notices_patch
+        : {};
     return plannerGasPostAction_(url, {
       action: action,
       phoneSegments: plannerPhoneSegmentsFromPayload_(payload),
       name: String(payload.name != null ? payload.name : ''),
       memberCode: plannerLinkKeyFromPayload_(payload),
       link_key: plannerLinkKeyFromPayload_(payload),
-      student_profile: prof
+      student_profile: prof,
+      monthly_plan_notices_patch: monthlyPatch
     });
   }
   if (action === 'plannerPersonalTodosApply') {
@@ -1996,34 +2001,96 @@ function plannerPlanAdminBulkScheduleAllowed_(root) {
 }
 
 /**
+ * 화면에서 실제로 고친 프로필 키만 모아 둔다. 재렌더·bootstrap이 이 키를 서버 값으로 덮지 않고,
+ * 저장 페이로드에도 이 키만 실어 옛 화면이 다른 값을 지우지 못하게 한다.
  * @param {HTMLElement} root
- * @returns {Record<string, string>}
+ * @returns {Record<string, boolean>}
  */
-function plannerCollectStudentProfilePayloadForSave_(root) {
-  const tbody = root.querySelector('#sp-plan-student-tbody');
-  const initial = root.__spPlanStudentProfileInitial && typeof root.__spPlanStudentProfileInitial === 'object'
-    ? root.__spPlanStudentProfileInitial
-    : {};
-  /** @type {Record<string, string>} */
-  const out = {};
-  PLANNER_STUDENT_PROFILE_KEYS_FOR_SAVE.forEach(function (k) {
-    if (k === 'prev_major_gpa') return;
-    if (!tbody) {
-      out[k] = initial[k] != null ? String(initial[k]) : '';
+function plannerProfileDirtyMap_(root) {
+  if (!root.__spPlanProfileDirty || typeof root.__spPlanProfileDirty !== 'object') {
+    root.__spPlanProfileDirty = {};
+  }
+  return /** @type {Record<string, boolean>} */ (root.__spPlanProfileDirty);
+}
+
+/**
+ * @param {HTMLElement} root
+ * @returns {Record<string, boolean>}
+ */
+function plannerMonthlyNoticeDirtyMap_(root) {
+  if (!root.__spPlanMonthlyNoticesDirty || typeof root.__spPlanMonthlyNoticesDirty !== 'object') {
+    root.__spPlanMonthlyNoticesDirty = {};
+  }
+  return /** @type {Record<string, boolean>} */ (root.__spPlanMonthlyNoticesDirty);
+}
+
+/** @param {HTMLElement} root */
+function plannerClearProfileDirty_(root) {
+  root.__spPlanProfileDirty = {};
+  root.__spPlanMonthlyNoticesDirty = {};
+}
+
+/**
+ * 학과·평점은 입력 두 칸이 `prev_major_gpa` 한 열로 합쳐진다.
+ * @param {string} attrKey
+ * @returns {string}
+ */
+function plannerProfileDirtyKeyFromInputAttr_(attrKey) {
+  if (attrKey === 'prev_major' || attrKey === 'prev_major_gpa_only') return 'prev_major_gpa';
+  return attrKey;
+}
+
+/**
+ * 상담기록의 정본은 `__spPlanMonthlyNoticesInitial` — 입력 즉시 반영해야 달력 재렌더가 화면을 비우지 않는다.
+ * @param {HTMLElement} root
+ */
+function wirePlannerProfileDirtyTrackingOnce_(root) {
+  if (root.__spPlanProfileDirtyWired) return;
+  root.__spPlanProfileDirtyWired = true;
+  root.addEventListener('input', function (e) {
+    const t = e.target instanceof HTMLElement ? e.target : null;
+    if (!t) return;
+    if (t.id === 'sp-plan-monthly-notice-body') {
+      plannerFlushMonthlyNoticeDraft_(root);
+      const st = root.__spPlanState;
+      const vm =
+        st && st.viewMonth instanceof Date && !isNaN(st.viewMonth.getTime()) ? st.viewMonth : new Date();
+      plannerMonthlyNoticeDirtyMap_(root)[plannerYearMonthFromDate_(vm)] = true;
       return;
     }
-    const inp = tbody.querySelector('[data-sp-plan-student-input="' + escAttr(k) + '"]');
-    if (!inp) {
-      out[k] = initial[k] != null ? String(initial[k]) : '';
+    if (t.id === 'sp-plan-coaching-features') {
+      plannerProfileDirtyMap_(root).plan_features = true;
       return;
     }
-    if ('value' in inp) {
-      out[k] = String(/** @type {HTMLInputElement | HTMLTextAreaElement} */ (inp).value).trim();
-    } else {
-      out[k] = initial[k] != null ? String(initial[k]) : '';
+    if (t.hasAttribute('data-sp-plan-subject-key') || t.hasAttribute('data-sp-plan-subject-body')) {
+      plannerProfileDirtyMap_(root).subject_guides_json = true;
+      return;
+    }
+    const stuKey = t.getAttribute('data-sp-plan-student-input');
+    if (stuKey) {
+      plannerProfileDirtyMap_(root)[plannerProfileDirtyKeyFromInputAttr_(stuKey)] = true;
     }
   });
-  if (tbody) {
+}
+
+/**
+ * 고친 프로필 키 + 고친 달 상담기록만 담은 저장 페이로드.
+ * @param {HTMLElement} root
+ * @returns {{ profile: Record<string, string>, monthly_patch: Record<string, string> }}
+ */
+function plannerCollectStudentProfilePayloadForSave_(root) {
+  const dirty = plannerProfileDirtyMap_(root);
+  const tbody = root.querySelector('#sp-plan-student-tbody');
+  /** @type {Record<string, string>} */
+  const profile = {};
+  PLANNER_STUDENT_PROFILE_KEYS_FOR_SAVE.forEach(function (k) {
+    if (k === 'prev_major_gpa') return;
+    if (!dirty[k] || !tbody) return;
+    const inp = tbody.querySelector('[data-sp-plan-student-input="' + escAttr(k) + '"]');
+    if (!inp || !('value' in inp)) return;
+    profile[k] = String(/** @type {HTMLInputElement | HTMLTextAreaElement} */ (inp).value).trim();
+  });
+  if (dirty.prev_major_gpa && tbody) {
     const majorInp = tbody.querySelector('[data-sp-plan-student-input="prev_major"]');
     const gpaInp = tbody.querySelector('[data-sp-plan-student-input="prev_major_gpa_only"]');
     if (majorInp || gpaInp) {
@@ -2035,29 +2102,22 @@ function plannerCollectStudentProfilePayloadForSave_(root) {
         gpaInp && 'value' in gpaInp
           ? String(/** @type {HTMLInputElement} */ (gpaInp).value).trim()
           : '';
-      out.prev_major_gpa = plannerComposePrevMajorGpa_(major, gpa);
+      profile.prev_major_gpa = plannerComposePrevMajorGpa_(major, gpa);
     } else {
       const legacy = tbody.querySelector('[data-sp-plan-student-input="prev_major_gpa"]');
       if (legacy && 'value' in legacy) {
-        out.prev_major_gpa = String(/** @type {HTMLInputElement} */ (legacy).value).trim();
-      } else {
-        out.prev_major_gpa = initial.prev_major_gpa != null ? String(initial.prev_major_gpa) : '';
+        profile.prev_major_gpa = String(/** @type {HTMLInputElement} */ (legacy).value).trim();
       }
     }
-  } else {
-    out.prev_major_gpa = initial.prev_major_gpa != null ? String(initial.prev_major_gpa) : '';
   }
   const featEl = root.querySelector('#sp-plan-coaching-features');
-  out.plan_features =
-    featEl && 'value' in featEl
-      ? String(/** @type {HTMLTextAreaElement} */ (featEl).value)
-      : initial.plan_features != null
-        ? String(initial.plan_features)
-        : '';
-  /** @type {Record<string, string>} */
-  const subjects = {};
+  if (dirty.plan_features && featEl && 'value' in featEl) {
+    profile.plan_features = String(/** @type {HTMLTextAreaElement} */ (featEl).value);
+  }
   const subjBody = root.querySelector('#sp-plan-coaching-subjects-body');
-  if (subjBody) {
+  if (dirty.subject_guides_json && subjBody) {
+    /** @type {Record<string, string>} */
+    const subjects = {};
     subjBody.querySelectorAll('[data-sp-plan-subject-row]').forEach(function (rowEl) {
       if (!(rowEl instanceof HTMLElement)) return;
       const subInp = rowEl.querySelector('[data-sp-plan-subject-key]');
@@ -2069,24 +2129,20 @@ function plannerCollectStudentProfilePayloadForSave_(root) {
         bodyInp && 'value' in bodyInp ? String(/** @type {HTMLTextAreaElement} */ (bodyInp).value) : '';
       subjects[sk] = bv;
     });
-  } else {
-    Object.assign(subjects, plannerParseProfileJsonObject_(initial.subject_guides_json));
+    profile.subject_guides_json = plannerStringifyProfileJsonObject_(subjects);
   }
-  out.subject_guides_json = plannerStringifyProfileJsonObject_(subjects);
-  const monthlyInitial =
+  const monthlyMap =
     root.__spPlanMonthlyNoticesInitial && typeof root.__spPlanMonthlyNoticesInitial === 'object'
-      ? /** @type {Record<string, string>} */ ({ ...root.__spPlanMonthlyNoticesInitial })
-      : plannerParseProfileJsonObject_(initial.monthly_plan_notices_json);
-  const st = root.__spPlanState;
-  const vm =
-    st && st.viewMonth instanceof Date && !isNaN(st.viewMonth.getTime()) ? st.viewMonth : new Date();
-  const ymKey = plannerYearMonthFromDate_(vm);
-  const monEl = root.querySelector('#sp-plan-monthly-notice-body');
-  if (monEl && 'value' in monEl) {
-    monthlyInitial[ymKey] = String(/** @type {HTMLTextAreaElement} */ (monEl).value);
-  }
-  out.monthly_plan_notices_json = plannerStringifyProfileJsonObject_(monthlyInitial);
-  return out;
+      ? /** @type {Record<string, string>} */ (root.__spPlanMonthlyNoticesInitial)
+      : {};
+  const monthlyDirty = plannerMonthlyNoticeDirtyMap_(root);
+  /** @type {Record<string, string>} */
+  const monthlyPatch = {};
+  Object.keys(monthlyDirty).forEach(function (ym) {
+    if (!monthlyDirty[ym]) return;
+    monthlyPatch[ym] = monthlyMap[ym] != null ? String(monthlyMap[ym]) : '';
+  });
+  return { profile: profile, monthly_patch: monthlyPatch };
 }
 
 /**
@@ -2136,13 +2192,26 @@ function renderPlannerCoachingBlocks_(root, profile) {
   const name = p.display_name && p.display_name.length ? p.display_name : '학생';
   const featTitle = wrap.querySelector('#sp-plan-coaching-features-title');
   if (featTitle) featTitle.textContent = name + '님 계획표 특징';
+  const dirty = plannerProfileDirtyMap_(root);
   const featEl = wrap.querySelector('#sp-plan-coaching-features');
-  if (featEl && 'value' in featEl) {
+  if (featEl && 'value' in featEl && !dirty.plan_features) {
     /** @type {HTMLTextAreaElement} */ (featEl).value = p.plan_features || '';
   }
-  root.__spPlanMonthlyNoticesInitial = plannerParseProfileJsonObject_(p.monthly_plan_notices_json);
+  const serverMonthly = plannerParseProfileJsonObject_(p.monthly_plan_notices_json);
+  const prevMonthly =
+    root.__spPlanMonthlyNoticesInitial && typeof root.__spPlanMonthlyNoticesInitial === 'object'
+      ? /** @type {Record<string, string>} */ (root.__spPlanMonthlyNoticesInitial)
+      : null;
+  if (prevMonthly) {
+    const monthlyDirty = plannerMonthlyNoticeDirtyMap_(root);
+    Object.keys(monthlyDirty).forEach(function (ym) {
+      if (!monthlyDirty[ym]) return;
+      serverMonthly[ym] = prevMonthly[ym] != null ? String(prevMonthly[ym]) : '';
+    });
+  }
+  root.__spPlanMonthlyNoticesInitial = serverMonthly;
   const subjObj = plannerParseProfileJsonObject_(p.subject_guides_json);
-  const subjBody = wrap.querySelector('#sp-plan-coaching-subjects-body');
+  const subjBody = dirty.subject_guides_json ? null : wrap.querySelector('#sp-plan-coaching-subjects-body');
   if (subjBody) {
     const keys = Object.keys(subjObj);
     let h = '';
@@ -2356,6 +2425,7 @@ function wirePlannerMainTabsOnce_(root) {
       const tbody = root.querySelector('#sp-plan-coaching-subjects-body');
       if (tbody) {
         tbody.insertAdjacentHTML('beforeend', plannerCoachingSubjectRowHtml_('', ''));
+        plannerProfileDirtyMap_(root).subject_guides_json = true;
       }
       return;
     }
@@ -2366,6 +2436,7 @@ function wirePlannerMainTabsOnce_(root) {
       const tbody = root.querySelector('#sp-plan-coaching-subjects-body');
       if (row && tbody) {
         row.remove();
+        plannerProfileDirtyMap_(root).subject_guides_json = true;
         if (!tbody.querySelector('[data-sp-plan-subject-row]')) {
           tbody.insertAdjacentHTML('beforeend', plannerCoachingSubjectRowHtml_('', ''));
         }
@@ -2394,6 +2465,18 @@ async function plannerStudentProfileSaveClick_(root, opts) {
     return false;
   }
   const payload = plannerCollectStudentProfilePayloadForSave_(root);
+  const hasProfileChange = Object.keys(payload.profile).length > 0;
+  const hasMonthlyChange = Object.keys(payload.monthly_patch).length > 0;
+  if (!hasProfileChange && !hasMonthlyChange) {
+    if (msgEl && !partOfDual) {
+      msgEl.textContent = '변경된 내용이 없습니다.';
+      msgEl.removeAttribute('hidden');
+      window.setTimeout(function () {
+        msgEl.setAttribute('hidden', 'hidden');
+      }, 2200);
+    }
+    return true;
+  }
   if (msgEl && !partOfDual) {
     msgEl.textContent = '저장 중…';
     msgEl.removeAttribute('hidden');
@@ -2403,7 +2486,8 @@ async function plannerStudentProfileSaveClick_(root, opts) {
     phoneSegments: ctx.phoneSegments,
     name: ctx.name || '',
     memberCode: ctx.memberCode || '',
-    student_profile: payload
+    student_profile: payload.profile,
+    monthly_plan_notices_patch: payload.monthly_patch
   });
   if (!res || !res.ok) {
     if (msgEl && !partOfDual) {
@@ -2412,6 +2496,7 @@ async function plannerStudentProfileSaveClick_(root, opts) {
     }
     return false;
   }
+  plannerClearProfileDirty_(root);
   const ymDate = st.viewMonth instanceof Date && !isNaN(st.viewMonth.getTime()) ? st.viewMonth : new Date();
   const boot = await plannerGasCall_({
     action: 'plannerBootstrap',
@@ -3558,6 +3643,16 @@ function renderPlannerStudentProfile_(root, profile) {
   if (!tbody) return;
   const canEdit = plannerStudentProfileCanEdit_(root);
   const p = plannerNormalizeStudentProfileFromApi_(profile);
+  const profileDirty = plannerProfileDirtyMap_(root);
+  /** @type {Record<string, string>} */
+  const keepDirtyInputs = {};
+  tbody.querySelectorAll('[data-sp-plan-student-input]').forEach(function (el) {
+    if (!(el instanceof HTMLElement) || !('value' in el)) return;
+    const attrKey = el.getAttribute('data-sp-plan-student-input') || '';
+    if (!attrKey.length) return;
+    if (!profileDirty[plannerProfileDirtyKeyFromInputAttr_(attrKey)]) return;
+    keepDirtyInputs[attrKey] = String(/** @type {HTMLInputElement | HTMLTextAreaElement} */ (el).value);
+  });
   root.__spPlanStudentProfileInitial = {};
   PLANNER_STUDENT_PROFILE_KEYS_FOR_SAVE.forEach(function (k) {
     root.__spPlanStudentProfileInitial[k] = p[k];
@@ -3677,6 +3772,12 @@ function renderPlannerStudentProfile_(root, profile) {
   h += '</tr>';
 
   tbody.innerHTML = h;
+  Object.keys(keepDirtyInputs).forEach(function (attrKey) {
+    const el = tbody.querySelector('[data-sp-plan-student-input="' + escAttr(attrKey) + '"]');
+    if (el && 'value' in el) {
+      /** @type {HTMLInputElement | HTMLTextAreaElement} */ (el).value = keepDirtyInputs[attrKey];
+    }
+  });
 
   const saveRow = root.querySelector('#sp-plan-student-save-row');
   if (saveRow) {
@@ -10393,6 +10494,8 @@ function wireGate_(root) {
   }
 
   async function runBootstrap(memberCode, segs, name) {
+    plannerClearProfileDirty_(root);
+    root.__spPlanMonthlyNoticesInitial = {};
     root.__spPlannerBootstrapCtx = {
       memberCode: memberCode || '',
       phoneSegments: Array.isArray(segs)
@@ -10585,6 +10688,7 @@ function main() {
     }
   }
   wirePlannerAdminUnlockOnce_(el);
+  wirePlannerProfileDirtyTrackingOnce_(el);
   wirePlannerMainTabsOnce_(el);
   wirePlannerManualRegOnce_(el);
   wirePlannerStudentProfileSaveOnce_(el);
