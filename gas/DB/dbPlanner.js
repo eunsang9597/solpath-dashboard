@@ -440,9 +440,31 @@ function dbPlannerRegistryMergeProfileFromExisting_(newRow, existingRow) {
  * `planner_month_ranges_json`이 비어 있거나 `[]`이면 첫 솔패스 주문 시각(서울 월)~당월 구간을 자동 채운다.
  * 제외 규칙은 `dbStudentMgmtRebuildFromMaster_`와 동일(구매자 이름·`dbAnOrderLineSkipForAnalytics_` 등), 단 **internal_category === solpass** 인 라인만 집계한다.
  *
- * @return {{ ok: true, data: { written: number, preservedRegistryRows: number, skippedLines: number, skippedNoPhone: number } }|{ ok: false, error: { code: string, message: string } }}
+ * @return {{ ok: true, data: Object }|{ ok: false, error: { code: string, message: string } }}
  */
 function dbPlannerRebuildRegistryFromMaster_() {
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(15000)) {
+    return {
+      ok: false,
+      error: {
+        code: 'PLANNER_SYNC_BUSY',
+        message: '이미 동기화가 진행 중입니다. 끝날 때까지 기다려 주세요.'
+      }
+    };
+  }
+  try {
+    return dbPlannerRebuildRegistryFromMasterBody_(Date.now());
+  } finally {
+    try {
+      lock.releaseLock();
+    } catch (eRel) {}
+  }
+}
+
+var DB_PLANNER_PROVISION_BUDGET_MS = 270000;
+
+function dbPlannerRebuildRegistryFromMasterBody_(startedAtMs) {
   var master;
   try {
     master = dbOpenMaster_();
@@ -688,7 +710,7 @@ function dbPlannerRebuildRegistryFromMaster_() {
     dbPlannerFixRegistryPhoneColumn_(shReg);
   }
 
-  var prov = dbPlannerProvisionStudentsFromRegistry_(ssPl);
+  var prov = dbPlannerProvisionStudentsFromRegistry_(ssPl, startedAtMs);
   return {
     ok: true,
     data: {
@@ -698,9 +720,13 @@ function dbPlannerRebuildRegistryFromMaster_() {
       skippedNoPhone: skippedNoPhone,
       provisioned: prov.provisioned,
       reusedStudentFiles: prov.reused,
+      reusedByTitle: prov.reusedByTitle,
       trashedBrokenLinks: prov.trashedBroken,
       trashedOrphanLinks: prov.trashedOrphans,
-      provisionErrors: prov.provisionErrors
+      provisionErrors: prov.provisionErrors,
+      incomplete: prov.incomplete ? true : false,
+      processed: prov.processed,
+      total: prov.total
     }
   };
 }
@@ -990,29 +1016,122 @@ function dbPlannerCreateStudentPlannerSpreadsheet_(masterSs, displayName, imwebU
   }
   var id = String(file.id).trim();
   var ss = dbOpenNewSpreadsheetByIdWithRetry_(id);
-  if (!ss) {
-    return '';
+  if (ss) {
+    dbPlannerEnsurePersonalTodoSheetsForStudent_(ss, rangesJsonRaw != null ? String(rangesJsonRaw) : '');
+  } else {
+    Logger.log('dbPlannerCreateStudentPlannerSpreadsheet_: open retry fail id=' + id);
   }
-  dbPlannerEnsurePersonalTodoSheetsForStudent_(ss, rangesJsonRaw != null ? String(rangesJsonRaw) : '');
   return id;
 }
 
 /**
+ * 폴더에서 제목이 같은 스프레드시트 중 **가장 최근 수정** ID. 없으면 ''.
+ * @param {string} folderId
+ * @param {string} title
+ * @return {string}
+ */
+function dbPlannerFindStudentSpreadsheetIdByTitle_(folderId, title) {
+  var fid = String(folderId != null ? folderId : '').trim();
+  var name = String(title != null ? title : '').trim();
+  if (!fid.length || !name.length) {
+    return '';
+  }
+  try {
+    var folder = DriveApp.getFolderById(fid);
+    var it = folder.getFilesByName(name);
+    var bestId = '';
+    var bestMs = 0;
+    while (it.hasNext()) {
+      var f = it.next();
+      if (f.isTrashed && typeof f.isTrashed === 'function' && f.isTrashed()) {
+        continue;
+      }
+      if (f.getMimeType() !== 'application/vnd.google-apps.spreadsheet') {
+        continue;
+      }
+      var id = String(f.getId()).trim();
+      if (!id.length || !dbDriveSpreadsheetIdIsUsableNow_(id)) {
+        continue;
+      }
+      var ms = 0;
+      try {
+        ms = f.getLastUpdated().getTime();
+      } catch (eT) {
+        ms = 0;
+      }
+      if (!bestId.length || ms >= bestMs) {
+        bestId = id;
+        bestMs = ms;
+      }
+    }
+    return bestId;
+  } catch (e) {
+    Logger.log(
+      'dbPlannerFindStudentSpreadsheetIdByTitle_: ' + (e && e.message != null ? e.message : String(e))
+    );
+    return '';
+  }
+}
+
+/**
+ * `planner_student_links`에서 같은 `link_key`(또는 member_code / imweb_uid) 행을 덮어쓰거나 한 행 추가.
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} sh
+ * @param {number} wL
+ * @param {number} ixMc
+ * @param {number} ixUid
+ * @param {string} mc
+ * @param {string} uid
+ * @param {string} sid
+ * @param {string} provAt
+ */
+function dbPlannerUpsertStudentLinkRow_(sh, wL, ixMc, ixUid, mc, uid, sid, provAt) {
+  var row = [mc, uid, sid, provAt];
+  while (row.length < wL) {
+    row.push('');
+  }
+  var lk = dbPlannerLinkKeyFromParts_(mc, uid);
+  var lr = sh.getLastRow();
+  if (lr >= 2) {
+    var n = lr - 2 + 1;
+    var vals = sh.getRange(2, 1, n, wL).getValues();
+    var i;
+    for (i = 0; i < vals.length; i++) {
+      var rowMc = dbPlannerCellToSheetText_(vals[i][ixMc]);
+      var rowUid = dbPlannerCellToSheetText_(vals[i][ixUid]);
+      if (dbPlannerLinkKeyFromParts_(rowMc, rowUid) === lk || (mc.length && rowMc === mc) || (uid.length && rowUid === uid)) {
+        sh.getRange(2 + i, 1, 1, wL).setValues([row]);
+        return;
+      }
+    }
+  }
+  var next = sh.getLastRow() < 2 ? 2 : sh.getLastRow() + 1;
+  sh.getRange(next, 1, 1, wL).setValues([row]);
+}
+
+/**
  * `planner_registry` 행(`member_code` 또는 `imweb_uid` 있음)마다 학생 파일·links 4열을 맞춘다.
+ * 링크 ID가 살아 있으면 그 파일을 연지 않고 재사용한다(매 동기화마다 22파일을 열다 6분에 끊기던 경로).
+ * ID가 깨졌으면 같은 제목 파일을 찾고, 없으면 새로 만든다. **링크 행은 학생 한 명마다 즉시 기록**한다.
  * 레지스트리에 없는 링크 `link_key`는 제거하고 파일은 휴지통으로 보낸다.
  *
  * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} masterSs
- * @return {{ provisioned: number, reused: number, trashedBroken: number, trashedOrphans: number, provisionErrors: number, error?: { code: string, message: string } }}
+ * @param {number} [startedAtMs]
+ * @return {{ provisioned: number, reused: number, reusedByTitle: number, trashedBroken: number, trashedOrphans: number, provisionErrors: number, incomplete: boolean, processed: number, total: number }}
  */
-function dbPlannerProvisionStudentsFromRegistry_(masterSs) {
+function dbPlannerProvisionStudentsFromRegistry_(masterSs, startedAtMs) {
   dbPlannerFixRegistryPhoneColumnOnMaster_(masterSs);
   var nowIso = Utilities.formatDate(new Date(), 'Asia/Seoul', "yyyy-MM-dd'T'HH:mm:ss");
+  var started = startedAtMs != null && isFinite(Number(startedAtMs)) ? Number(startedAtMs) : Date.now();
   var out = {
     provisioned: 0,
     reused: 0,
+    reusedByTitle: 0,
     trashedBroken: 0,
     trashedOrphans: 0,
-    provisionErrors: 0
+    provisionErrors: 0,
+    incomplete: false,
+    processed: 0,
+    total: 0
   };
   var shLinks = dbGetOrCreateSheetWithHeaders_(masterSs, DB_SHEET_PLANNER_STUDENT_LINKS, DB_PLANNER_STUDENT_LINK_HEADERS);
   var wL = DB_PLANNER_STUDENT_LINK_HEADERS.length;
@@ -1034,6 +1153,7 @@ function dbPlannerProvisionStudentsFromRegistry_(masterSs) {
   }
 
   var regTargets = dbPlannerReadRegistryLinkTargetsOrdered_(masterSs);
+  out.total = regTargets.length;
   var regSet = {};
   var ri;
   for (ri = 0; ri < regTargets.length; ri++) {
@@ -1064,26 +1184,40 @@ function dbPlannerProvisionStudentsFromRegistry_(masterSs) {
     }
   }
 
-  var lkOrphan;
-  for (lkOrphan in linkByKey) {
-    if (!Object.prototype.hasOwnProperty.call(linkByKey, lkOrphan)) {
+  var keepRows = [];
+  var orphanKeys = [];
+  var lkScan;
+  for (lkScan in linkByKey) {
+    if (!Object.prototype.hasOwnProperty.call(linkByKey, lkScan)) {
       continue;
     }
-    if (regSet[lkOrphan]) {
-      continue;
+    if (regSet[lkScan]) {
+      var keep = linkByKey[lkScan];
+      keepRows.push([keep.member_code, keep.imweb_uid, keep.sid, keep.prov]);
+    } else {
+      orphanKeys.push(lkScan);
     }
+  }
+  var oi;
+  for (oi = 0; oi < orphanKeys.length; oi++) {
+    var lkOrphan = orphanKeys[oi];
     var sidO = linkByKey[lkOrphan].sid;
     if (sidO) {
       dbPlannerTrashFileBestEffort_(sidO);
       out.trashedOrphans++;
     }
+    delete linkByKey[lkOrphan];
+  }
+  dbClearDataRows2Plus_(shLinks, wL);
+  if (keepRows.length) {
+    dbSetValuesFromRow2_(shLinks, keepRows, wL);
   }
 
   /**
    * @param {string} lk
    * @param {string} mc
    * @param {string} uid
-   * @return {{ sid: string, prov: string }|null}
+   * @return {{ sid: string, prov: string, member_code: string, imweb_uid: string }|null}
    */
   function findPrevLink_(lk, mc, uid) {
     if (linkByKey[lk]) {
@@ -1105,29 +1239,83 @@ function dbPlannerProvisionStudentsFromRegistry_(masterSs) {
     return null;
   }
 
-  var newRows = [];
+  /**
+   * @param {string} lk
+   * @param {string} mc
+   * @param {string} uid
+   * @param {string} sidW
+   * @param {string} provW
+   */
+  function rememberAndWrite_(lk, mc, uid, sidW, provW) {
+    dbPlannerUpsertStudentLinkRow_(shLinks, wL, ixLkMc, ixLkUid, mc, uid, sidW, provW);
+    linkByKey[lk] = { sid: sidW, prov: provW, member_code: mc, imweb_uid: uid };
+  }
+
+  var folderId = dbPlannerMasterParentFolderId_(masterSs);
+  if (!folderId) {
+    folderId = dbPmGetMasterParentFolderId_();
+  }
+  if (!folderId) {
+    var base = dbResolveMasterParentFolderId_();
+    if (base) {
+      folderId = dbGetOrCreateDbSubfolder_(base) || '';
+    }
+  }
+
   var ci;
   for (ci = 0; ci < regTargets.length; ci++) {
+    if (Date.now() - started >= DB_PLANNER_PROVISION_BUDGET_MS) {
+      out.incomplete = true;
+      out.processed = ci;
+      return out;
+    }
     var tgt = regTargets[ci];
     var lk = tgt.link_key;
     var mcW = tgt.member_code;
     var uidW = tgt.imweb_uid;
     var prev = findPrevLink_(lk, mcW, uidW);
     var sid = prev && prev.sid ? prev.sid : '';
-    var provOld = prev && prev.prov ? prev.prov : '';
-    var usable = sid.length > 0 && dbDriveSpreadsheetIdIsUsableNow_(sid);
     var rangesJson = String(tgt.planner_month_ranges_json != null ? tgt.planner_month_ranges_json : '');
-    if (usable) {
+    if (sid.length > 0 && dbDriveSpreadsheetIdIsUsableNow_(sid)) {
+      out.reused++;
+      out.processed = ci + 1;
+      continue;
+    }
+    var title =
+      DB_PLANNER_STUDENT_FILE_TITLE_PREFIX +
+      dbPlannerStudentFileTitleSuffix_(tgt.display_name, uidW, mcW, lk);
+    var foundId = dbPlannerFindStudentSpreadsheetIdByTitle_(folderId, title);
+    var titleHit = foundId;
+    if (foundId.length && dbDriveSpreadsheetIdIsUsableNow_(foundId)) {
       try {
-        var ssSt = SpreadsheetApp.openById(sid);
-        dbPlannerEnsurePersonalTodoSheetsForStudent_(ssSt, rangesJson);
-        newRows.push([mcW, uidW, sid, provOld.length ? provOld : nowIso]);
-        out.reused++;
-        continue;
-      } catch (e1) {
-        Logger.log('dbPlannerProvisionStudentsFromRegistry_: open fail ' + sid + ' ' + (e1 && e1.message != null ? e1.message : String(e1)));
-        usable = false;
+        dbPlannerEnsurePersonalTodoSheetsForStudent_(SpreadsheetApp.openById(foundId), rangesJson);
+      } catch (eFound) {
+        Logger.log(
+          'dbPlannerProvisionStudentsFromRegistry_: title open fail ' +
+            foundId +
+            ' ' +
+            (eFound && eFound.message != null ? eFound.message : String(eFound))
+        );
+        foundId = '';
       }
+    } else {
+      foundId = '';
+    }
+    if (foundId.length) {
+      if (sid.length && sid !== foundId) {
+        dbPlannerTrashFileBestEffort_(sid);
+        out.trashedBroken++;
+      }
+      rememberAndWrite_(lk, mcW, uidW, foundId, nowIso);
+      out.reused++;
+      out.reusedByTitle++;
+      out.processed = ci + 1;
+      continue;
+    }
+    if (titleHit.length) {
+      out.provisionErrors++;
+      out.processed = ci + 1;
+      continue;
     }
     if (sid.length) {
       dbPlannerTrashFileBestEffort_(sid);
@@ -1136,16 +1324,15 @@ function dbPlannerProvisionStudentsFromRegistry_(masterSs) {
     var nid = dbPlannerCreateStudentPlannerSpreadsheet_(masterSs, tgt.display_name, uidW, mcW, lk, rangesJson);
     if (!nid.length) {
       out.provisionErrors++;
+      out.processed = ci + 1;
       continue;
     }
-    newRows.push([mcW, uidW, nid, nowIso]);
+    rememberAndWrite_(lk, mcW, uidW, nid, nowIso);
     out.provisioned++;
+    out.processed = ci + 1;
   }
-
-  dbClearDataRows2Plus_(shLinks, wL);
-  if (newRows.length) {
-    dbSetValuesFromRow2_(shLinks, newRows, wL);
-  }
+  out.processed = regTargets.length;
+  out.incomplete = false;
   return out;
 }
 

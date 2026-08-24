@@ -4239,6 +4239,13 @@ const PLAN_DEV_HTML = `<div class="sp-plan-devbar" id="sp-plan-devbar" role="reg
   <button type="button" class="btn btn--ghost sp-plan-devbar__btn" id="sp-plan-dev-init" title="Drive에 플래너 마스터 스프레드시트가 없으면 새로 만들고, 필요한 시트·헤더를 맞춥니다.">마스터 준비(파일·탭)</button>
   <button type="button" class="btn btn--ghost sp-plan-devbar__btn" id="sp-plan-dev-sync" title="주문 원천 DB에서 레지스트리를 갱신합니다. planner_registry에 수기로 넣은 행·프로필·코칭 열은 유지하고, 주문에서 다시 쓰는 행만 회원·주문 정보를 맞춥니다. 학생 todo 데이터는 지우지 않습니다.">동기화(레지스트리+학생파일)</button>
   <span class="sp-plan-devbar__msg" id="sp-plan-dev-msg" aria-live="polite"></span>
+</div>
+<div class="sp-overlay" id="sp-plan-sync-overlay" hidden aria-hidden="true">
+  <div class="sp-overlay-box">
+    <div class="sp-spinner" aria-hidden="true"></div>
+    <p class="sp-overlay-text" id="sp-plan-sync-overlay-title">동기화 중</p>
+    <p class="sp-overlay-sub" id="sp-plan-sync-overlay-desc">화면을 닫지 마세요. 학생 파일이 많을수록 수 분 걸릴 수 있습니다.</p>
+  </div>
 </div>`;
 
 const PLAN_APP_SHELL_START = `<div class="app-shell app-shell--plan">
@@ -10606,6 +10613,39 @@ function wireGate_(root) {
 
 /**
  * @param {HTMLElement} root
+ * @param {boolean} on
+ * @param {string} [title]
+ * @param {string} [sub]
+ */
+function setPlanSyncOverlay_(root, on, title, sub) {
+  const el = root.querySelector('#sp-plan-sync-overlay');
+  const tEl = root.querySelector('#sp-plan-sync-overlay-title');
+  const sEl = root.querySelector('#sp-plan-sync-overlay-desc');
+  if (tEl && title) {
+    tEl.textContent = title;
+  }
+  if (sEl && sub) {
+    sEl.textContent = sub;
+  }
+  if (on) {
+    root.classList.add('is-plan-syncing');
+    root.setAttribute('aria-busy', 'true');
+    if (el) {
+      el.removeAttribute('hidden');
+      el.setAttribute('aria-hidden', 'false');
+    }
+  } else {
+    root.classList.remove('is-plan-syncing');
+    root.removeAttribute('aria-busy');
+    if (el) {
+      el.setAttribute('hidden', '');
+      el.setAttribute('aria-hidden', 'true');
+    }
+  }
+}
+
+/**
+ * @param {HTMLElement} root
  */
 function wirePlanDevBar_(root) {
   const msg = root.querySelector('#sp-plan-dev-msg');
@@ -10619,6 +10659,7 @@ function wirePlanDevBar_(root) {
   }
 
   skipBtn.addEventListener('click', function () {
+    if (root.__spPlanSyncBusy) return;
     showDevMsg('제작용: 게이트 생략 · GAS 없이 원페이지만 표시');
     const gate = root.querySelector('.sp-plan-gate');
     const appMain = root.querySelector('#sp-plan-app-main');
@@ -10632,6 +10673,7 @@ function wirePlanDevBar_(root) {
   });
 
   initBtn.addEventListener('click', async function () {
+    if (root.__spPlanSyncBusy) return;
     showDevMsg('');
     const r = await plannerGasCall_({ action: 'initPlannerMasterSheets' });
     if (!r || !r.ok) {
@@ -10653,16 +10695,56 @@ function wirePlanDevBar_(root) {
   });
 
   syncBtn.addEventListener('click', async function () {
+    if (root.__spPlanSyncBusy) return;
+    root.__spPlanSyncBusy = true;
+    skipBtn.disabled = true;
+    initBtn.disabled = true;
+    syncBtn.disabled = true;
     showDevMsg('');
-    const r = await plannerGasCall_({ action: 'plannerRegistryRebuild' });
-    if (!r || !r.ok) {
-      const m = r && r.error && r.error.message != null ? String(r.error.message) : '동기화에 실패했습니다.';
-      showDevMsg(m);
-      return;
-    }
-    const d = /** @type {Record<string, number>} */ (r.data || {});
-    showDevMsg(
-      '레지스트리 ' +
+    setPlanSyncOverlay_(
+      root,
+      true,
+      '동기화 중',
+      '화면을 닫지 마세요. 학생 파일이 많을수록 수 분 걸릴 수 있습니다.'
+    );
+    try {
+      const maxRounds = 8;
+      let round = 0;
+      let lastProcessed = -1;
+      /** @type {Record<string, unknown>} */
+      let lastD = {};
+      let lastIncomplete = false;
+      while (round < maxRounds) {
+        round += 1;
+        const r = await plannerGasCall_({ action: 'plannerRegistryRebuild' });
+        if (!r || !r.ok) {
+          const m =
+            r && r.error && r.error.message != null ? String(r.error.message) : '동기화에 실패했습니다.';
+          showDevMsg(m);
+          return;
+        }
+        lastD = /** @type {Record<string, unknown>} */ (r.data || {});
+        lastIncomplete = Boolean(lastD.incomplete);
+        const processed = lastD.processed != null ? Number(lastD.processed) : 0;
+        const total = lastD.total != null ? Number(lastD.total) : 0;
+        if (!lastIncomplete) {
+          break;
+        }
+        if (round > 1 && processed <= lastProcessed) {
+          break;
+        }
+        lastProcessed = processed;
+        setPlanSyncOverlay_(
+          root,
+          true,
+          '동기화 이어서 처리 중',
+          (total > 0 ? String(processed) + ' / ' + String(total) + '명까지 반영했습니다. ' : '') +
+            '화면을 닫지 마세요.'
+        );
+      }
+      const d = lastD;
+      let line =
+        '동기화 완료. 레지스트리 ' +
         (d.written != null ? d.written : 0) +
         '행' +
         (d.preservedRegistryRows ? ', 수기 유지 ' + d.preservedRegistryRows : '') +
@@ -10670,8 +10752,23 @@ function wirePlanDevBar_(root) {
         (d.provisioned != null ? d.provisioned : 0) +
         ', 재사용 ' +
         (d.reusedStudentFiles != null ? d.reusedStudentFiles : 0) +
-        (d.provisionErrors ? ', 생성 실패 ' + d.provisionErrors : '')
-    );
+        (d.reusedByTitle ? ', 제목 재사용 ' + d.reusedByTitle : '') +
+        (d.provisionErrors ? ', 생성 실패 ' + d.provisionErrors : '');
+      if (lastIncomplete) {
+        const processed = d.processed != null ? Number(d.processed) : 0;
+        const total = d.total != null ? Number(d.total) : 0;
+        line =
+          (total > 0 ? String(processed) + ' / ' + String(total) + '명까지 반영했습니다. ' : '') +
+          '시간 제한으로 일부가 남았습니다. 같은 버튼을 한 번 더 눌러 주세요.';
+      }
+      showDevMsg(line);
+    } finally {
+      setPlanSyncOverlay_(root, false);
+      root.__spPlanSyncBusy = false;
+      skipBtn.disabled = false;
+      initBtn.disabled = false;
+      syncBtn.disabled = false;
+    }
   });
 }
 

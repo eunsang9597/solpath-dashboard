@@ -3869,6 +3869,18 @@ button.sp-stu-remark__item--open:hover {
   line-height: 1.35;
 }
 
+#solpath-plan-root #sp-plan-sync-overlay {
+  z-index: 1000000;
+}
+
+#solpath-plan-root.is-plan-syncing {
+  pointer-events: none;
+}
+
+#solpath-plan-root.is-plan-syncing #sp-plan-sync-overlay {
+  pointer-events: auto;
+}
+
 #solpath-plan-root .sp-plan-gate {
   display: flex;
   flex-direction: column;
