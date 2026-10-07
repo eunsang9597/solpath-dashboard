@@ -643,7 +643,7 @@ async function plannerStartPlanDemo_(root) {
 }
 
 /** `styles.css`가 막혀도 게이트 카드·가운데 유지 */
-const PLAN_GATE_FALLBACK_CSS = `#solpath-plan-root .sp-plan-gate{display:flex!important;flex-direction:column!important;align-items:center!important;margin-left:auto!important;margin-right:auto!important;width:100%!important;max-width:100%!important;box-sizing:border-box!important;padding:0.5rem 0 1.5rem!important}#solpath-plan-root .sp-plan-gate__card{width:100%!important;max-width:28.5rem!important;box-sizing:border-box!important;margin:0 auto!important;padding:2rem 1.5rem 1.75rem!important;background:#fff!important;border:1px solid #e7e2ef!important;border-radius:24px!important}#solpath-plan-root .sp-plan-gate__lead,#solpath-plan-root .sp-plan-gate__privacy{width:100%;max-width:100%;text-align:left;margin:0 0 0.45rem}#solpath-plan-root .sp-plan-gate__privacy{margin-bottom:1.15rem;color:#64748b;font-size:0.85rem}#solpath-plan-root .sp-plan-gate__pair{display:flex!important;flex-direction:column!important;flex-wrap:nowrap!important;align-items:stretch!important;justify-content:flex-start!important;gap:0.9rem!important;width:100%!important;max-width:100%!important;margin:0!important;padding:0!important;overflow:visible!important;box-sizing:border-box!important}#solpath-plan-root .sp-plan-gate__stack{display:flex!important;flex-direction:column!important;gap:0.32rem!important;flex:none!important;width:100%!important}#solpath-plan-root .sp-plan-gate__stack--tel{align-items:stretch!important}#solpath-plan-root .sp-plan-gate__lbl{font-size:0.75rem;font-weight:600;color:#1e293b;text-align:left;align-self:stretch}#solpath-plan-root .sp-plan-gate__tel{display:flex!important;flex-wrap:nowrap!important;align-items:center!important;gap:0.35rem!important;width:100%!important}#solpath-plan-root .sp-plan-gate__dash{color:#94a3b8;font-weight:600;flex-shrink:0}#solpath-plan-root .sp-plan-gate__input{box-sizing:border-box;padding:0.7rem 0.85rem;border:1px solid #e4dfec;border-radius:14px;font-size:1rem;width:100%}#solpath-plan-root .sp-plan-gate__input--seg3,#solpath-plan-root .sp-plan-gate__input--seg4{flex:1 1 0!important;width:auto!important;min-width:0!important;max-width:none!important;padding:0.7rem 0.4rem!important;text-align:center;box-sizing:border-box!important}#solpath-plan-root .sp-plan-gate__input--name{width:100%!important;min-width:0!important;max-width:none!important;text-align:left}#solpath-plan-root .sp-plan-gate__err{margin:0.5rem 0 0;width:100%;max-width:100%;text-align:left;color:#b71c1c;font-size:0.8rem}#solpath-plan-root .sp-plan-gate__btn{margin-top:1.15rem;align-self:stretch;width:100%}`;
+const PLAN_GATE_FALLBACK_CSS = `#solpath-plan-root .sp-plan-gate{display:flex!important;flex-direction:column!important;align-items:stretch!important;margin:0 auto!important;width:100%!important;max-width:100%!important;box-sizing:border-box!important;padding:0 0 1.25rem!important}#solpath-plan-root .sp-plan-gate__card{width:100%!important;max-width:100%!important;box-sizing:border-box!important;margin:0!important;padding:0!important;background:#f6f2fb!important;border:1px solid #e4d8f2!important;border-radius:18px!important;overflow:hidden!important}#solpath-plan-root .sp-plan-gate__head{display:flex!important;align-items:center!important;justify-content:space-between!important;gap:12px!important;padding:14px 22px!important;background:#9b82c4!important}#solpath-plan-root .sp-plan-gate__body{padding:22px 24px 24px!important}#solpath-plan-root .sp-plan-gate__lead,#solpath-plan-root .sp-plan-gate__privacy{width:100%;max-width:100%;text-align:left;margin:0 0 0.4rem}#solpath-plan-root .sp-plan-gate__privacy{margin-bottom:1rem;color:#7a7288;font-size:0.85rem}#solpath-plan-root .sp-plan-gate__pair{display:flex!important;flex-wrap:wrap!important;align-items:flex-end!important;justify-content:flex-start!important;gap:0.85rem 1.25rem!important;width:100%!important;max-width:100%!important;margin:0!important;padding:0!important;overflow:visible!important;box-sizing:border-box!important}#solpath-plan-root .sp-plan-gate__stack{display:flex!important;flex-direction:column!important;gap:0.32rem!important;flex:1 1 12rem!important;min-width:0!important}#solpath-plan-root .sp-plan-gate__stack--tel{align-items:stretch!important;flex:1.4 1 16rem!important}#solpath-plan-root .sp-plan-gate__lbl{font-size:0.75rem;font-weight:600;color:#1e293b;text-align:left;align-self:stretch}#solpath-plan-root .sp-plan-gate__tel{display:flex!important;flex-wrap:nowrap!important;align-items:center!important;gap:0.35rem!important;width:100%!important}#solpath-plan-root .sp-plan-gate__dash{color:#94a3b8;font-weight:600;flex-shrink:0}#solpath-plan-root .sp-plan-gate__input{box-sizing:border-box;padding:0.65rem 0.8rem;border:1px solid #e4dfec;border-radius:12px;font-size:1rem;width:100%;background:#fff}#solpath-plan-root .sp-plan-gate__input--seg3,#solpath-plan-root .sp-plan-gate__input--seg4{flex:1 1 0!important;width:auto!important;min-width:0!important;max-width:none!important;padding:0.65rem 0.4rem!important;text-align:center;box-sizing:border-box!important}#solpath-plan-root .sp-plan-gate__input--name{width:100%!important;min-width:0!important;max-width:none!important;text-align:left}#solpath-plan-root .sp-plan-gate__err{margin:0.5rem 0 0;width:100%;max-width:100%;text-align:left;color:#b71c1c;font-size:0.8rem}#solpath-plan-root .sp-plan-gate__btn{margin-top:1rem;align-self:flex-start;width:auto}`;
 
 function injectPlanGateFallbackCss_() {
   if (document.getElementById('sp-plan-gate-fallback-css')) return;
@@ -969,9 +969,11 @@ function wirePlannerAdminUnlockOnce_(root) {
   const profileTitle = root.querySelector('#sp-plan-student-info-title');
   /** @type {{ count: number, lastAt: number }} */
   const st = { count: 0, lastAt: 0 };
+  const gateTitle = root.querySelector('#sp-plan-gate-title');
   if (tap) plannerAdminUnlockOnFiveTap_(tap, root, st);
   if (profileTitle) plannerAdminUnlockOnFiveTap_(profileTitle, root, st);
-  if (!tap && !profileTitle) return;
+  if (gateTitle) plannerAdminUnlockOnFiveTap_(gateTitle, root, st);
+  if (!tap && !profileTitle && !gateTitle) return;
 
   if (!modal) return;
   modal.addEventListener('click', function (e) {
@@ -4369,8 +4371,11 @@ const PLAN_STUDENT_MANUAL_REG_HTML = `<div class="sp-plan-studentManualReg" id="
 const GATE_HTML = `<div class="sp-plan-gate">
   ${PLAN_STUDENT_MANUAL_REG_HTML}
   <div class="sp-plan-gate__card">
-  <p class="sp-plan-gate__eyebrow">솔패스 학습실</p>
-  <h2 class="sp-plan-gate__title">휴대전화로 <span class="sp-plan-gate__titleEm">본인</span> 확인</h2>
+  <div class="sp-plan-gate__head">
+    <button type="button" class="sp-plan-gate__headTitle" id="sp-plan-gate-title">솔패스 학습실</button>
+    <span class="sp-plan-gate__headMeta">본인 확인</span>
+  </div>
+  <div class="sp-plan-gate__body">
   <p class="sp-plan-gate__lead">솔패스 수강 확인을 위해 휴대전화 번호를 입력해 주세요.</p>
   <p class="sp-plan-gate__privacy">입력하신 정보는 본인 확인과 플래너 이용에만 사용됩니다.</p>
   <div class="sp-plan-gate__pair" role="group" aria-label="이름 및 휴대전화">
@@ -4428,6 +4433,7 @@ const GATE_HTML = `<div class="sp-plan-gate">
   <p class="sp-plan-gate__status" id="sp-plan-gate-status" hidden aria-live="polite" aria-busy="false"></p>
   <p class="sp-plan-gate__err" id="sp-plan-gate-err" hidden></p>
   <button type="button" class="btn btn--primary sp-plan-gate__btn" id="sp-plan-gate-submit">확인</button>
+  </div>
   </div>
 </div>`;
 
