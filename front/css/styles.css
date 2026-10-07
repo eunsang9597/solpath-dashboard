@@ -3004,6 +3004,33 @@ button.sp-stu-remark__item--open:hover {
   display: none !important;
 }
 
+#solpath-plan-root.is-plan-gate-pending.solpath-mount {
+  background: #f4f1fa;
+  padding: 1.25rem 1rem 3rem !important;
+  border-radius: 24px;
+}
+
+#solpath-plan-root.is-plan-gate-pending .app-shell--plan {
+  padding: 0.15rem 0 0;
+}
+
+#solpath-plan-root.is-plan-gate-pending .app-shell--plan > .app-header {
+  margin-bottom: 0;
+}
+
+#solpath-plan-root.is-plan-gate-pending .app-shell--plan > .app-header .brand > div {
+  display: none;
+}
+
+#solpath-plan-root.is-plan-gate-pending .app-shell--plan .brand-mark.sp-plan-adminTap {
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  opacity: 0.28;
+  background: #6b3fa0;
+  box-shadow: none;
+}
+
 /* 어드민 모달은 main 밖 — 게이트 대기 중에도 표시 */
 #solpath-plan-root #sp-plan-admin-modal:not([hidden]) {
   display: block !important;
@@ -3091,11 +3118,11 @@ button.sp-stu-remark__item--open:hover {
 
 #solpath-plan-root .sp-plan-gate .sp-plan-studentManualReg {
   width: 100%;
-  max-width: 100%;
-  margin: 0 0 1.1rem;
+  max-width: 28.5rem;
+  margin: 0 auto 1.1rem;
   padding-bottom: 0.85rem;
-  border-bottom: 1px solid #e2e8f0;
-  border-radius: 10px 10px 0 0;
+  border-bottom: 1px solid #e7e2ef;
+  border-radius: 16px;
   border-left-color: #e9d5ff;
   border-right-color: #e9d5ff;
   border-top-color: #e9d5ff;
@@ -3888,41 +3915,89 @@ button.sp-stu-remark__item--open:hover {
   margin-inline: auto;
   box-sizing: border-box;
   width: 100%;
-  max-width: min(100%, 52rem);
-  padding: 1rem clamp(0.75rem, 3vw, 1.75rem) 1.25rem;
+  max-width: 100%;
+  padding: 0.5rem 0 1.5rem;
+}
+
+#solpath-plan-root .sp-plan-gate__card {
+  width: 100%;
+  max-width: 28.5rem;
+  margin: 0 auto;
+  box-sizing: border-box;
+  padding: 2rem 1.65rem 1.75rem;
+  background: #fff;
+  border: 1px solid #e7e2ef;
+  border-radius: 24px;
+}
+
+#solpath-plan-root .sp-plan-gate__eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 0 0.85rem;
+  font-size: calc(0.72rem + var(--sp-text-bump));
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #6b3fa0;
+  line-height: 1.3;
+}
+
+#solpath-plan-root .sp-plan-gate__eyebrow::before {
+  content: '';
+  width: 1.15rem;
+  height: 2px;
+  flex-shrink: 0;
+  background: #c24a2a;
+  border-radius: 1px;
+}
+
+#solpath-plan-root .sp-plan-gate__title {
+  margin: 0 0 0.7rem;
+  font-size: calc(1.55rem + var(--sp-text-bump));
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 1.28;
+  color: #1a1a1a;
+  word-break: keep-all;
+}
+
+#solpath-plan-root .sp-plan-gate__titleEm {
+  color: #6b3fa0;
 }
 
 #solpath-plan-root .sp-plan-gate__lead {
-  margin: 0 0 0.5rem;
+  margin: 0 0 0.4rem;
   width: 100%;
   max-width: 100%;
-  text-align: center;
-  font-size: calc(0.82rem + var(--sp-text-bump));
-  color: #334155;
-  line-height: 1.5;
+  text-align: left;
+  font-size: calc(0.86rem + var(--sp-text-bump));
+  color: #4b4458;
+  line-height: 1.55;
+  word-break: keep-all;
 }
 
 #solpath-plan-root .sp-plan-gate__privacy {
-  margin: 0 0 1rem;
+  margin: 0 0 1.2rem;
   width: 100%;
   max-width: 100%;
-  text-align: center;
-  font-size: calc(0.72rem + var(--sp-text-bump));
-  color: #64748b;
-  line-height: 1.45;
+  text-align: left;
+  font-size: calc(0.76rem + var(--sp-text-bump));
+  color: #847c90;
+  line-height: 1.5;
+  word-break: keep-all;
 }
 
 #solpath-plan-root .sp-plan-gate__pair {
   display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  justify-content: center;
-  gap: 0.75rem 2rem;
+  flex-direction: column;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 0.9rem;
   width: 100%;
   max-width: 100%;
-  margin-inline: auto;
-  padding-inline: 0.25rem;
-  /* overflow-x:auto 는 스크롤 트랙이 입력행과 겹쳐 보이는 경우가 있어 제거(좁은 화면은 wrap). */
+  margin: 0;
+  padding: 0;
   overflow: visible;
   box-sizing: border-box;
 }
@@ -3930,82 +4005,83 @@ button.sp-stu-remark__item--open:hover {
 #solpath-plan-root .sp-plan-gate__stack {
   display: flex;
   flex-direction: column;
-  flex: 0 0 auto;
+  flex: none;
   align-items: stretch;
-  gap: 0.28rem;
+  gap: 0.32rem;
+  width: 100%;
   min-width: 0;
 }
 
 #solpath-plan-root .sp-plan-gate__stack--tel {
-  align-items: flex-start;
+  align-items: stretch;
 }
 
 #solpath-plan-root .sp-plan-gate__lbl {
   font-size: calc(0.72rem + var(--sp-text-bump));
-  font-weight: 600;
-  color: #1e293b;
+  font-weight: 700;
+  color: #2a2433;
   line-height: 1.2;
   text-align: left;
   align-self: stretch;
 }
 
 #solpath-plan-root .sp-plan-gate__tel {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   flex-wrap: nowrap;
-  gap: 0.35rem;
+  gap: 0.4rem;
+  width: 100%;
+  min-width: 0;
 }
 
 #solpath-plan-root .sp-plan-gate__telhint {
   margin: 0.35rem 0 0;
   width: 100%;
   max-width: 100%;
-  text-align: center;
+  text-align: left;
   font-size: calc(0.68rem + var(--sp-text-bump));
-  color: #64748b;
+  color: #847c90;
   line-height: 1.35;
 }
 
 #solpath-plan-root .sp-plan-gate__dash {
-  color: #94a3b8;
+  color: #b4adc0;
   font-weight: 600;
   flex-shrink: 0;
 }
 
 #solpath-plan-root .sp-plan-gate__input {
   box-sizing: border-box;
-  padding: 0.45rem 0.35rem;
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
+  width: 100%;
+  padding: 0.7rem 0.85rem;
+  border: 1px solid #e4dfec;
+  border-radius: 14px;
+  background: #fff;
   font-size: calc(0.95rem + var(--sp-text-bump));
+  color: #1a1a1a;
+}
+
+#solpath-plan-root .sp-plan-gate__input:focus {
+  outline: 2px solid rgba(107, 63, 160, 0.28);
+  outline-offset: 1px;
+  border-color: #b9a8d4;
+}
+
+#solpath-plan-root .sp-plan-gate__input--seg3,
+#solpath-plan-root .sp-plan-gate__input--seg4 {
+  flex: 1 1 0;
+  width: auto;
+  min-width: 0;
+  max-width: none;
+  padding: 0.7rem 0.4rem;
   text-align: center;
 }
 
-#solpath-plan-root .sp-plan-gate__input--seg3 {
-  box-sizing: border-box;
-  width: 6.5rem;
-  min-width: 6.5rem;
-  max-width: 7.5rem;
-  padding: 0.5rem 0.65rem;
-  flex-shrink: 0;
-}
-
-#solpath-plan-root .sp-plan-gate__input--seg4 {
-  box-sizing: border-box;
-  width: 8rem;
-  min-width: 8rem;
-  max-width: 9rem;
-  padding: 0.5rem 0.65rem;
-  flex-shrink: 0;
-}
-
 #solpath-plan-root .sp-plan-gate__input--name {
-  width: min(100%, 14rem);
-  min-width: 6.5rem;
-  max-width: 20rem;
+  width: 100%;
+  min-width: 0;
+  max-width: none;
   text-align: left;
-  padding-left: 0.45rem;
-  padding-right: 0.45rem;
 }
 
 #solpath-plan-root .sp-plan-gate__status {
@@ -4013,10 +4089,10 @@ button.sp-stu-remark__item--open:hover {
   width: 100%;
   max-width: 100%;
   min-height: 1.35rem;
-  text-align: center;
+  text-align: left;
   font-size: calc(0.8rem + var(--sp-text-bump));
   font-weight: 650;
-  color: #4a148c;
+  color: #6b3fa0;
   line-height: 1.4;
 }
 
@@ -4031,8 +4107,8 @@ button.sp-stu-remark__item--open:hover {
   height: 0.85rem;
   margin-right: 0.4rem;
   vertical-align: -0.12em;
-  border: 2px solid #c4b5fd;
-  border-top-color: #4a148c;
+  border: 2px solid #d8ccec;
+  border-top-color: #6b3fa0;
   border-radius: 50%;
   animation: sp-plan-gate-spin 0.75s linear infinite;
 }
@@ -4057,15 +4133,36 @@ button.sp-stu-remark__item--open:hover {
   margin: 0.5rem 0 0;
   width: 100%;
   max-width: 100%;
-  text-align: center;
+  text-align: left;
   font-size: calc(0.78rem + var(--sp-text-bump));
   color: #b71c1c;
   line-height: 1.4;
 }
 
-#solpath-plan-root .sp-plan-gate__btn {
-  margin-top: 0.85rem;
-  align-self: center;
+#solpath-plan-root .sp-plan-gate__btn.btn--primary {
+  margin-top: 1.15rem;
+  align-self: stretch;
+  width: 100%;
+  border-radius: 999px;
+  background: #c24a2a;
+  color: #fff;
+  box-shadow: none;
+}
+
+#solpath-plan-root .sp-plan-gate__btn.btn--primary:hover:not(:disabled) {
+  background: #a83e24;
+  transform: translateY(-1px);
+}
+
+@media (max-width: 720px) {
+  #solpath-plan-root .sp-plan-gate__card {
+    padding: 1.55rem 1.15rem 1.4rem;
+    border-radius: 20px;
+  }
+
+  #solpath-plan-root .sp-plan-gate__title {
+    font-size: calc(1.32rem + var(--sp-text-bump));
+  }
 }
 
 #solpath-plan-root .app-shell--plan .sp-plan-banner {
