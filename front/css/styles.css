@@ -2974,28 +2974,56 @@ button.sp-stu-remark__item--open:hover {
   margin-bottom: 0.65rem;
 }
 
-#solpath-plan-root .app-shell--plan .brand-mark.sp-plan-adminTap {
+#solpath-plan-root .sp-plan-appHead {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0;
+  margin: 0 0 1.25rem;
+  padding: 0;
+}
+
+#solpath-plan-root .sp-plan-appHead__eyebrow {
+  margin: 0 0 0.45rem;
+  font-size: calc(0.72rem + var(--sp-text-bump));
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  color: #9b82c4;
+  line-height: 1.3;
+}
+
+#solpath-plan-root .sp-plan-appHead__title {
   appearance: none;
   -webkit-appearance: none;
-  border: none;
-  padding: 0;
-  margin: 0;
-  cursor: pointer;
   display: block;
+  width: auto;
+  max-width: 100%;
+  margin: 0 0 0.4rem;
+  padding: 0;
+  border: none;
+  background: none;
   font: inherit;
-  color: transparent;
-  flex-shrink: 0;
+  font-size: clamp(1.55rem, 2.6vw, 2.15rem);
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  color: #1c1630;
+  line-height: 1.2;
+  text-align: left;
+  cursor: pointer;
+  word-break: keep-all;
 }
 
-#solpath-plan-root .app-shell--plan .brand-mark.sp-plan-adminTap:focus-visible {
-  outline: 2px solid #7c3aed;
-  outline-offset: 2px;
+#solpath-plan-root .sp-plan-appHead__title:focus-visible {
+  outline: 2px solid #9b82c4;
+  outline-offset: 4px;
+  border-radius: 4px;
 }
 
-#solpath-plan-root.is-plan-admin .app-shell--plan .brand-mark.sp-plan-adminTap {
+#solpath-plan-root.is-plan-admin .sp-plan-appHead__title {
   box-shadow:
     0 0 0 2px #faf5ff,
     0 0 0 4px #7c3aed;
+  border-radius: 4px;
 }
 
 /* 게이트 전: 학생 정보·월간 플랜·달력 본문 전부 숨김(임웹 등 [hidden] 무력화 대비) */
@@ -3054,8 +3082,14 @@ button.sp-stu-remark__item--open:hover {
   padding: 0;
 }
 
-#solpath-plan-root.is-plan-gate-pending .app-shell--plan > .app-header {
-  display: none;
+#solpath-plan-root.is-plan-gate-pending .app-shell--plan > .app-header,
+#solpath-plan-root.is-plan-gate-loading .app-shell--plan > .app-header,
+#solpath-plan-root:has(.sp-plan-gate:not([hidden])) .app-shell--plan > .app-header {
+  display: none !important;
+}
+
+#solpath-plan-root:has(.sp-plan-gate:not([hidden])) #sp-plan-app-main {
+  display: none !important;
 }
 
 /* 어드민 모달은 main 밖 — 게이트 대기 중에도 표시 */
@@ -3077,16 +3111,17 @@ button.sp-stu-remark__item--open:hover {
 }
 
 #solpath-plan-root .app-shell--plan .brand__title {
-  color: #4a148c;
+  color: #1c1630;
 }
 
 #solpath-plan-root .app-shell--plan .sp-plan-desc {
-  margin: 0.15rem 0 0;
-  font-size: calc(0.8rem + var(--sp-text-bump));
-  color: #1e293b;
-  font-weight: 600;
+  margin: 0;
+  font-size: calc(0.82rem + var(--sp-text-bump));
+  color: #7a7288;
+  font-weight: 500;
   line-height: 1.5;
-  max-width: 100%;
+  max-width: 36rem;
+  word-break: keep-all;
 }
 
 #solpath-plan-root .app-shell--plan .panel--hero.sp-plan-body {
@@ -4274,6 +4309,14 @@ button.sp-stu-remark__item--open:hover {
     padding-top: 0;
   }
 
+  #solpath-plan-root .sp-plan-appHead {
+    margin-bottom: 0.9rem;
+  }
+
+  #solpath-plan-root .sp-plan-appHead__title {
+    font-size: 1.55rem;
+  }
+
   #solpath-plan-root .sp-plan-gate__title {
     font-size: 1.7rem;
     margin-bottom: 0.65rem;
@@ -4292,6 +4335,10 @@ button.sp-stu-remark__item--open:hover {
 
   #solpath-plan-root.solpath-mount:not(.is-plan-gate-pending) {
     padding: 0.7rem 0.65rem 1.1rem !important;
+  }
+
+  #solpath-plan-root .sp-plan-appHead__title {
+    font-size: 1.4rem;
   }
 
   #solpath-plan-root .sp-plan-gate__title {
