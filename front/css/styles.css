@@ -3066,7 +3066,7 @@ button.sp-stu-remark__item--open:hover {
 }
 
 #solpath-plan-root:not(.is-plan-gate-pending) .sp-plan-rootinner {
-  width: min(100% - 4rem, 90rem) !important;
+  width: calc(100% - 2rem) !important;
   max-width: none !important;
   margin-inline: auto;
   min-width: 0;
