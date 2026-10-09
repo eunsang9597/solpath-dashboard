@@ -3036,7 +3036,7 @@ button.sp-stu-remark__item--open:hover {
   background: #f6f3fb;
   border-radius: 0;
   box-sizing: border-box !important;
-  padding: 1rem 0 3.25rem !important;
+  padding: 24px 0 40px !important;
 }
 
 @media (min-width: 861px) {
@@ -3977,7 +3977,7 @@ button.sp-stu-remark__item--open:hover {
   align-items: stretch;
   margin-inline: auto;
   box-sizing: border-box;
-  width: min(100% - 2.5rem, 70rem);
+  width: min(1180px, calc(100% - 40px));
   max-width: none;
   min-width: 0;
   padding: 0;
@@ -4281,7 +4281,7 @@ button.sp-stu-remark__item--open:hover {
     max-width: 100% !important;
     margin-left: 0 !important;
     margin-right: 0 !important;
-    padding: 1.75rem 1rem 2.15rem !important;
+    padding: 24px 0 30px !important;
   }
 
   #solpath-plan-root.solpath-mount:not(.is-plan-gate-pending) {
@@ -4304,7 +4304,7 @@ button.sp-stu-remark__item--open:hover {
   }
 
   #solpath-plan-root .sp-plan-gate {
-    width: 100%;
+    width: min(1180px, calc(100% - 32px));
     max-width: none;
     padding: 0;
   }
@@ -4339,7 +4339,7 @@ button.sp-stu-remark__item--open:hover {
 
 @media (max-width: 480px) {
   #solpath-plan-root.is-plan-gate-pending.solpath-mount {
-    padding: 1.35rem 0.85rem 1.75rem !important;
+    padding: 24px 0 30px !important;
   }
 
   #solpath-plan-root.solpath-mount:not(.is-plan-gate-pending) {
