@@ -2305,48 +2305,57 @@ function dbPlannerRegistryProfileSave_(body) {
     'plan_features',
     'subject_guides_json'
   ];
-  var monCol = 0;
-  var mergedMonthly = null;
-  if (monthlyPatch && Object.keys(monthlyPatch).length) {
-    monCol = headers.indexOf('monthly_plan_notices_json') + 1;
-    if (monCol > 0) {
-      mergedMonthly = dbPlannerMergeMonthlyNoticesCell_(sh.getRange(rowIx, monCol).getValue(), monthlyPatch);
-      if (mergedMonthly == null) {
-        return {
-          ok: false,
-          error: {
-            code: 'PLANNER_MONTHLY_NOTICES_CORRUPT',
-            message: '기존 월 상담기록(JSON)을 읽지 못해 아무것도 저장하지 않았습니다. 시트 값을 확인해 주세요.'
-          }
-        };
+  var seq = dbPlannerSaveSeqFromBody_(body);
+  var seqKey = dbPlannerSaveSeqCacheKey_('prof', linkKeyReq);
+  return dbPlannerWithWriteLock_(function () {
+    if (dbPlannerSaveSeqIsStale_(seqKey, seq)) {
+      return { ok: true, data: { stale: true, skipped: true, written: 0, save_seq: seq } };
+    }
+    var monCol = 0;
+    var mergedMonthly = null;
+    if (monthlyPatch && Object.keys(monthlyPatch).length) {
+      monCol = headers.indexOf('monthly_plan_notices_json') + 1;
+      if (monCol > 0) {
+        mergedMonthly = dbPlannerMergeMonthlyNoticesCell_(sh.getRange(rowIx, monCol).getValue(), monthlyPatch);
+        if (mergedMonthly == null) {
+          return {
+            ok: false,
+            error: {
+              code: 'PLANNER_MONTHLY_NOTICES_CORRUPT',
+              message: '기존 월 상담기록(JSON)을 읽지 못해 아무것도 저장하지 않았습니다. 시트 값을 확인해 주세요.'
+            }
+          };
+        }
       }
     }
-  }
-  var written = 0;
-  var ki;
-  for (ki = 0; ki < keys.length; ki++) {
-    var key = keys[ki];
-    if (!profIn || !Object.prototype.hasOwnProperty.call(profIn, key)) {
-      continue;
+    var written = 0;
+    var ki;
+    for (ki = 0; ki < keys.length; ki++) {
+      var key = keys[ki];
+      if (!profIn || !Object.prototype.hasOwnProperty.call(profIn, key)) {
+        continue;
+      }
+      var col = headers.indexOf(key) + 1;
+      if (col < 1) {
+        continue;
+      }
+      var v = profIn[key] != null ? String(profIn[key]) : '';
+      if (key === 'subject_guides_json') {
+        v = dbPlannerNormalizeRegistryJsonObjectCell_(v);
+      }
+      if (dbPlannerWriteRegistryCellIfChanged_(sh, rowIx, col, v)) {
+        written++;
+      }
     }
-    var col = headers.indexOf(key) + 1;
-    if (col < 1) {
-      continue;
+    if (mergedMonthly != null && monCol > 0) {
+      if (dbPlannerWriteRegistryCellIfChanged_(sh, rowIx, monCol, mergedMonthly)) {
+        written++;
+      }
     }
-    var v = profIn[key] != null ? String(profIn[key]) : '';
-    if (key === 'subject_guides_json') {
-      v = dbPlannerNormalizeRegistryJsonObjectCell_(v);
-    }
-    if (dbPlannerWriteRegistryCellIfChanged_(sh, rowIx, col, v)) {
-      written++;
-    }
-  }
-  if (mergedMonthly != null && monCol > 0) {
-    if (dbPlannerWriteRegistryCellIfChanged_(sh, rowIx, monCol, mergedMonthly)) {
-      written++;
-    }
-  }
-  return { ok: true, data: { written: written } };
+    SpreadsheetApp.flush();
+    dbPlannerStoreSaveSeq_(seqKey, seq);
+    return { ok: true, data: { written: written, save_seq: seq } };
+  });
 }
 
 /**
@@ -2667,6 +2676,137 @@ function dbPlannerPersonalTodosMatrixFromPayload_(todosRaw, ymNorm, todayYmd, le
   return matrix;
 }
 
+/** 저장 락 대기. 레지스트리 동기화가 락을 잡고 있으면 이 시간 뒤 실패로 돌려 화면을 풀어 준다. */
+var PLANNER_WRITE_LOCK_WAIT_MS = 20000;
+/** 학생·월(또는 프로필)별 마지막 저장 번호. 더 작은 번호가 늦게 끝나도 시트에 쓰지 않는다. */
+var PLANNER_SAVE_SEQ_CACHE_SEC = 21600;
+
+/**
+ * @param {Object} body
+ * @return {number} 없으면 0
+ */
+function dbPlannerSaveSeqFromBody_(body) {
+  body = body || {};
+  var n = Number(body.save_seq != null ? body.save_seq : body.saveSeq != null ? body.saveSeq : 0);
+  if (!isFinite(n) || n <= 0) {
+    return 0;
+  }
+  return Math.floor(n);
+}
+
+/**
+ * @return {Object}
+ */
+function dbPlannerWriteLockBusy_() {
+  return {
+    ok: false,
+    error: {
+      code: 'PLANNER_WRITE_BUSY',
+      message: '다른 저장이 진행 중입니다. 잠시 후 다시 저장해 주세요.'
+    }
+  };
+}
+
+/**
+ * 스크립트 락을 잡은 동안만 `fn`을 실행한다. 못 잡으면 시트를 쓰지 않고 실패를 돌려준다.
+ * @param {function(): Object} fn
+ * @return {Object}
+ */
+function dbPlannerWithWriteLock_(fn) {
+  var lock = LockService.getScriptLock();
+  var got = false;
+  try {
+    got = lock.tryLock(PLANNER_WRITE_LOCK_WAIT_MS);
+  } catch (eLock) {
+    got = false;
+  }
+  if (!got) {
+    return dbPlannerWriteLockBusy_();
+  }
+  try {
+    return fn();
+  } finally {
+    try {
+      lock.releaseLock();
+    } catch (eRel) {}
+  }
+}
+
+/**
+ * @param {string} kind
+ * @param {string} id
+ * @return {string}
+ */
+function dbPlannerSaveSeqCacheKey_(kind, id) {
+  var s = String(id != null ? id : '').replace(/[^A-Za-z0-9_-]/g, '');
+  if (s.length > 180) {
+    s = s.slice(0, 180);
+  }
+  return 'plseq_' + String(kind || 'x') + '_' + s;
+}
+
+/**
+ * @param {string} key
+ * @return {number}
+ */
+function dbPlannerReadSaveSeq_(key) {
+  var raw = CacheService.getScriptCache().get(key);
+  var n = raw != null ? Number(raw) : 0;
+  if (!isFinite(n) || n <= 0) {
+    return 0;
+  }
+  return Math.floor(n);
+}
+
+/**
+ * @param {string} key
+ * @param {number} seq
+ */
+function dbPlannerStoreSaveSeq_(key, seq) {
+  if (!seq) {
+    return;
+  }
+  try {
+    CacheService.getScriptCache().put(key, String(seq), PLANNER_SAVE_SEQ_CACHE_SEC);
+  } catch (ePut) {
+    Logger.log('dbPlannerStoreSaveSeq_: ' + (ePut && ePut.message != null ? ePut.message : String(ePut)));
+  }
+}
+
+/**
+ * @param {string} key
+ * @param {number} seq
+ * @return {boolean}
+ */
+function dbPlannerSaveSeqIsStale_(key, seq) {
+  if (!seq) {
+    return false;
+  }
+  return dbPlannerReadSaveSeq_(key) > seq;
+}
+
+/**
+ * @param {string} ymNorm
+ * @param {number} seq
+ * @param {number} batchIndex
+ * @param {number} batchTotal
+ * @return {Object}
+ */
+function dbPlannerSaveSeqStaleResult_(ymNorm, seq, batchIndex, batchTotal) {
+  return {
+    ok: true,
+    data: {
+      stale: true,
+      skipped: true,
+      written: 0,
+      year_month: ymNorm,
+      batch_index: batchIndex,
+      batch_total: batchTotal,
+      save_seq: seq
+    }
+  };
+}
+
 /**
  * @param {string} sid
  * @param {string} ymNorm
@@ -2754,13 +2894,18 @@ function dbPlannerApplyBufferDoneKey_(sid, ymNorm, sessionId) {
  * @param {Array[]} matrix
  * @param {number} batchIndex
  * @param {number} batchTotal
+ * @param {number} seq
+ * @param {string} seqKey
  * @return {Object}
  */
-function dbPlannerPersonalTodosApplyBuffered_(ctx, sessionId, matrix, batchIndex, batchTotal) {
+function dbPlannerPersonalTodosApplyBuffered_(ctx, sessionId, matrix, batchIndex, batchTotal, seq, seqKey) {
   var cache = CacheService.getScriptCache();
   var doneKey = dbPlannerApplyBufferDoneKey_(ctx.sid, ctx.ymNorm, sessionId);
   var doneRaw = cache.get(doneKey);
   if (doneRaw) {
+    if (dbPlannerSaveSeqIsStale_(seqKey, seq)) {
+      return dbPlannerSaveSeqStaleResult_(ctx.ymNorm, seq, batchIndex, batchTotal);
+    }
     try {
       var doneObj = JSON.parse(doneRaw);
       return {
@@ -2825,61 +2970,70 @@ function dbPlannerPersonalTodosApplyBuffered_(ctx, sessionId, matrix, batchIndex
     };
   }
 
-  var merged = [];
-  var i;
-  for (i = 0; i < batchTotal; i++) {
-    var cr = cache.get(dbPlannerApplyBufferChunkKey_(ctx.sid, ctx.ymNorm, sessionId, i));
-    if (!cr) {
-      return {
-        ok: false,
-        error: {
-          code: 'PLANNER_WRITE_FAILED',
-          message: '분할 저장 chunk ' + String(i + 1) + '/' + String(batchTotal) + '가 없습니다. 처음부터 다시 저장해 주세요.'
+  if (dbPlannerSaveSeqIsStale_(seqKey, seq)) {
+    return dbPlannerSaveSeqStaleResult_(ctx.ymNorm, seq, batchIndex, batchTotal);
+  }
+
+  return dbPlannerWithWriteLock_(function () {
+    if (dbPlannerSaveSeqIsStale_(seqKey, seq)) {
+      return dbPlannerSaveSeqStaleResult_(ctx.ymNorm, seq, batchIndex, batchTotal);
+    }
+    var merged = [];
+    var i;
+    for (i = 0; i < batchTotal; i++) {
+      var cr = cache.get(dbPlannerApplyBufferChunkKey_(ctx.sid, ctx.ymNorm, sessionId, i));
+      if (!cr) {
+        return {
+          ok: false,
+          error: {
+            code: 'PLANNER_WRITE_FAILED',
+            message: '분할 저장 chunk ' + String(i + 1) + '/' + String(batchTotal) + '가 없습니다. 처음부터 다시 저장해 주세요.'
+          }
+        };
+      }
+      try {
+        var part = JSON.parse(cr);
+        if (part && Object.prototype.toString.call(part) === '[object Array]') {
+          merged = merged.concat(part);
         }
-      };
+      } catch (eParse) {
+        return {
+          ok: false,
+          error: {
+            code: 'PLANNER_WRITE_FAILED',
+            message: '분할 저장 chunk 파싱 실패: ' + (eParse && eParse.message != null ? String(eParse.message) : String(eParse))
+          }
+        };
+      }
     }
     try {
-      var part = JSON.parse(cr);
-      if (part && Object.prototype.toString.call(part) === '[object Array]') {
-        merged = merged.concat(part);
-      }
-    } catch (eParse) {
+      dbPlannerPersonalTodosWriteMatrix_(ctx.sid, ctx.ymNorm, merged, 'replace');
+      SpreadsheetApp.flush();
+    } catch (eW) {
       return {
         ok: false,
-        error: {
-          code: 'PLANNER_WRITE_FAILED',
-          message: '분할 저장 chunk 파싱 실패: ' + (eParse && eParse.message != null ? String(eParse.message) : String(eParse))
-        }
+        error: { code: 'PLANNER_WRITE_FAILED', message: eW && eW.message != null ? String(eW.message) : String(eW) }
       };
     }
-  }
-
-  try {
-    dbPlannerPersonalTodosWriteMatrix_(ctx.sid, ctx.ymNorm, merged, 'replace');
-  } catch (eW) {
-    return {
-      ok: false,
-      error: { code: 'PLANNER_WRITE_FAILED', message: eW && eW.message != null ? String(eW.message) : String(eW) }
-    };
-  }
-
-  for (i = 0; i < batchTotal; i++) {
-    cache.remove(dbPlannerApplyBufferChunkKey_(ctx.sid, ctx.ymNorm, sessionId, i));
-  }
-  cache.remove(metaKey);
-  cache.put(doneKey, JSON.stringify({ written: merged.length }), PLANNER_APPLY_BUF_CACHE_SEC);
-
-  return {
-    ok: true,
-    data: {
-      written: merged.length,
-      year_month: ctx.ymNorm,
-      batch_index: batchIndex,
-      batch_total: batchTotal,
-      apply_session_id: sessionId,
-      committed: true
+    dbPlannerStoreSaveSeq_(seqKey, seq);
+    for (i = 0; i < batchTotal; i++) {
+      cache.remove(dbPlannerApplyBufferChunkKey_(ctx.sid, ctx.ymNorm, sessionId, i));
     }
-  };
+    cache.remove(metaKey);
+    cache.put(doneKey, JSON.stringify({ written: merged.length }), PLANNER_APPLY_BUF_CACHE_SEC);
+    return {
+      ok: true,
+      data: {
+        written: merged.length,
+        year_month: ctx.ymNorm,
+        batch_index: batchIndex,
+        batch_total: batchTotal,
+        apply_session_id: sessionId,
+        save_seq: seq,
+        committed: true
+      }
+    };
+  });
 }
 
 /**
@@ -2923,27 +3077,36 @@ function dbPlannerPersonalTodosApply_(body) {
     lectureIdSet = dbPlannerCurriculumLectureIdSetCached_(ctx.ss);
   }
   var matrix = dbPlannerPersonalTodosMatrixFromPayload_(todosRaw, ctx.ymNorm, todayYmd, lectureIdSet);
+  var seq = dbPlannerSaveSeqFromBody_(body);
+  var seqKey = dbPlannerSaveSeqCacheKey_('todo', ctx.sid + '_' + ctx.ymNorm);
   try {
     if (batchTotal <= 1) {
-      dbPlannerPersonalTodosWriteMatrix_(ctx.sid, ctx.ymNorm, matrix, 'replace');
-    } else {
-      return dbPlannerPersonalTodosApplyBuffered_(ctx, sessionId, matrix, batchIndex, batchTotal);
+      return dbPlannerWithWriteLock_(function () {
+        if (dbPlannerSaveSeqIsStale_(seqKey, seq)) {
+          return dbPlannerSaveSeqStaleResult_(ctx.ymNorm, seq, batchIndex, batchTotal);
+        }
+        dbPlannerPersonalTodosWriteMatrix_(ctx.sid, ctx.ymNorm, matrix, 'replace');
+        SpreadsheetApp.flush();
+        dbPlannerStoreSaveSeq_(seqKey, seq);
+        return {
+          ok: true,
+          data: {
+            written: matrix.length,
+            year_month: ctx.ymNorm,
+            batch_index: batchIndex,
+            batch_total: batchTotal,
+            save_seq: seq
+          }
+        };
+      });
     }
+    return dbPlannerPersonalTodosApplyBuffered_(ctx, sessionId, matrix, batchIndex, batchTotal, seq, seqKey);
   } catch (eW) {
     return {
       ok: false,
       error: { code: 'PLANNER_WRITE_FAILED', message: eW && eW.message != null ? String(eW.message) : String(eW) }
     };
   }
-  return {
-    ok: true,
-    data: {
-      written: matrix.length,
-      year_month: ctx.ymNorm,
-      batch_index: batchIndex,
-      batch_total: batchTotal
-    }
-  };
 }
 
 /**

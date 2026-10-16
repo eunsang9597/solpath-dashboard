@@ -3971,6 +3971,19 @@ button.sp-stu-remark__item--open:hover {
   pointer-events: auto;
 }
 
+#solpath-plan-root.is-plan-save-locked {
+  pointer-events: none;
+}
+
+#solpath-plan-root.is-plan-save-locked #sp-plan-save-lock {
+  pointer-events: auto;
+  z-index: 1000000;
+}
+
+#solpath-plan-root.is-month-fetching #sp-plan-quick-reg {
+  opacity: 0.55;
+}
+
 #solpath-plan-root .sp-plan-gate {
   display: flex;
   flex-direction: column;

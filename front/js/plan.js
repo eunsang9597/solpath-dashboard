@@ -766,6 +766,15 @@ function plannerSetMonthFetchLoading_(root, on, statusText) {
     textEl.textContent = '일정 불러오는 중…';
   }
   wrap.classList.toggle('is-month-fetching', Boolean(on));
+  root.classList.toggle('is-month-fetching', Boolean(on));
+  const reg = root.querySelector('#sp-plan-quick-reg');
+  const calReg = root.querySelector('#sp-plan-cal-reg-modal');
+  const eventReg = root.querySelector('#sp-plan-event-reg-modal');
+  [reg, calReg, eventReg].forEach(function (node) {
+    if (!(node instanceof HTMLElement)) return;
+    if (on) node.setAttribute('inert', '');
+    else if (!root.classList.contains('is-plan-save-locked')) node.removeAttribute('inert');
+  });
   if (on) {
     el.removeAttribute('hidden');
     wrap.setAttribute('aria-busy', 'true');
@@ -1374,6 +1383,8 @@ function plannerRefetchBootstrapForViewMonth_(root) {
   }
   const view = st.viewMonth instanceof Date && !isNaN(st.viewMonth.getTime()) ? st.viewMonth : new Date();
   const rid = (root.__spPlannerMonthFetchId = (root.__spPlannerMonthFetchId || 0) + 1);
+  const todoEpoch = st.todoEpoch || 0;
+  const profileEpoch = root.__spPlanProfileEpoch || 0;
   const msgEl = root.querySelector('#sp-plan-month-apply-msg');
   if (msgEl) {
     msgEl.textContent = '';
@@ -1417,7 +1428,10 @@ function plannerRefetchBootstrapForViewMonth_(root) {
       if (cached && (!cv.length || cached.version === cv)) {
         mergePack.curriculum = cached.curriculum;
       }
-      plannerMergeBootstrapMonthData_(root, /** @type {Parameters<typeof plannerMergeBootstrapMonthData_>[1]} */ (mergePack));
+      plannerMergeBootstrapMonthData_(root, /** @type {Parameters<typeof plannerMergeBootstrapMonthData_>[1]} */ (mergePack), {
+        todoEpoch: todoEpoch,
+        profileEpoch: profileEpoch
+      });
       if (cv.length && !(cached && cached.version === cv)) {
         void plannerEnsureCurriculumLoaded_(root, cv);
       }
@@ -1433,8 +1447,9 @@ function plannerRefetchBootstrapForViewMonth_(root) {
  * 월 이동 재조회 결과만 상태·달력 격자에 반영 (`renderCalendar_` 전체 생략 — 등록 폼 유지).
  * @param {HTMLElement} root
  * @param {{ role: string, common: object[], personal: object[] | null, student_profile?: Record<string, unknown>, curriculum?: unknown, curriculum_version?: string }} pack
+ * @param {{ todoEpoch?: number, profileEpoch?: number }} [epochs] 불러오기 시작 시점. 그 뒤 고친 일정·글은 덮지 않는다.
  */
-function plannerMergeBootstrapMonthData_(root, pack) {
+function plannerMergeBootstrapMonthData_(root, pack, epochs) {
   const st = root.__spPlanState;
   if (!st || typeof st !== 'object') return;
   const roleNext = pack.role === 'member' ? 'member' : 'guest';
@@ -1448,16 +1463,21 @@ function plannerMergeBootstrapMonthData_(root, pack) {
   const common = plannerNormalizeCommonEventsFromApi_(pack.common);
   const personal = pack.personal != null && Array.isArray(pack.personal) ? pack.personal : [];
   st.plannerCommonEvents = common;
-  /** @type {Record<string, number>} */
-  const byDate = {};
-  plannerCommonEventsMergeIntoByDate_(byDate, common);
-  personal.forEach(function (ev) {
-    const d0 = String((ev && ev.date) || '').trim();
-    if (!d0) return;
-    byDate[d0] = (byDate[d0] || 0) + 1;
-  });
-  st.byDate = byDate;
-  st.apiHadCalendarRows = common.length > 0 || personal.length > 0;
+  const allowProfile = !epochs || (root.__spPlanProfileEpoch || 0) === epochs.profileEpoch;
+  const allowTodos =
+    !epochs || ((st.todoEpoch || 0) === epochs.todoEpoch && !root.classList.contains('is-plan-save-locked'));
+  if (allowTodos) {
+    /** @type {Record<string, number>} */
+    const byDate = {};
+    plannerCommonEventsMergeIntoByDate_(byDate, common);
+    personal.forEach(function (ev) {
+      const d0 = String((ev && ev.date) || '').trim();
+      if (!d0) return;
+      byDate[d0] = (byDate[d0] || 0) + 1;
+    });
+    st.byDate = byDate;
+    st.apiHadCalendarRows = common.length > 0 || personal.length > 0;
+  }
   const ban = root.querySelector('#sp-plan-banner');
   if (ban) {
     if (st.role === 'guest') {
@@ -1467,16 +1487,20 @@ function plannerMergeBootstrapMonthData_(root, pack) {
       ban.setAttribute('hidden', 'hidden');
     }
   }
-  renderPlannerStudentProfile_(root, pack.student_profile);
-  plannerApplyBootstrapPersonal_(st, pack.personal, st.role);
-  if (typeof root.__spPlanRerenderMonth === 'function') {
-    root.__spPlanRerenderMonth();
+  if (allowProfile) {
+    renderPlannerStudentProfile_(root, pack.student_profile);
+  }
+  if (allowTodos) {
+    plannerApplyBootstrapPersonal_(st, pack.personal, st.role);
+    if (typeof root.__spPlanRerenderMonth === 'function') {
+      root.__spPlanRerenderMonth();
+    }
+    plannerRefreshPostPreview_(root);
+    if (typeof root.__spPlanRefreshOpenDayModal === 'function') {
+      root.__spPlanRefreshOpenDayModal();
+    }
   }
   plannerRefreshCurriculumSelectsInRoot_(root);
-  plannerRefreshPostPreview_(root);
-  if (typeof root.__spPlanRefreshOpenDayModal === 'function') {
-    root.__spPlanRefreshOpenDayModal();
-  }
 }
 
 const PLANNER_GAS_POST_TIMEOUT_MS = 360000;
@@ -1521,6 +1545,14 @@ function plannerNewApplySessionId_() {
     }
   } catch (_e) {}
   return 'as_' + String(Date.now()) + '_' + Math.random().toString(36).slice(2, 12);
+}
+
+/**
+ * 한 번의 저장 클릭 번호. 재시도는 같은 번호를 보내고, 더 작은 번호가 늦게 끝나도 서버가 시트를 덮지 않는다.
+ * @returns {number}
+ */
+function plannerNewSaveSeq_() {
+  return Date.now();
 }
 
 /**
@@ -1843,7 +1875,8 @@ async function plannerGasCall_(payload) {
       memberCode: plannerLinkKeyFromPayload_(payload),
       link_key: plannerLinkKeyFromPayload_(payload),
       student_profile: prof,
-      monthly_plan_notices_patch: monthlyPatch
+      monthly_plan_notices_patch: monthlyPatch,
+      save_seq: payload.save_seq != null ? payload.save_seq : 0
     });
   }
   if (action === 'plannerPersonalTodosApply') {
@@ -1866,6 +1899,9 @@ async function plannerGasCall_(payload) {
     }
     if (payload.apply_session_id != null) {
       body.apply_session_id = payload.apply_session_id;
+    }
+    if (payload.save_seq != null) {
+      body.save_seq = payload.save_seq;
     }
     return plannerGasPostAction_(url, body, { maxRetry: PLANNER_GAS_APPLY_MAX_RETRY });
   }
@@ -2015,6 +2051,15 @@ function plannerPlanAdminBulkScheduleAllowed_(root) {
  * @param {HTMLElement} root
  * @returns {Record<string, boolean>}
  */
+/**
+ * 공부 방법·프로필을 고친 표시. 이 값보다 먼저 시작한 불러오기는 입력칸을 덮지 않는다.
+ * @param {HTMLElement} root
+ */
+function plannerBumpProfileEpoch_(root) {
+  if (!root) return;
+  root.__spPlanProfileEpoch = (root.__spPlanProfileEpoch || 0) + 1;
+}
+
 function plannerProfileDirtyMap_(root) {
   if (!root.__spPlanProfileDirty || typeof root.__spPlanProfileDirty !== 'object') {
     root.__spPlanProfileDirty = {};
@@ -2060,6 +2105,7 @@ function wirePlannerProfileDirtyTrackingOnce_(root) {
     const t = e.target instanceof HTMLElement ? e.target : null;
     if (!t) return;
     if (t.id === 'sp-plan-monthly-notice-body') {
+      plannerBumpProfileEpoch_(root);
       plannerFlushMonthlyNoticeDraft_(root);
       const st = root.__spPlanState;
       const vm =
@@ -2068,15 +2114,18 @@ function wirePlannerProfileDirtyTrackingOnce_(root) {
       return;
     }
     if (t.id === 'sp-plan-coaching-features') {
+      plannerBumpProfileEpoch_(root);
       plannerProfileDirtyMap_(root).plan_features = true;
       return;
     }
     if (t.hasAttribute('data-sp-plan-subject-key') || t.hasAttribute('data-sp-plan-subject-body')) {
+      plannerBumpProfileEpoch_(root);
       plannerProfileDirtyMap_(root).subject_guides_json = true;
       return;
     }
     const stuKey = t.getAttribute('data-sp-plan-student-input');
     if (stuKey) {
+      plannerBumpProfileEpoch_(root);
       plannerProfileDirtyMap_(root)[plannerProfileDirtyKeyFromInputAttr_(stuKey)] = true;
     }
   });
@@ -2434,6 +2483,7 @@ function wirePlannerMainTabsOnce_(root) {
       const tbody = root.querySelector('#sp-plan-coaching-subjects-body');
       if (tbody) {
         tbody.insertAdjacentHTML('beforeend', plannerCoachingSubjectRowHtml_('', ''));
+        plannerBumpProfileEpoch_(root);
         plannerProfileDirtyMap_(root).subject_guides_json = true;
       }
       return;
@@ -2445,6 +2495,7 @@ function wirePlannerMainTabsOnce_(root) {
       const tbody = root.querySelector('#sp-plan-coaching-subjects-body');
       if (row && tbody) {
         row.remove();
+        plannerBumpProfileEpoch_(root);
         plannerProfileDirtyMap_(root).subject_guides_json = true;
         if (!tbody.querySelector('[data-sp-plan-subject-row]')) {
           tbody.insertAdjacentHTML('beforeend', plannerCoachingSubjectRowHtml_('', ''));
@@ -2455,8 +2506,65 @@ function wirePlannerMainTabsOnce_(root) {
 }
 
 /**
+ * 저장 요청이 끝날 때까지 플래너 조작을 막는다. 서버 락을 기다리는 동안도 같다.
  * @param {HTMLElement} root
- * @param {{ msgEl?: HTMLElement|null, partOfDual?: boolean }} [opts]
+ * @param {boolean} on
+ */
+function plannerSetSaveUiLock_(root, on) {
+  if (!root) return;
+  let el = root.querySelector('#sp-plan-save-lock');
+  if (!(el instanceof HTMLElement)) {
+    el = document.createElement('div');
+    el.id = 'sp-plan-save-lock';
+    el.className = 'sp-overlay';
+    el.setAttribute('hidden', 'hidden');
+    el.setAttribute('aria-hidden', 'true');
+    el.innerHTML =
+      '<div class="sp-overlay-box" role="status" aria-live="polite">' +
+      '<div class="sp-spinner" aria-hidden="true"></div>' +
+      '<p class="sp-overlay-text">저장 중</p>' +
+      '<p class="sp-overlay-sub">저장이 끝날 때까지 다른 조작은 할 수 없습니다.</p>' +
+      '</div>';
+    root.appendChild(el);
+  }
+  const kids = root.children;
+  let i;
+  for (i = 0; i < kids.length; i++) {
+    const child = kids[i];
+    if (!(child instanceof HTMLElement) || child.id === 'sp-plan-save-lock') continue;
+    if (on) child.setAttribute('inert', '');
+    else child.removeAttribute('inert');
+  }
+  if (on) {
+    root.classList.add('is-plan-save-locked');
+    root.setAttribute('aria-busy', 'true');
+    const ae = document.activeElement;
+    if (ae instanceof HTMLElement && root.contains(ae) && ae !== el) {
+      ae.blur();
+    }
+    el.removeAttribute('hidden');
+    el.setAttribute('aria-hidden', 'false');
+    return;
+  }
+  root.classList.remove('is-plan-save-locked');
+  if (!root.classList.contains('is-plan-syncing')) {
+    root.removeAttribute('aria-busy');
+  }
+  el.setAttribute('hidden', 'hidden');
+  el.setAttribute('aria-hidden', 'true');
+  if (root.classList.contains('is-month-fetching')) {
+    const reg = root.querySelector('#sp-plan-quick-reg');
+    const calReg = root.querySelector('#sp-plan-cal-reg-modal');
+    const eventReg = root.querySelector('#sp-plan-event-reg-modal');
+    [reg, calReg, eventReg].forEach(function (node) {
+      if (node instanceof HTMLElement) node.setAttribute('inert', '');
+    });
+  }
+}
+
+/**
+ * @param {HTMLElement} root
+ * @param {{ msgEl?: HTMLElement|null, partOfDual?: boolean, saveSeq?: number }} [opts]
  * @returns {Promise<boolean>}
  */
 async function plannerStudentProfileSaveClick_(root, opts) {
@@ -2490,18 +2598,33 @@ async function plannerStudentProfileSaveClick_(root, opts) {
     msgEl.textContent = '저장 중…';
     msgEl.removeAttribute('hidden');
   }
+  const ownLock = !partOfDual;
+  if (ownLock) plannerSetSaveUiLock_(root, true);
+  plannerBumpProfileEpoch_(root);
+  const saveSeq = opts && opts.saveSeq != null ? opts.saveSeq : plannerNewSaveSeq_();
+  try {
   const res = await plannerGasCall_({
     action: 'plannerRegistryProfileSave',
     phoneSegments: ctx.phoneSegments,
     name: ctx.name || '',
     memberCode: ctx.memberCode || '',
     student_profile: payload.profile,
-    monthly_plan_notices_patch: payload.monthly_patch
+    monthly_plan_notices_patch: payload.monthly_patch,
+    save_seq: saveSeq
   });
   if (!res || !res.ok) {
     if (msgEl && !partOfDual) {
       const m = res && res.error && res.error.message != null ? String(res.error.message) : '저장에 실패했습니다.';
       msgEl.textContent = m;
+    }
+    return false;
+  }
+  const saved = /** @type {{ stale?: boolean }} */ (res.data || {});
+  if (saved.stale) {
+    root.__spPlanSaveStale = true;
+    if (msgEl && !partOfDual) {
+      msgEl.textContent =
+        '더 최근 저장이 이미 반영되어 이번 내용은 시트에 쓰지 않았습니다. 달을 옮겨 다시 불러온 뒤 수정해 주세요.';
     }
     return false;
   }
@@ -2530,6 +2653,9 @@ async function plannerStudentProfileSaveClick_(root, opts) {
     msgEl.textContent = '저장은 반영되었을 수 있습니다. 달력 월을 한 번 바꿔 새로고침해 보세요.';
   }
   return true;
+  } finally {
+    if (ownLock) plannerSetSaveUiLock_(root, false);
+  }
 }
 
 /**
@@ -2564,6 +2690,11 @@ async function plannerAdminDualSaveClick_(root, opts) {
     return;
   }
   root.__spPlanAdminDualSaveInFlight = true;
+  root.__spPlanSaveStale = false;
+  const saveSeq = plannerNewSaveSeq_();
+  plannerBumpTodoEpoch_(root.__spPlanState);
+  plannerBumpProfileEpoch_(root);
+  plannerSetSaveUiLock_(root, true);
   try {
     if (msgEl) {
       msgEl.textContent = '저장 중…';
@@ -2573,17 +2704,35 @@ async function plannerAdminDualSaveClick_(root, opts) {
     let profileOk = true;
     const profileSkipped = !plannerStudentProfileCanEdit_(root);
     if (!profileSkipped) {
-      profileOk = await plannerStudentProfileSaveClick_(root, { partOfDual: true });
+      profileOk = await plannerStudentProfileSaveClick_(root, { partOfDual: true, saveSeq: saveSeq });
     }
 
     const todosOk = await plannerPersonalTodosApplyClick_(root, {
       msgEl: msgEl,
       requireAdmin: opts.requireAdmin,
       partOfDual: true,
-      skipInFlightCheck: true
+      skipInFlightCheck: true,
+      saveSeq: saveSeq
     });
 
     if (!msgEl) return;
+
+    if (root.__spPlanSaveStale) {
+      if (profileSkipped || (profileOk && !todosOk)) {
+        msgEl.textContent =
+          '일정은 더 최근 저장이 있어 쓰지 않았습니다. 달을 옮겨 다시 불러온 뒤 수정해 주세요.';
+      } else if (!profileOk && !todosOk) {
+        msgEl.textContent =
+          '더 최근 저장이 이미 반영되어 이번 내용은 시트에 쓰지 않았습니다. 달을 옮겨 다시 불러온 뒤 수정해 주세요.';
+      } else if (!profileOk) {
+        msgEl.textContent =
+          '일정은 저장됐으나 공부 방법 글은 더 최근 저장이 있어 쓰지 않았습니다. 달을 옮겨 다시 불러와 주세요.';
+      } else {
+        msgEl.textContent =
+          '공부 방법 글은 저장됐으나 일정은 더 최근 저장이 있어 쓰지 않았습니다. 달을 옮겨 다시 불러와 주세요.';
+      }
+      return;
+    }
 
     if (profileSkipped) {
       if (todosOk) {
@@ -2616,6 +2765,7 @@ async function plannerAdminDualSaveClick_(root, opts) {
     }
     msgEl.textContent = '저장에 실패했습니다. 다시 저장해 주세요.';
   } finally {
+    plannerSetSaveUiLock_(root, false);
     root.__spPlanAdminDualSaveInFlight = false;
   }
 }
@@ -3198,7 +3348,7 @@ function plannerRefreshUiAfterTodosApply_(root) {
  * `plannerPersonalTodosApply` — 해당 월 todo를 batch POST로 저장.
  * @param {Record<string, unknown>} callPayload `plannerGasCall_` 인자
  * @param {HTMLElement|null} msgEl
- * @returns {Promise<{ ok: boolean, written: number, error?: string }>}
+ * @returns {Promise<{ ok: boolean, written: number, stale?: boolean, error?: string }>}
  */
 async function plannerPersonalTodosApplyBatched_(callPayload, msgEl) {
   const todos = Array.isArray(callPayload.todos) ? /** @type {object[]} */ (callPayload.todos) : [];
@@ -3222,7 +3372,8 @@ async function plannerPersonalTodosApplyBatched_(callPayload, msgEl) {
       year_month: callPayload.year_month,
       todos: chunks[bi],
       batch_index: bi,
-      batch_total: batchTotal
+      batch_total: batchTotal,
+      save_seq: callPayload.save_seq != null ? callPayload.save_seq : 0
     };
     if (applySessionId.length) {
       batchPayload.apply_session_id = applySessionId;
@@ -3232,7 +3383,10 @@ async function plannerPersonalTodosApplyBatched_(callPayload, msgEl) {
       const m = res && res.error && res.error.message != null ? String(res.error.message) : '저장에 실패했습니다.';
       return { ok: false, written: writtenTotal, error: m };
     }
-    const d = /** @type {{ written?: number }} */ (res.data || {});
+    const d = /** @type {{ written?: number, stale?: boolean }} */ (res.data || {});
+    if (d.stale) {
+      return { ok: false, stale: true, written: writtenTotal };
+    }
     writtenTotal += Number(d.written) || 0;
   }
   return { ok: true, written: writtenTotal };
@@ -3241,7 +3395,7 @@ async function plannerPersonalTodosApplyBatched_(callPayload, msgEl) {
 /**
  * `plannerPersonalTodosApply` — 현재 보는 달(`viewMonth`)의 todo 페이로드를 학생 월 시트에 덮어쓴다.
  * @param {HTMLElement} root
- * @param {{ msgEl?: HTMLElement|null, requireAdmin?: boolean, partOfDual?: boolean, skipInFlightCheck?: boolean }} [opts]
+ * @param {{ msgEl?: HTMLElement|null, requireAdmin?: boolean, partOfDual?: boolean, skipInFlightCheck?: boolean, saveSeq?: number }} [opts]
  */
 async function plannerPersonalTodosApplyClick_(root, opts) {
   const partOfDual = Boolean(opts && opts.partOfDual);
@@ -3277,6 +3431,9 @@ async function plannerPersonalTodosApplyClick_(root, opts) {
     }
   }
   root.__spPlanTodosApplyInFlight = true;
+  const ownLock = !partOfDual;
+  if (ownLock) plannerSetSaveUiLock_(root, true);
+  plannerBumpTodoEpoch_(st);
   try {
     plannerPrepareClientStateBeforeApply_(root);
     plannerRebuildQuickPostPayload_(st);
@@ -3288,16 +3445,26 @@ async function plannerPersonalTodosApplyClick_(root, opts) {
       msgEl.textContent = '저장 중…';
       msgEl.removeAttribute('hidden');
     }
+    const saveSeq = opts && opts.saveSeq != null ? opts.saveSeq : plannerNewSaveSeq_();
     const applyRes = await plannerPersonalTodosApplyBatched_(
       {
         phoneSegments: ctx.phoneSegments,
         name: ctx.name || '',
         memberCode: ctx.memberCode || '',
         year_month: ym,
-        todos: todos
+        todos: todos,
+        save_seq: saveSeq
       },
       msgEl
     );
+    if (applyRes.stale) {
+      root.__spPlanSaveStale = true;
+      if (msgEl && !partOfDual) {
+        msgEl.textContent =
+          '더 최근 저장이 이미 반영되어 이번 일정은 시트에 쓰지 않았습니다. 달을 옮겨 다시 불러온 뒤 수정해 주세요.';
+      }
+      return false;
+    }
     if (!applyRes.ok) {
       if (msgEl && !partOfDual) {
         msgEl.textContent =
@@ -3316,6 +3483,7 @@ async function plannerPersonalTodosApplyClick_(root, opts) {
     return true;
   } finally {
     root.__spPlanTodosApplyInFlight = false;
+    if (ownLock) plannerSetSaveUiLock_(root, false);
   }
 }
 
@@ -3520,6 +3688,7 @@ function plannerClearAllTodosForViewMonth_(st, viewMonth) {
   });
   plannerRebuildFixedBlockSlotsForMonth_(st, viewMonth);
   plannerRebuildQuickPostPayload_(st);
+  plannerBumpTodoEpoch_(st);
 }
 
 /**
@@ -5168,6 +5337,7 @@ function plannerMoveMonthTodoByDrag_(st, taskId, fromYmd, toYmd) {
   plannerInvalidateDayTimelineCache_(st, from);
   plannerInvalidateDayTimelineCache_(st, to);
   plannerRebuildQuickPostPayload_(st);
+  plannerBumpTodoEpoch_(st);
   return '';
 }
 
@@ -5192,6 +5362,7 @@ function plannerRemoveTraceDateFromTodo_(st, taskId, traceYmd) {
   row.trace_dates = plannerTraceDatesToJson_(list);
   if (!row._fromServer) row.updated_date = plannerTodayYmdSeoul_();
   plannerRebuildQuickPostPayload_(st);
+  plannerBumpTodoEpoch_(st);
   return true;
 }
 
@@ -5512,6 +5683,7 @@ function plannerAppendEventTodo_(st, ymd, title) {
     updated_date: today
   });
   plannerRebuildQuickPostPayload_(st);
+  plannerBumpTodoEpoch_(st);
   return '';
 }
 
@@ -5784,6 +5956,15 @@ function plannerEnsureMonthTodos_(st) {
 }
 
 /**
+ * 일정을 고친 표시. 이 값보다 먼저 시작한 달 불러오기는 `monthTodos`를 덮지 않는다.
+ * @param {object} st
+ */
+function plannerBumpTodoEpoch_(st) {
+  if (!st || typeof st !== 'object') return;
+  st.todoEpoch = (st.todoEpoch || 0) + 1;
+}
+
+/**
  * @param {object} row
  * @returns {object}
  */
@@ -5868,6 +6049,7 @@ function plannerClearLocalTodosForMonth_(st, viewMonth) {
     });
   }
   plannerRebuildQuickPostPayload_(st);
+  plannerBumpTodoEpoch_(st);
 }
 
 /**
@@ -5928,6 +6110,7 @@ function plannerPersistTimelineSlotMapToMonthTodos_(st, ymd) {
     row.timeline_slots = JSON.stringify(keys);
     if (!row._fromServer) row.updated_date = today;
   });
+  plannerBumpTodoEpoch_(st);
   plannerUpsertRoutineMonthTodosFromDayMap_(st, ymd, byTask);
   if (st.viewMonth instanceof Date && !isNaN(st.viewMonth.getTime())) {
     plannerRebuildFixedBlockSlotsForMonth_(st, st.viewMonth);
@@ -6144,6 +6327,7 @@ function plannerSyncDayMemoToMonthTodo_(st, ymd) {
   if (!text.length) {
     if (existingIx >= 0) st.monthTodos.splice(existingIx, 1);
     plannerRebuildQuickPostPayload_(st);
+    plannerBumpTodoEpoch_(st);
     return;
   }
   const task_id = existingTid.length ? existingTid : '__sp_memo_' + day;
@@ -6168,6 +6352,7 @@ function plannerSyncDayMemoToMonthTodo_(st, ymd) {
     plannerPushMonthTodo_(st, plannerTodoRowLocal_(payload), true);
   }
   plannerRebuildQuickPostPayload_(st);
+  plannerBumpTodoEpoch_(st);
 }
 
 /**
@@ -6737,6 +6922,7 @@ function plannerAppendCurriculumTodoFromForm_(slot, st, opts) {
   );
   if (lecEl instanceof HTMLSelectElement) lecEl.value = '';
   plannerCurriculumRefreshCascade_(slot, st, 'course', kind);
+  plannerBumpTodoEpoch_(st);
   return '';
 }
 
@@ -6820,6 +7006,7 @@ function plannerAppendFixedTodoForOneDay_(st, ymd, title, startIx, endIx) {
     plannerRebuildFixedBlockSlotsForMonth_(st, st.viewMonth);
   }
   plannerRebuildQuickPostPayload_(st);
+  plannerBumpTodoEpoch_(st);
   return '';
 }
 
@@ -6886,6 +7073,7 @@ function plannerAppendManualTodoFromForm_(slot, st, opts) {
     })
   );
   if (titleEl) /** @type {HTMLInputElement} */ (titleEl).value = '';
+  plannerBumpTodoEpoch_(st);
   return '';
 }
 
@@ -7201,6 +7389,7 @@ function plannerApplyQuickCurriculumToMonthTodos_(
     }
   }
   plannerRebuildQuickPostPayload_(st);
+  plannerBumpTodoEpoch_(st);
   return '';
 }
 
@@ -8278,6 +8467,7 @@ function plannerRemoveMonthTodo_(st, ymd, taskId) {
     plannerRebuildFixedBlockSlotsForMonth_(st, st.viewMonth);
   }
   plannerRebuildQuickPostPayload_(st);
+  plannerBumpTodoEpoch_(st);
   return true;
 }
 
@@ -8312,6 +8502,7 @@ function plannerMarkMonthTodoDeleted_(st, ymd, taskId) {
     plannerRebuildFixedBlockSlotsForMonth_(st, st.viewMonth);
   }
   plannerRebuildQuickPostPayload_(st);
+  plannerBumpTodoEpoch_(st);
   return true;
 }
 
@@ -8414,6 +8605,7 @@ function plannerApplyFixedScheduleForMonth_(st, viewMonth, weekdays, title, star
     }
   }
   plannerRebuildQuickPostPayload_(st);
+  plannerBumpTodoEpoch_(st);
   return '';
 }
 
@@ -8607,6 +8799,7 @@ function plannerTodoCompletionSet_(st, ymd, taskId, mark) {
   row.mark = mark === 'none' ? 'none' : mark;
   if (!row._fromServer) row.updated_date = plannerTodayYmdSeoul_();
   plannerRebuildQuickPostPayload_(st);
+  plannerBumpTodoEpoch_(st);
 }
 
 /**
