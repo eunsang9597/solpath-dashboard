@@ -244,6 +244,11 @@ function plannerMountDemoTrackBar_(root) {
     '<span class="sp-plan-demoTrackBar__btnMain">이과 수강생</span>' +
     '<span class="sp-plan-demoTrackBar__btnSub">솔루션(이과)</span>' +
     '</button>';
+  const head = root.querySelector('.sp-plan-appHead');
+  if (head) {
+    head.insertAdjacentElement('afterend', bar);
+    return;
+  }
   const shell = root.querySelector('.sp-plan-rootinner');
   if (shell) {
     shell.insertBefore(bar, shell.firstChild);
