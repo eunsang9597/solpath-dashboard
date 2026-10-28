@@ -2786,6 +2786,50 @@ function dbPlannerSaveSeqIsStale_(key, seq) {
 }
 
 /**
+ * 학생 저장이 실어 보낸 불러오기 시점 번호. 필드가 없으면 null(관리자 저장은 기존 번호 비교만).
+ * @param {Object} body
+ * @return {number|null}
+ */
+function dbPlannerBaseSaveSeqFromBody_(body) {
+  body = body || {};
+  var has =
+    Object.prototype.hasOwnProperty.call(body, 'base_save_seq') ||
+    Object.prototype.hasOwnProperty.call(body, 'baseSaveSeq');
+  if (!has) {
+    return null;
+  }
+  var raw = body.base_save_seq != null ? body.base_save_seq : body.baseSaveSeq;
+  var n = Number(raw);
+  if (!isFinite(n) || n < 0) {
+    return null;
+  }
+  return Math.floor(n);
+}
+
+/**
+ * 시트에 쓰기 전에 호출. null이면 진행.
+ * 같은 save_seq가 이미 기록돼 있으면 재시도로 보고 다시 쓰지 않는다.
+ * base가 있으면 불러온 번호와 시트 번호가 다를 때 덮어쓰지 않는다.
+ * @param {string} key
+ * @param {number} seq
+ * @param {number|null} base
+ * @return {{ stale: boolean, idempotent: boolean }|null}
+ */
+function dbPlannerTodoSaveSeqGate_(key, seq, base) {
+  var stored = dbPlannerReadSaveSeq_(key);
+  if (seq && stored === seq) {
+    return { stale: false, idempotent: true };
+  }
+  if (base != null && stored !== base) {
+    return { stale: true, idempotent: false };
+  }
+  if (dbPlannerSaveSeqIsStale_(key, seq)) {
+    return { stale: true, idempotent: false };
+  }
+  return null;
+}
+
+/**
  * @param {string} ymNorm
  * @param {number} seq
  * @param {number} batchIndex
@@ -2896,9 +2940,10 @@ function dbPlannerApplyBufferDoneKey_(sid, ymNorm, sessionId) {
  * @param {number} batchTotal
  * @param {number} seq
  * @param {string} seqKey
+ * @param {number|null} base
  * @return {Object}
  */
-function dbPlannerPersonalTodosApplyBuffered_(ctx, sessionId, matrix, batchIndex, batchTotal, seq, seqKey) {
+function dbPlannerPersonalTodosApplyBuffered_(ctx, sessionId, matrix, batchIndex, batchTotal, seq, seqKey, base) {
   var cache = CacheService.getScriptCache();
   var doneKey = dbPlannerApplyBufferDoneKey_(ctx.sid, ctx.ymNorm, sessionId);
   var doneRaw = cache.get(doneKey);
@@ -2916,6 +2961,7 @@ function dbPlannerPersonalTodosApplyBuffered_(ctx, sessionId, matrix, batchIndex
           batch_index: batchIndex,
           batch_total: batchTotal,
           apply_session_id: sessionId,
+          save_seq: seq,
           committed: true,
           idempotent: true
         }
@@ -2956,6 +3002,26 @@ function dbPlannerPersonalTodosApplyBuffered_(ctx, sessionId, matrix, batchIndex
   meta.received[String(batchIndex)] = true;
   cache.put(metaKey, JSON.stringify(meta), PLANNER_APPLY_BUF_CACHE_SEC);
 
+  var gateEarly = dbPlannerTodoSaveSeqGate_(seqKey, seq, base);
+  if (gateEarly && gateEarly.idempotent) {
+    return {
+      ok: true,
+      data: {
+        written: matrix.length,
+        year_month: ctx.ymNorm,
+        batch_index: batchIndex,
+        batch_total: batchTotal,
+        apply_session_id: sessionId,
+        save_seq: seq,
+        idempotent: true,
+        committed: true
+      }
+    };
+  }
+  if (gateEarly && gateEarly.stale) {
+    return dbPlannerSaveSeqStaleResult_(ctx.ymNorm, seq, batchIndex, batchTotal);
+  }
+
   if (batchIndex !== batchTotal - 1) {
     return {
       ok: true,
@@ -2970,12 +3036,24 @@ function dbPlannerPersonalTodosApplyBuffered_(ctx, sessionId, matrix, batchIndex
     };
   }
 
-  if (dbPlannerSaveSeqIsStale_(seqKey, seq)) {
-    return dbPlannerSaveSeqStaleResult_(ctx.ymNorm, seq, batchIndex, batchTotal);
-  }
-
   return dbPlannerWithWriteLock_(function () {
-    if (dbPlannerSaveSeqIsStale_(seqKey, seq)) {
+    var gate = dbPlannerTodoSaveSeqGate_(seqKey, seq, base);
+    if (gate && gate.idempotent) {
+      return {
+        ok: true,
+        data: {
+          written: matrix.length,
+          year_month: ctx.ymNorm,
+          batch_index: batchIndex,
+          batch_total: batchTotal,
+          apply_session_id: sessionId,
+          save_seq: seq,
+          idempotent: true,
+          committed: true
+        }
+      };
+    }
+    if (gate && gate.stale) {
       return dbPlannerSaveSeqStaleResult_(ctx.ymNorm, seq, batchIndex, batchTotal);
     }
     var merged = [];
@@ -3078,11 +3156,26 @@ function dbPlannerPersonalTodosApply_(body) {
   }
   var matrix = dbPlannerPersonalTodosMatrixFromPayload_(todosRaw, ctx.ymNorm, todayYmd, lectureIdSet);
   var seq = dbPlannerSaveSeqFromBody_(body);
+  var base = dbPlannerBaseSaveSeqFromBody_(body);
   var seqKey = dbPlannerSaveSeqCacheKey_('todo', ctx.sid + '_' + ctx.ymNorm);
   try {
     if (batchTotal <= 1) {
       return dbPlannerWithWriteLock_(function () {
-        if (dbPlannerSaveSeqIsStale_(seqKey, seq)) {
+        var gate = dbPlannerTodoSaveSeqGate_(seqKey, seq, base);
+        if (gate && gate.idempotent) {
+          return {
+            ok: true,
+            data: {
+              written: matrix.length,
+              year_month: ctx.ymNorm,
+              batch_index: batchIndex,
+              batch_total: batchTotal,
+              save_seq: seq,
+              idempotent: true
+            }
+          };
+        }
+        if (gate && gate.stale) {
           return dbPlannerSaveSeqStaleResult_(ctx.ymNorm, seq, batchIndex, batchTotal);
         }
         dbPlannerPersonalTodosWriteMatrix_(ctx.sid, ctx.ymNorm, matrix, 'replace');
@@ -3100,7 +3193,7 @@ function dbPlannerPersonalTodosApply_(body) {
         };
       });
     }
-    return dbPlannerPersonalTodosApplyBuffered_(ctx, sessionId, matrix, batchIndex, batchTotal, seq, seqKey);
+    return dbPlannerPersonalTodosApplyBuffered_(ctx, sessionId, matrix, batchIndex, batchTotal, seq, seqKey, base);
   } catch (eW) {
     return {
       ok: false,
@@ -3153,6 +3246,10 @@ function dbPlannerBootstrap_(body) {
   var ymNorm = dbPlannerNormalizeYearMonthFromBody_(body);
   var personal = dbPlannerReadPersonalStub_(sid, ymNorm.length ? ymNorm : '');
   var student_profile = dbPlannerStudentProfileFromRegistryCells_(pickedHit.row, pickedHit.rowD);
+  var todoSaveSeq = 0;
+  if (sid && String(sid).length && ymNorm.length) {
+    todoSaveSeq = dbPlannerReadSaveSeq_(dbPlannerSaveSeqCacheKey_('todo', String(sid) + '_' + ymNorm));
+  }
   return {
     ok: true,
     data: {
@@ -3160,7 +3257,8 @@ function dbPlannerBootstrap_(body) {
       common: common,
       personal: personal,
       student_profile: student_profile,
-      curriculum_version: curriculumVersion
+      curriculum_version: curriculumVersion,
+      todo_save_seq: todoSaveSeq
     }
   };
 }
