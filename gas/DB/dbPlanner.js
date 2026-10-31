@@ -1684,7 +1684,8 @@ function dbPlannerReadCurriculumLectures_(ss) {
 }
 
 /**
- * 커리큘럼 캐시 무효화용 — 강좌·강의 데이터 행 수 (`courses:lectures`).
+ * 커리큘럼 캐시 무효화용 — 강좌·강의 데이터 행 수 + 마스터 파일 마지막 수정 시각 (`courses:lectures:ms`).
+ * 행 수만 쓰면 칸만 고친 편집(강의 `course_id`·`lecture_no` 등)에 버전이 그대로라 브라우저·서버 캐시가 옛 커리큘럼을 계속 쓴다.
  * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} ss
  * @return {string}
  */
@@ -1699,7 +1700,8 @@ function dbPlannerCurriculumVersion_(ss) {
   if (shL && shL.getLastRow() >= 2) {
     lr = shL.getLastRow() - 1;
   }
-  return String(cr) + ':' + String(lr);
+  var updatedMs = DriveApp.getFileById(ss.getId()).getLastUpdated().getTime();
+  return String(cr) + ':' + String(lr) + ':' + String(updatedMs);
 }
 
 /**
