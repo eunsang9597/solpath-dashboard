@@ -6587,7 +6587,7 @@ function plannerCurriculumLectureOptionLabel_(lectureName, lectureNo) {
 
 /**
  * 달력 표시/저장 todo title — lecture_name 기반.
- * - 강사=솔루션편입 또는 과목=어휘(`vocab`) → `lecture_name`
+ * - 강사=솔루션편입 또는 과목=어휘·영어기출·수학기출 → `lecture_name`
  * - 그 외 → `[N강] lecture_name`
  * lecture_name 없으면 기존 폴백(강좌명 · N강).
  * @param {string} instructor
@@ -6604,7 +6604,7 @@ function plannerCurriculumTodoTitleForCalendar_(instructor, courseName, lectureN
   const no = Number(lectureNo);
   const noTxt = isFinite(no) && no > 0 ? String(no) + '강' : '';
   if (lecName.length) {
-    if (inst === '솔루션편입' || subj === 'vocab') return lecName;
+    if (inst === '솔루션편입' || subj === 'vocab' || subj === 'eng_past' || subj === 'math_past') return lecName;
     return (noTxt.length ? '[' + noTxt + '] ' : '') + lecName;
   }
   const cname = String(courseName != null ? courseName : '').trim();
