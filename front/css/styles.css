@@ -5663,6 +5663,18 @@ button.sp-stu-remark__item--open:hover {
   border-color: #38bdf8;
 }
 
+#solpath-plan-root .sp-plan-curBadge--eng_past {
+  background: #ccfbf1;
+  color: #115e59;
+  border-color: #2dd4bf;
+}
+
+#solpath-plan-root .sp-plan-curBadge--math_past {
+  background: #ecfccb;
+  color: #3f6212;
+  border-color: #a3e635;
+}
+
 #solpath-plan-root .sp-plan-curBadge--toeic_rc {
   background: #e8eaf6;
   color: #1a237e;
@@ -6378,6 +6390,12 @@ button.sp-stu-remark__item--open:hover {
 #solpath-plan-root .sp-plan-todoSideTable tbody tr.sp-plan-todoCat--math > *:first-child {
   box-shadow: inset 4px 0 0 #0284c7;
 }
+#solpath-plan-root .sp-plan-todoSideTable tbody tr.sp-plan-todoCat--eng_past > *:first-child {
+  box-shadow: inset 4px 0 0 #0d9488;
+}
+#solpath-plan-root .sp-plan-todoSideTable tbody tr.sp-plan-todoCat--math_past > *:first-child {
+  box-shadow: inset 4px 0 0 #65a30d;
+}
 #solpath-plan-root .sp-plan-todoSideTable tbody tr.sp-plan-todoCat--toeic_rc > *:first-child {
   box-shadow: inset 4px 0 0 #3949ab;
 }
@@ -6986,6 +7004,16 @@ button.sp-stu-remark__item--open:hover {
   color: #0369a1;
   border-color: #38bdf8;
 }
+#solpath-plan-root .sp-plan-hourTodoPill--cat-eng_past {
+  background: #ccfbf1;
+  color: #115e59;
+  border-color: #2dd4bf;
+}
+#solpath-plan-root .sp-plan-hourTodoPill--cat-math_past {
+  background: #ecfccb;
+  color: #3f6212;
+  border-color: #a3e635;
+}
 #solpath-plan-root .sp-plan-hourTodoPill--cat-toeic_rc {
   background: #e8eaf6;
   color: #1a237e;
@@ -7123,6 +7151,14 @@ button.sp-stu-remark__item--open:hover {
 #solpath-plan-root .sp-plan-slotcell--todo--math.is-on {
   border-color: #0284c7;
   background: linear-gradient(180deg, #e0f2fe 0%, #7dd3fc 100%);
+}
+#solpath-plan-root .sp-plan-slotcell--todo--eng_past.is-on {
+  border-color: #0d9488;
+  background: linear-gradient(180deg, #f0fdfa 0%, #5eead4 100%);
+}
+#solpath-plan-root .sp-plan-slotcell--todo--math_past.is-on {
+  border-color: #65a30d;
+  background: linear-gradient(180deg, #f7fee7 0%, #bef264 100%);
 }
 #solpath-plan-root .sp-plan-slotcell--todo--toeic_rc.is-on {
   border-color: #3949ab;
@@ -7369,6 +7405,18 @@ button.sp-stu-remark__item--open:hover {
   box-shadow: inset 0 0 0 1px rgba(2, 132, 199, 0.25);
 }
 
+#solpath-plan-root .sp-plan-timecell--todo--eng_past.is-on {
+  border-color: #0d9488;
+  background: linear-gradient(180deg, #ccfbf1 0%, #5eead4 100%);
+  box-shadow: inset 0 0 0 1px rgba(13, 148, 136, 0.25);
+}
+
+#solpath-plan-root .sp-plan-timecell--todo--math_past.is-on {
+  border-color: #65a30d;
+  background: linear-gradient(180deg, #ecfccb 0%, #bef264 100%);
+  box-shadow: inset 0 0 0 1px rgba(101, 163, 13, 0.25);
+}
+
 #solpath-plan-root .sp-plan-timecell--todo--toeic_rc.is-on {
   border-color: #3949ab;
   background: linear-gradient(180deg, #e8eaf6 0%, #9fa8da 100%);
@@ -7443,6 +7491,16 @@ button.sp-stu-remark__item--open:hover {
 #solpath-plan-root .sp-plan-chip--math {
   background: #e0f2fe;
   color: #0369a1;
+}
+
+#solpath-plan-root .sp-plan-chip--eng_past {
+  background: #99f6e4;
+  color: #115e59;
+}
+
+#solpath-plan-root .sp-plan-chip--math_past {
+  background: #d9f99d;
+  color: #3f6212;
 }
 
 #solpath-plan-root .sp-plan-chip--toeic_rc {

@@ -4057,6 +4057,8 @@ function plannerSubjectCodeFromSubjectField_(subjectRaw) {
   if (sl === 'logic' || s === '논리') return 'logic';
   if (sl === 'read' || s === '독해') return 'read';
   if (sl === 'comprehensive' || s === '통합' || s === '종합') return 'comprehensive';
+  if (sl === 'eng_past' || s === '영어기출') return 'eng_past';
+  if (sl === 'math_past' || s === '수학기출') return 'math_past';
   if (sl === 'math' || s === '수학') return 'math';
   if (sl === 'toeic_rc' || /^토익\s*rc$/i.test(s)) return 'toeic_rc';
   if (sl === 'toeic_lc' || /^토익\s*lc$/i.test(s)) return 'toeic_lc';
@@ -4082,6 +4084,8 @@ function plannerSubjectCodeFromCatalogCourse_(course) {
   if (/\blogic\b|논리/.test(blob)) return 'logic';
   if (/\bread\b|독해/.test(blob)) return 'read';
   if (/\bcomprehensive\b|통합|종합/.test(blob)) return 'comprehensive';
+  if (/\beng_past\b|영어\s*기출/.test(blob)) return 'eng_past';
+  if (/\bmath_past\b|수학\s*기출/.test(blob)) return 'math_past';
   if (/\bmath\b|수학/.test(blob)) return 'math';
   if (/\btoeic[_\s-]?rc\b|토익\s*rc/i.test(blob)) return 'toeic_rc';
   if (/\btoeic[_\s-]?lc\b|토익\s*lc/i.test(blob)) return 'toeic_lc';
@@ -4813,6 +4817,8 @@ const PLANNER_STUDY_SUBJECT_DEFS = [
   { code: 'read', label: '독해', short: '독' },
   { code: 'comprehensive', label: '통합', short: '통' },
   { code: 'math', label: '수학', short: '수' },
+  { code: 'eng_past', label: '영어기출', short: '영기' },
+  { code: 'math_past', label: '수학기출', short: '수기' },
   { code: 'toeic_rc', label: '토익RC', short: 'RC' },
   { code: 'toeic_lc', label: '토익LC', short: 'LC' },
   { code: 'misc', label: '기타', short: '기' }
